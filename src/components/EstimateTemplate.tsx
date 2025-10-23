@@ -20,7 +20,9 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { toast } from "sonner";
-import { Plus, Trash2, ChevronDown, ChevronRight, DollarSign, Edit2, Save, X } from "lucide-react";
+import { Plus, Trash2, ChevronDown, ChevronRight, DollarSign, Edit2, Save, X, Link, Copy } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
 import { AIPlanAnalyzer } from "./AIPlanAnalyzer";
 import { PreliminariesSection } from "./PreliminariesSection";
 import { NCCSearchBar } from "./NCCSearchBar";
@@ -82,6 +84,16 @@ const CONSUMABLES = [
   "Caulking gun tips", "Grease gun cartridges", "Extension cords"
 ];
 
+interface RelatedMaterial {
+  id: string;
+  name: string;
+  quantity: number;
+  unit: string;
+  unit_price: number;
+  comment: string;
+  url: string;
+}
+
 interface EstimateItem {
   id: string;
   section_id: string | null;
@@ -100,12 +112,8 @@ interface EstimateItem {
   expanded: boolean;
   item_number?: string;
   isEditing?: boolean;
-  relatedMaterials?: Array<{
-    name: string;
-    quantity: number;
-    unit: string;
-    unit_price: number;
-  }>;
+  product_url?: string;
+  relatedMaterials?: RelatedMaterial[];
 }
 
 interface ConsumableItem {
@@ -128,6 +136,9 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValues, setEditValues] = useState<Partial<EstimateItem>>({});
   const [newConsumable, setNewConsumable] = useState({ name: "", quantity: "", unit: "ea", unit_price: "" });
+  const [urlDialog, setUrlDialog] = useState<{ open: boolean; url: string; type: 'item' | 'related'; itemId?: string; materialId?: string }>({ 
+    open: false, url: "", type: 'item' 
+  });
   const [config, setConfig] = useState({
     defaultLabourRate: 90,
     materialWastage: 10,
@@ -331,6 +342,80 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
     setItems(items.map(item => 
       item.id === id ? { ...item, expanded: !item.expanded } : item
     ));
+  };
+
+  const addRelatedMaterial = (itemId: string, materialName: string) => {
+    setItems(items.map(item => {
+      if (item.id === itemId) {
+        const newMaterial: RelatedMaterial = {
+          id: Math.random().toString(),
+          name: materialName,
+          quantity: 0,
+          unit: "ea",
+          unit_price: 0,
+          comment: "",
+          url: ""
+        };
+        return {
+          ...item,
+          relatedMaterials: [...(item.relatedMaterials || []), newMaterial]
+        };
+      }
+      return item;
+    }));
+  };
+
+  const updateRelatedMaterial = (itemId: string, materialId: string, field: keyof RelatedMaterial, value: any) => {
+    setItems(items.map(item => {
+      if (item.id === itemId && item.relatedMaterials) {
+        return {
+          ...item,
+          relatedMaterials: item.relatedMaterials.map(rm => 
+            rm.id === materialId ? { ...rm, [field]: value } : rm
+          )
+        };
+      }
+      return item;
+    }));
+  };
+
+  const deleteRelatedMaterial = (itemId: string, materialId: string) => {
+    setItems(items.map(item => {
+      if (item.id === itemId && item.relatedMaterials) {
+        return {
+          ...item,
+          relatedMaterials: item.relatedMaterials.filter(rm => rm.id !== materialId)
+        };
+      }
+      return item;
+    }));
+  };
+
+  const openUrlDialog = (type: 'item' | 'related', itemId: string, materialId?: string) => {
+    if (type === 'item') {
+      const item = items.find(i => i.id === itemId);
+      setUrlDialog({ open: true, url: item?.product_url || "", type, itemId });
+    } else if (materialId) {
+      const item = items.find(i => i.id === itemId);
+      const material = item?.relatedMaterials?.find(rm => rm.id === materialId);
+      setUrlDialog({ open: true, url: material?.url || "", type, itemId, materialId });
+    }
+  };
+
+  const saveUrl = () => {
+    if (urlDialog.type === 'item' && urlDialog.itemId) {
+      setItems(items.map(item => 
+        item.id === urlDialog.itemId ? { ...item, product_url: urlDialog.url } : item
+      ));
+    } else if (urlDialog.type === 'related' && urlDialog.itemId && urlDialog.materialId) {
+      updateRelatedMaterial(urlDialog.itemId, urlDialog.materialId, 'url', urlDialog.url);
+    }
+    setUrlDialog({ open: false, url: "", type: 'item' });
+  };
+
+  const copyUrl = (url: string) => {
+    navigator.clipboard.writeText(url);
+    toast.success("URL copied to clipboard");
   };
 
   const addConsumable = () => {
@@ -681,6 +766,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
                 <TableHead className="text-right">Qty</TableHead>
                 <TableHead>Unit</TableHead>
                 <TableHead className="text-right">$/Unit</TableHead>
+                <TableHead className="text-center">URL</TableHead>
                 <TableHead className="text-right">Labour Hrs</TableHead>
                 <TableHead className="text-right">Line Total</TableHead>
                 <TableHead></TableHead>
@@ -759,6 +845,16 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
                           />
                         ) : <span className="font-mono">${item.unit_price.toFixed(2)}</span>}
                       </TableCell>
+                      <TableCell className="text-center">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6"
+                          onClick={() => openUrlDialog('item', item.id)}
+                        >
+                          <Link className="h-3 w-3" />
+                        </Button>
+                      </TableCell>
                       <TableCell className="text-right">
                         {isEditing ? (
                           <Input
@@ -817,16 +913,86 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
                     </TableRow>
                     {item.expanded && relatedMats.length > 0 && (
                       <TableRow key={`${item.id}-related`} className="bg-muted/30">
-                        <TableCell colSpan={12} className="py-0">
-                          <div className="p-4 space-y-2">
-                            <p className="text-sm font-semibold text-muted-foreground mb-2">Related Materials for {item.scope_of_work}:</p>
-                            <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                              {relatedMats.map((mat, idx) => (
-                                <div key={idx} className="text-sm bg-background rounded p-2 border border-border">
-                                  • {mat}
-                                </div>
-                              ))}
+                        <TableCell colSpan={13} className="py-0">
+                          <div className="p-4 space-y-3">
+                            <div className="flex items-center justify-between">
+                              <p className="text-sm font-semibold text-muted-foreground">Related Materials for {item.scope_of_work}:</p>
+                              <Select onValueChange={(value) => addRelatedMaterial(item.id, value)}>
+                                <SelectTrigger className="w-64 h-8">
+                                  <SelectValue placeholder="Add material..." />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {relatedMats.map(mat => (
+                                    <SelectItem key={mat} value={mat}>{mat}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
                             </div>
+                            {item.relatedMaterials && item.relatedMaterials.length > 0 && (
+                              <div className="space-y-2">
+                                {item.relatedMaterials.map(rm => (
+                                  <div key={rm.id} className="bg-background rounded border border-border p-3 grid grid-cols-12 gap-2 items-center">
+                                    <div className="col-span-3 text-sm font-medium">{rm.name}</div>
+                                    <Input
+                                      type="number"
+                                      step="0.01"
+                                      value={rm.quantity}
+                                      onChange={(e) => updateRelatedMaterial(item.id, rm.id, 'quantity', parseFloat(e.target.value) || 0)}
+                                      placeholder="Qty"
+                                      className="col-span-1 h-8"
+                                    />
+                                    <Select
+                                      value={rm.unit}
+                                      onValueChange={(value) => updateRelatedMaterial(item.id, rm.id, 'unit', value)}
+                                    >
+                                      <SelectTrigger className="col-span-1 h-8">
+                                        <SelectValue />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="ea">ea</SelectItem>
+                                        <SelectItem value="m">m</SelectItem>
+                                        <SelectItem value="m²">m²</SelectItem>
+                                        <SelectItem value="kg">kg</SelectItem>
+                                        <SelectItem value="L">L</SelectItem>
+                                      </SelectContent>
+                                    </Select>
+                                    <Input
+                                      type="number"
+                                      step="0.01"
+                                      value={rm.unit_price}
+                                      onChange={(e) => updateRelatedMaterial(item.id, rm.id, 'unit_price', parseFloat(e.target.value) || 0)}
+                                      placeholder="$/Unit"
+                                      className="col-span-1 h-8"
+                                    />
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-6 w-6"
+                                      onClick={() => openUrlDialog('related', item.id, rm.id)}
+                                    >
+                                      <Link className="h-3 w-3" />
+                                    </Button>
+                                    <Input
+                                      value={rm.comment}
+                                      onChange={(e) => updateRelatedMaterial(item.id, rm.id, 'comment', e.target.value)}
+                                      placeholder="Comment"
+                                      className="col-span-4 h-8"
+                                    />
+                                    <div className="col-span-1 text-right font-mono text-sm">
+                                      ${(rm.quantity * rm.unit_price).toFixed(2)}
+                                    </div>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      onClick={() => deleteRelatedMaterial(item.id, rm.id)}
+                                      className="h-6 w-6 text-destructive"
+                                    >
+                                      <Trash2 className="h-3 w-3" />
+                                    </Button>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
                           </div>
                         </TableCell>
                       </TableRow>
@@ -838,6 +1004,35 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
           </Table>
         </div>
       </Card>
+
+      {/* URL Dialog */}
+      <Dialog open={urlDialog.open} onOpenChange={(open) => setUrlDialog({ ...urlDialog, open })}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Product URL</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>Product Link</Label>
+              <Textarea
+                value={urlDialog.url}
+                onChange={(e) => setUrlDialog({ ...urlDialog, url: e.target.value })}
+                placeholder="Paste product URL here..."
+                rows={3}
+              />
+            </div>
+            <div className="flex gap-2">
+              <Button onClick={saveUrl} className="flex-1">Save URL</Button>
+              {urlDialog.url && (
+                <Button variant="outline" onClick={() => copyUrl(urlDialog.url)}>
+                  <Copy className="h-4 w-4 mr-2" />
+                  Copy
+                </Button>
+              )}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Consumables Section */}
       <Card className="p-6">
