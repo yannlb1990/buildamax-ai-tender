@@ -118,19 +118,31 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
       .order("created_at");
 
     if (error) {
+      console.error("Load error:", error);
       toast.error("Failed to load items");
       return;
     }
 
-    setItems(data.map((item: any) => ({
-      ...item,
-      area: item.description?.split(" - ")[0] || "",
-      trade: item.category || "",
-      scope_of_work: item.item_type || "",
-      material_type: item.description || "",
-      notes: "",
-      expanded: false
-    })));
+    if (data) {
+      const mappedItems = data.map((item: any) => ({
+        id: item.id,
+        section_id: item.section_id,
+        area: item.description?.split(" - ")[0] || "",
+        trade: item.category || "",
+        scope_of_work: item.item_type || "",
+        material_type: item.description?.split(" - ")[1] || item.description || "",
+        quantity: parseFloat(item.quantity) || 0,
+        unit: item.unit || "m²",
+        unit_price: parseFloat(item.unit_price) || 0,
+        labour_hours: parseFloat(item.labour_hours) || 0,
+        labour_rate: parseFloat(item.labour_rate) || config.defaultLabourRate,
+        material_wastage_pct: parseFloat(item.material_wastage_pct) || config.materialWastage,
+        labour_wastage_pct: parseFloat(item.labour_wastage_pct) || config.labourWastage,
+        notes: "",
+        expanded: false
+      }));
+      setItems(mappedItems);
+    }
   };
 
   const addItem = async () => {
@@ -139,38 +151,45 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
       return;
     }
 
+    if (!estimateId) {
+      toast.error("No estimate found");
+      return;
+    }
+
+    const qty = parseFloat(newItem.quantity) || 0;
+    const unitPrice = parseFloat(newItem.unit_price) || 0;
+    const labourHrs = parseFloat(newItem.labour_hours) || 0;
+
+    if (qty === 0 || unitPrice === 0) {
+      toast.error("Quantity and unit price must be greater than 0");
+      return;
+    }
+
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user || !estimateId) return;
-
-    const materialBase = parseFloat(newItem.quantity) * parseFloat(newItem.unit_price);
-    const materialWaste = materialBase * (config.materialWastage / 100);
-    const materialTotal = materialBase + materialWaste;
-
-    const labourBase = parseFloat(newItem.labour_hours) * config.defaultLabourRate;
-    const labourWaste = labourBase * (config.labourWastage / 100);
-    const labourTotal = labourBase + labourWaste;
+    if (!user) return;
 
     const { error } = await supabase.from("estimate_items").insert({
       estimate_id: estimateId,
       category: newItem.trade,
       item_type: newItem.scope_of_work,
       description: `${newItem.area} - ${newItem.material_type}`,
-      quantity: parseFloat(newItem.quantity),
+      quantity: qty,
       unit: newItem.unit,
-      unit_price: parseFloat(newItem.unit_price),
-      total_price: materialTotal + labourTotal,
-      labour_hours: parseFloat(newItem.labour_hours),
+      unit_price: unitPrice,
+      total_price: 0, // Will be calculated on load
+      labour_hours: labourHrs,
       labour_rate: config.defaultLabourRate,
       material_wastage_pct: config.materialWastage,
       labour_wastage_pct: config.labourWastage,
     });
 
     if (error) {
-      toast.error("Failed to add item");
+      console.error("Insert error:", error);
+      toast.error("Failed to add item: " + error.message);
       return;
     }
 
-    toast.success("Item added");
+    toast.success("Item added successfully");
     setNewItem({
       area: "",
       trade: "",
@@ -181,7 +200,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
       unit_price: "",
       labour_hours: "",
     });
-    loadItems();
+    await loadItems();
   };
 
   const deleteItem = async (id: string) => {
@@ -199,18 +218,20 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
     let totalLabour = 0;
 
     items.forEach(item => {
-      const matBase = item.quantity * item.unit_price;
-      const matWaste = matBase * (item.material_wastage_pct / 100);
+      // Material calculation with wastage
+      const matBase = (item.quantity || 0) * (item.unit_price || 0);
+      const matWaste = matBase * ((item.material_wastage_pct || 0) / 100);
       totalMaterials += matBase + matWaste;
 
-      const labBase = item.labour_hours * item.labour_rate;
-      const labWaste = labBase * (item.labour_wastage_pct / 100);
+      // Labour calculation with wastage
+      const labBase = (item.labour_hours || 0) * (item.labour_rate || config.defaultLabourRate);
+      const labWaste = labBase * ((item.labour_wastage_pct || 0) / 100);
       totalLabour += labBase + labWaste;
     });
 
     const baseSubtotal = totalMaterials + totalLabour;
     const supervision = totalLabour * (config.supervisionPct / 100);
-    const overheadsPct = baseSubtotal * (config.overheadPct / 100);
+    const overheadsPct = (baseSubtotal + supervision) * (config.overheadPct / 100);
     const totalOverheads = overheadsPct + overheadTotal;
     const preMargin = baseSubtotal + supervision + totalOverheads;
     const margin = preMargin * (config.marginPct / 100);
