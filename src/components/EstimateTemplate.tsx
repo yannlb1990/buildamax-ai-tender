@@ -43,6 +43,45 @@ const SCOPE_OF_WORK = {
   Landscaper: ["Retaining walls", "Fencing", "Gardens", "Paving"]
 };
 
+// Related materials for each scope of work
+const SOW_RELATED_MATERIALS: Record<string, string[]> = {
+  "Cladding": ["Sarking/Building wrap", "Clouts/Nails", "Adhesive/Glue", "Flashings", "Corner trims", "J-mould"],
+  "Framing": ["Noggins", "Bracing straps", "Nails/Screws", "Treated timber bottom plate", "Galv straps"],
+  "Roof frame": ["Hurricane ties", "Nails/Screws", "Gal straps", "Ridge capping", "Bracing"],
+  "Tiles/Metal": ["Sarking", "Battens", "Screws/Clips", "Ridge caps", "Valley irons", "Flashings"],
+  "Internal walls": ["Adhesive", "Screws", "Cornice cement", "Joint compound", "Paper tape"],
+  "Ceilings": ["Adhesive", "Screws", "Battens", "Cornice cement", "Joint compound"],
+  "Floor tiling": ["Adhesive", "Grout", "Waterproofing membrane", "Tile spacers", "Movement joints"],
+  "Wall tiling": ["Adhesive", "Grout", "Waterproofing", "Tile spacers", "Corner trims"],
+  "Interior": ["Undercoat", "Primer sealer", "Topcoat", "Fillers", "Sandpaper", "Drop sheets"],
+  "Exterior": ["Undercoat", "Primer sealer", "Topcoat", "Fillers", "Sandpaper", "Masking tape"],
+  "Slab": ["Plastic sheeting", "Rebar/Mesh", "Spacers", "Expansion joints", "Curing compound"],
+  "Footings": ["Rebar", "Spacers", "Formwork timber", "Tie wire"],
+  "Rough-in": ["Glue", "Clips", "Brackets", "Straps", "Tape"],
+  "Fix out": ["Silicone", "Thread tape", "Brackets", "Screws"],
+  "Drainage": ["Glue", "Clips", "Inspection openings", "Junction boxes"],
+  "Fit-off": ["Cable ties", "Junction boxes", "Connectors", "Tape"],
+  "Solar": ["MC4 connectors", "Cable clips", "Junction boxes", "Conduit"],
+  "External walls": ["Mortar", "Wall ties", "Damp proof course", "Weep holes"],
+  "Decking": ["Screws/Hidden fixings", "Joist hangers", "Post anchors", "Bracing"],
+  "Stairs": ["Bolts", "Brackets", "Handrail brackets", "Balustrade fixings"]
+};
+
+const CONSUMABLES = [
+  "Saw blades - Circular", "Saw blades - Jigsaw", "Saw blades - Reciprocating",
+  "Drill bits - HSS", "Drill bits - Masonry", "Drill bits - Spade",
+  "Screwdriver bits - Phillips", "Screwdriver bits - Flat", "Screwdriver bits - Torx",
+  "Cutting discs - Metal", "Cutting discs - Masonry", "Grinding discs",
+  "Sandpaper - 80 grit", "Sandpaper - 120 grit", "Sandpaper - 240 grit",
+  "Pencils/Markers", "Chalk lines", "Measuring tape",
+  "Safety glasses", "Gloves - Work", "Gloves - Chemical resistant",
+  "Dust masks", "Ear plugs", "Hard hats",
+  "Drop sheets", "Masking tape", "Duct tape",
+  "Rags/Cloths", "Cleaning solvent", "WD-40",
+  "Wire brushes", "Paint brushes - Disposable", "Paint rollers",
+  "Caulking gun tips", "Grease gun cartridges", "Extension cords"
+];
+
 interface EstimateItem {
   id: string;
   section_id: string | null;
@@ -61,6 +100,20 @@ interface EstimateItem {
   expanded: boolean;
   item_number?: string;
   isEditing?: boolean;
+  relatedMaterials?: Array<{
+    name: string;
+    quantity: number;
+    unit: string;
+    unit_price: number;
+  }>;
+}
+
+interface ConsumableItem {
+  id: string;
+  name: string;
+  quantity: number;
+  unit: string;
+  unit_price: number;
 }
 
 interface EstimateTemplateProps {
@@ -70,9 +123,11 @@ interface EstimateTemplateProps {
 
 export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProps) => {
   const [items, setItems] = useState<EstimateItem[]>([]);
+  const [consumables, setConsumables] = useState<ConsumableItem[]>([]);
   const [overheadTotal, setOverheadTotal] = useState(0);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValues, setEditValues] = useState<Partial<EstimateItem>>({});
+  const [newConsumable, setNewConsumable] = useState({ name: "", quantity: "", unit: "ea", unit_price: "" });
   const [config, setConfig] = useState({
     defaultLabourRate: 90,
     materialWastage: 10,
@@ -272,6 +327,34 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
     loadItems();
   };
 
+  const toggleExpanded = (id: string) => {
+    setItems(items.map(item => 
+      item.id === id ? { ...item, expanded: !item.expanded } : item
+    ));
+  };
+
+  const addConsumable = () => {
+    if (!newConsumable.name || !newConsumable.quantity || !newConsumable.unit_price) {
+      toast.error("Please fill all consumable fields");
+      return;
+    }
+    const consumable: ConsumableItem = {
+      id: Math.random().toString(),
+      name: newConsumable.name,
+      quantity: parseFloat(newConsumable.quantity),
+      unit: newConsumable.unit,
+      unit_price: parseFloat(newConsumable.unit_price)
+    };
+    setConsumables([...consumables, consumable]);
+    setNewConsumable({ name: "", quantity: "", unit: "ea", unit_price: "" });
+    toast.success("Consumable added");
+  };
+
+  const deleteConsumable = (id: string) => {
+    setConsumables(consumables.filter(c => c.id !== id));
+    toast.success("Consumable removed");
+  };
+
   const calculateTotals = () => {
     let totalMaterials = 0;
     let totalLabour = 0;
@@ -282,10 +365,22 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
       const matWaste = matBase * ((item.material_wastage_pct || 0) / 100);
       totalMaterials += matBase + matWaste;
 
+      // Add related materials
+      if (item.relatedMaterials) {
+        item.relatedMaterials.forEach(rm => {
+          totalMaterials += (rm.quantity || 0) * (rm.unit_price || 0);
+        });
+      }
+
       // Labour calculation with wastage
       const labBase = (item.labour_hours || 0) * (item.labour_rate || config.defaultLabourRate);
       const labWaste = labBase * ((item.labour_wastage_pct || 0) / 100);
       totalLabour += labBase + labWaste;
+    });
+
+    // Add consumables to materials
+    consumables.forEach(cons => {
+      totalMaterials += (cons.quantity || 0) * (cons.unit_price || 0);
     });
 
     const baseSubtotal = totalMaterials + totalLabour;
@@ -577,6 +672,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-12"></TableHead>
                 <TableHead>Item #</TableHead>
                 <TableHead>Area</TableHead>
                 <TableHead>Trade</TableHead>
@@ -598,114 +694,259 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
                 const labWaste = labBase * (item.labour_wastage_pct / 100);
                 const lineTotal = matBase + matWaste + labBase + labWaste;
                 const isEditing = editingId === item.id;
+                const relatedMats = SOW_RELATED_MATERIALS[item.scope_of_work] || [];
 
                 return (
-                  <TableRow key={item.id}>
-                    <TableCell className="font-mono text-xs">{item.item_number}</TableCell>
-                    <TableCell>
-                      {isEditing ? (
-                        <Input
-                          value={editValues.area}
-                          onChange={(e) => setEditValues({ ...editValues, area: e.target.value })}
-                          className="h-8"
-                        />
-                      ) : item.area}
-                    </TableCell>
-                    <TableCell>{item.trade}</TableCell>
-                    <TableCell>{item.scope_of_work}</TableCell>
-                    <TableCell>
-                      {isEditing ? (
-                        <Input
-                          value={editValues.material_type}
-                          onChange={(e) => setEditValues({ ...editValues, material_type: e.target.value })}
-                          className="h-8"
-                        />
-                      ) : item.material_type}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {isEditing ? (
-                        <Input
-                          type="number"
-                          step="0.01"
-                          value={editValues.quantity}
-                          onChange={(e) => setEditValues({ ...editValues, quantity: parseFloat(e.target.value) })}
-                          className="h-8 w-20 text-right"
-                        />
-                      ) : <span className="font-mono">{item.quantity}</span>}
-                    </TableCell>
-                    <TableCell>{item.unit}</TableCell>
-                    <TableCell className="text-right">
-                      {isEditing ? (
-                        <Input
-                          type="number"
-                          step="0.01"
-                          value={editValues.unit_price}
-                          onChange={(e) => setEditValues({ ...editValues, unit_price: parseFloat(e.target.value) })}
-                          className="h-8 w-24 text-right"
-                        />
-                      ) : <span className="font-mono">${item.unit_price.toFixed(2)}</span>}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {isEditing ? (
-                        <Input
-                          type="number"
-                          step="0.5"
-                          value={editValues.labour_hours}
-                          onChange={(e) => setEditValues({ ...editValues, labour_hours: parseFloat(e.target.value) })}
-                          className="h-8 w-20 text-right"
-                        />
-                      ) : <span className="font-mono">{item.labour_hours}</span>}
-                    </TableCell>
-                    <TableCell className="text-right font-mono font-bold">${lineTotal.toFixed(2)}</TableCell>
-                    <TableCell>
-                      <div className="flex gap-1">
-                        {isEditing ? (
-                          <>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => saveEdit(item.id)}
-                              className="text-green-600 h-8 w-8"
-                            >
-                              <Save className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={cancelEditing}
-                              className="h-8 w-8"
-                            >
-                              <X className="h-4 w-4" />
-                            </Button>
-                          </>
-                        ) : (
-                          <>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => startEditing(item)}
-                              className="h-8 w-8"
-                            >
-                              <Edit2 className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => deleteItem(item.id)}
-                              className="text-destructive h-8 w-8"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </>
+                  <>
+                    <TableRow key={item.id} className="group">
+                      <TableCell>
+                        {relatedMats.length > 0 && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6"
+                            onClick={() => toggleExpanded(item.id)}
+                          >
+                            {item.expanded ? (
+                              <ChevronDown className="h-4 w-4" />
+                            ) : (
+                              <ChevronRight className="h-4 w-4" />
+                            )}
+                          </Button>
                         )}
-                      </div>
-                    </TableCell>
-                  </TableRow>
+                      </TableCell>
+                      <TableCell className="font-mono text-xs">{item.item_number}</TableCell>
+                      <TableCell>
+                        {isEditing ? (
+                          <Input
+                            value={editValues.area}
+                            onChange={(e) => setEditValues({ ...editValues, area: e.target.value })}
+                            className="h-8"
+                          />
+                        ) : item.area}
+                      </TableCell>
+                      <TableCell>{item.trade}</TableCell>
+                      <TableCell>{item.scope_of_work}</TableCell>
+                      <TableCell>
+                        {isEditing ? (
+                          <Input
+                            value={editValues.material_type}
+                            onChange={(e) => setEditValues({ ...editValues, material_type: e.target.value })}
+                            className="h-8"
+                          />
+                        ) : item.material_type}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {isEditing ? (
+                          <Input
+                            type="number"
+                            step="0.01"
+                            value={editValues.quantity}
+                            onChange={(e) => setEditValues({ ...editValues, quantity: parseFloat(e.target.value) })}
+                            className="h-8 w-20 text-right"
+                          />
+                        ) : <span className="font-mono">{item.quantity}</span>}
+                      </TableCell>
+                      <TableCell>{item.unit}</TableCell>
+                      <TableCell className="text-right">
+                        {isEditing ? (
+                          <Input
+                            type="number"
+                            step="0.01"
+                            value={editValues.unit_price}
+                            onChange={(e) => setEditValues({ ...editValues, unit_price: parseFloat(e.target.value) })}
+                            className="h-8 w-24 text-right"
+                          />
+                        ) : <span className="font-mono">${item.unit_price.toFixed(2)}</span>}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {isEditing ? (
+                          <Input
+                            type="number"
+                            step="0.5"
+                            value={editValues.labour_hours}
+                            onChange={(e) => setEditValues({ ...editValues, labour_hours: parseFloat(e.target.value) })}
+                            className="h-8 w-20 text-right"
+                          />
+                        ) : <span className="font-mono">{item.labour_hours}</span>}
+                      </TableCell>
+                      <TableCell className="text-right font-mono font-bold">${lineTotal.toFixed(2)}</TableCell>
+                      <TableCell>
+                        <div className="flex gap-1">
+                          {isEditing ? (
+                            <>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => saveEdit(item.id)}
+                                className="text-green-600 h-8 w-8"
+                              >
+                                <Save className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={cancelEditing}
+                                className="h-8 w-8"
+                              >
+                                <X className="h-4 w-4" />
+                              </Button>
+                            </>
+                          ) : (
+                            <>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => startEditing(item)}
+                                className="h-8 w-8"
+                              >
+                                <Edit2 className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => deleteItem(item.id)}
+                                className="text-destructive h-8 w-8"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </>
+                          )}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                    {item.expanded && relatedMats.length > 0 && (
+                      <TableRow key={`${item.id}-related`} className="bg-muted/30">
+                        <TableCell colSpan={12} className="py-0">
+                          <div className="p-4 space-y-2">
+                            <p className="text-sm font-semibold text-muted-foreground mb-2">Related Materials for {item.scope_of_work}:</p>
+                            <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                              {relatedMats.map((mat, idx) => (
+                                <div key={idx} className="text-sm bg-background rounded p-2 border border-border">
+                                  • {mat}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </>
                 );
               })}
             </TableBody>
           </Table>
         </div>
+      </Card>
+
+      {/* Consumables Section */}
+      <Card className="p-6">
+        <h3 className="font-display text-xl font-bold mb-4">Consumables</h3>
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-4">
+          <div className="md:col-span-2">
+            <Label>Consumable Item</Label>
+            <Select
+              value={newConsumable.name}
+              onValueChange={(value) => setNewConsumable({ ...newConsumable, name: value })}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select or type custom" />
+              </SelectTrigger>
+              <SelectContent className="max-h-60">
+                {CONSUMABLES.map(cons => (
+                  <SelectItem key={cons} value={cons}>{cons}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label>Quantity</Label>
+            <Input
+              type="number"
+              step="0.01"
+              value={newConsumable.quantity}
+              onChange={(e) => setNewConsumable({ ...newConsumable, quantity: e.target.value })}
+              placeholder="0"
+            />
+          </div>
+          <div>
+            <Label>Unit</Label>
+            <Select
+              value={newConsumable.unit}
+              onValueChange={(value) => setNewConsumable({ ...newConsumable, unit: value })}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ea">ea (each)</SelectItem>
+                <SelectItem value="box">box</SelectItem>
+                <SelectItem value="pk">pk (pack)</SelectItem>
+                <SelectItem value="set">set</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label>Unit Price ($)</Label>
+            <Input
+              type="number"
+              step="0.01"
+              value={newConsumable.unit_price}
+              onChange={(e) => setNewConsumable({ ...newConsumable, unit_price: e.target.value })}
+              placeholder="0.00"
+            />
+          </div>
+        </div>
+        <div className="flex gap-2 mb-4">
+          <Button onClick={addConsumable} variant="outline">
+            <Plus className="h-4 w-4 mr-2" />
+            Add Consumable
+          </Button>
+          <Input
+            placeholder="Or type custom consumable name..."
+            value={newConsumable.name}
+            onChange={(e) => setNewConsumable({ ...newConsumable, name: e.target.value })}
+            className="flex-1"
+          />
+        </div>
+        
+        {consumables.length > 0 && (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Item</TableHead>
+                <TableHead className="text-right">Quantity</TableHead>
+                <TableHead>Unit</TableHead>
+                <TableHead className="text-right">Unit Price</TableHead>
+                <TableHead className="text-right">Total</TableHead>
+                <TableHead></TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {consumables.map(cons => (
+                <TableRow key={cons.id}>
+                  <TableCell>{cons.name}</TableCell>
+                  <TableCell className="text-right font-mono">{cons.quantity}</TableCell>
+                  <TableCell>{cons.unit}</TableCell>
+                  <TableCell className="text-right font-mono">${cons.unit_price.toFixed(2)}</TableCell>
+                  <TableCell className="text-right font-mono font-bold">
+                    ${(cons.quantity * cons.unit_price).toFixed(2)}
+                  </TableCell>
+                  <TableCell>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => deleteConsumable(cons.id)}
+                      className="text-destructive h-8 w-8"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
       </Card>
     </div>
   );
