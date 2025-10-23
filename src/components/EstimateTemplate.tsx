@@ -20,8 +20,10 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { toast } from "sonner";
-import { Plus, Trash2, ChevronDown, ChevronRight, DollarSign } from "lucide-react";
+import { Plus, Trash2, ChevronDown, ChevronRight, DollarSign, Edit2, Save, X } from "lucide-react";
 import { AIPlanAnalyzer } from "./AIPlanAnalyzer";
+import { PreliminariesSection } from "./PreliminariesSection";
+import { NCCSearchBar } from "./NCCSearchBar";
 
 const AU_TRADES = [
   "Carpenter", "Plumber", "Electrician", "Bricklayer", "Plasterer",
@@ -57,6 +59,8 @@ interface EstimateItem {
   labour_wastage_pct: number;
   notes: string;
   expanded: boolean;
+  item_number?: string;
+  isEditing?: boolean;
 }
 
 interface EstimateTemplateProps {
@@ -67,6 +71,8 @@ interface EstimateTemplateProps {
 export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProps) => {
   const [items, setItems] = useState<EstimateItem[]>([]);
   const [overheadTotal, setOverheadTotal] = useState(0);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editValues, setEditValues] = useState<Partial<EstimateItem>>({});
   const [config, setConfig] = useState({
     defaultLabourRate: 90,
     materialWastage: 10,
@@ -125,23 +131,37 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
     }
 
     if (data) {
-      const mappedItems = data.map((item: any) => ({
-        id: item.id,
-        section_id: item.section_id,
-        area: item.description?.split(" - ")[0] || "",
-        trade: item.category || "",
-        scope_of_work: item.item_type || "",
-        material_type: item.description?.split(" - ")[1] || item.description || "",
-        quantity: parseFloat(item.quantity) || 0,
-        unit: item.unit || "m²",
-        unit_price: parseFloat(item.unit_price) || 0,
-        labour_hours: parseFloat(item.labour_hours) || 0,
-        labour_rate: parseFloat(item.labour_rate) || config.defaultLabourRate,
-        material_wastage_pct: parseFloat(item.material_wastage_pct) || config.materialWastage,
-        labour_wastage_pct: parseFloat(item.labour_wastage_pct) || config.labourWastage,
-        notes: "",
-        expanded: false
-      }));
+      const mappedItems = data.map((item: any, index: number) => {
+        // Generate item number based on trade grouping
+        const tradeItems = data.filter((i: any) => i.category === item.category);
+        const tradeIndex = tradeItems.findIndex((i: any) => i.id === item.id);
+        const tradeNumber = data.filter((i: any, idx: number) => idx < index && i.category !== item.category)
+          .reduce((acc: any, curr: any) => {
+            if (!acc.includes(curr.category)) acc.push(curr.category);
+            return acc;
+          }, []).length + 1;
+        const itemNumber = `${tradeNumber}.${tradeIndex + 1}`;
+
+        return {
+          id: item.id,
+          section_id: item.section_id,
+          area: item.description?.split(" - ")[0] || "",
+          trade: item.category || "",
+          scope_of_work: item.item_type || "",
+          material_type: item.description?.split(" - ")[1] || item.description || "",
+          quantity: parseFloat(item.quantity) || 0,
+          unit: item.unit || "m²",
+          unit_price: parseFloat(item.unit_price) || 0,
+          labour_hours: parseFloat(item.labour_hours) || 0,
+          labour_rate: parseFloat(item.labour_rate) || config.defaultLabourRate,
+          material_wastage_pct: parseFloat(item.material_wastage_pct) || config.materialWastage,
+          labour_wastage_pct: parseFloat(item.labour_wastage_pct) || config.labourWastage,
+          notes: "",
+          expanded: false,
+          item_number: itemNumber,
+          isEditing: false
+        };
+      });
       setItems(mappedItems);
     }
   };
@@ -214,6 +234,44 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
     loadItems();
   };
 
+  const startEditing = (item: EstimateItem) => {
+    setEditingId(item.id);
+    setEditValues({
+      quantity: item.quantity,
+      unit_price: item.unit_price,
+      labour_hours: item.labour_hours,
+      material_type: item.material_type,
+      area: item.area
+    });
+  };
+
+  const cancelEditing = () => {
+    setEditingId(null);
+    setEditValues({});
+  };
+
+  const saveEdit = async (id: string) => {
+    const { error } = await supabase
+      .from("estimate_items")
+      .update({
+        quantity: editValues.quantity,
+        unit_price: editValues.unit_price,
+        labour_hours: editValues.labour_hours,
+        description: `${editValues.area} - ${editValues.material_type}`
+      })
+      .eq("id", id);
+
+    if (error) {
+      toast.error("Failed to update item");
+      return;
+    }
+
+    toast.success("Item updated");
+    setEditingId(null);
+    setEditValues({});
+    loadItems();
+  };
+
   const calculateTotals = () => {
     let totalMaterials = 0;
     let totalLabour = 0;
@@ -276,12 +334,18 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
 
   return (
     <div className="space-y-6">
+      {/* NCC Search Bar */}
+      <NCCSearchBar />
+
       {/* AI Plan Analyzer */}
       <AIPlanAnalyzer 
         projectId={projectId} 
         estimateId={estimateId}
         onAddItems={handleAIItems}
       />
+
+      {/* Preliminaries Section */}
+      <PreliminariesSection />
 
       {/* Summary Card */}
       <Card className="p-6 bg-gradient-to-br from-primary/20 to-accent/20">
@@ -513,6 +577,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead>Item #</TableHead>
                 <TableHead>Area</TableHead>
                 <TableHead>Trade</TableHead>
                 <TableHead>SOW</TableHead>
@@ -532,27 +597,108 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
                 const labBase = item.labour_hours * item.labour_rate;
                 const labWaste = labBase * (item.labour_wastage_pct / 100);
                 const lineTotal = matBase + matWaste + labBase + labWaste;
+                const isEditing = editingId === item.id;
 
                 return (
                   <TableRow key={item.id}>
-                    <TableCell>{item.area}</TableCell>
+                    <TableCell className="font-mono text-xs">{item.item_number}</TableCell>
+                    <TableCell>
+                      {isEditing ? (
+                        <Input
+                          value={editValues.area}
+                          onChange={(e) => setEditValues({ ...editValues, area: e.target.value })}
+                          className="h-8"
+                        />
+                      ) : item.area}
+                    </TableCell>
                     <TableCell>{item.trade}</TableCell>
                     <TableCell>{item.scope_of_work}</TableCell>
-                    <TableCell>{item.material_type}</TableCell>
-                    <TableCell className="text-right font-mono">{item.quantity}</TableCell>
+                    <TableCell>
+                      {isEditing ? (
+                        <Input
+                          value={editValues.material_type}
+                          onChange={(e) => setEditValues({ ...editValues, material_type: e.target.value })}
+                          className="h-8"
+                        />
+                      ) : item.material_type}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {isEditing ? (
+                        <Input
+                          type="number"
+                          step="0.01"
+                          value={editValues.quantity}
+                          onChange={(e) => setEditValues({ ...editValues, quantity: parseFloat(e.target.value) })}
+                          className="h-8 w-20 text-right"
+                        />
+                      ) : <span className="font-mono">{item.quantity}</span>}
+                    </TableCell>
                     <TableCell>{item.unit}</TableCell>
-                    <TableCell className="text-right font-mono">${item.unit_price.toFixed(2)}</TableCell>
-                    <TableCell className="text-right font-mono">{item.labour_hours}</TableCell>
+                    <TableCell className="text-right">
+                      {isEditing ? (
+                        <Input
+                          type="number"
+                          step="0.01"
+                          value={editValues.unit_price}
+                          onChange={(e) => setEditValues({ ...editValues, unit_price: parseFloat(e.target.value) })}
+                          className="h-8 w-24 text-right"
+                        />
+                      ) : <span className="font-mono">${item.unit_price.toFixed(2)}</span>}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {isEditing ? (
+                        <Input
+                          type="number"
+                          step="0.5"
+                          value={editValues.labour_hours}
+                          onChange={(e) => setEditValues({ ...editValues, labour_hours: parseFloat(e.target.value) })}
+                          className="h-8 w-20 text-right"
+                        />
+                      ) : <span className="font-mono">{item.labour_hours}</span>}
+                    </TableCell>
                     <TableCell className="text-right font-mono font-bold">${lineTotal.toFixed(2)}</TableCell>
                     <TableCell>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => deleteItem(item.id)}
-                        className="text-destructive"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                      <div className="flex gap-1">
+                        {isEditing ? (
+                          <>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => saveEdit(item.id)}
+                              className="text-green-600 h-8 w-8"
+                            >
+                              <Save className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={cancelEditing}
+                              className="h-8 w-8"
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
+                          </>
+                        ) : (
+                          <>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => startEditing(item)}
+                              className="h-8 w-8"
+                            >
+                              <Edit2 className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => deleteItem(item.id)}
+                              className="text-destructive h-8 w-8"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </>
+                        )}
+                      </div>
                     </TableCell>
                   </TableRow>
                 );
