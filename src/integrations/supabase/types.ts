@@ -14,7 +14,294 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      ai_analyses: {
+        Row: {
+          analysis_type: string
+          confidence_score: number | null
+          created_at: string | null
+          id: string
+          input_data: Json | null
+          project_id: string
+          results: Json | null
+          user_id: string
+        }
+        Insert: {
+          analysis_type: string
+          confidence_score?: number | null
+          created_at?: string | null
+          id?: string
+          input_data?: Json | null
+          project_id: string
+          results?: Json | null
+          user_id: string
+        }
+        Update: {
+          analysis_type?: string
+          confidence_score?: number | null
+          created_at?: string | null
+          id?: string
+          input_data?: Json | null
+          project_id?: string
+          results?: Json | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_analyses_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      estimate_items: {
+        Row: {
+          category: string
+          created_at: string | null
+          description: string
+          estimate_id: string
+          id: string
+          item_type: string
+          quantity: number
+          supplier: string | null
+          total_price: number
+          unit: string | null
+          unit_price: number
+        }
+        Insert: {
+          category: string
+          created_at?: string | null
+          description: string
+          estimate_id: string
+          id?: string
+          item_type: string
+          quantity?: number
+          supplier?: string | null
+          total_price?: number
+          unit?: string | null
+          unit_price?: number
+        }
+        Update: {
+          category?: string
+          created_at?: string | null
+          description?: string
+          estimate_id?: string
+          id?: string
+          item_type?: string
+          quantity?: number
+          supplier?: string | null
+          total_price?: number
+          unit?: string | null
+          unit_price?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "estimate_items_estimate_id_fkey"
+            columns: ["estimate_id"]
+            isOneToOne: false
+            referencedRelation: "estimates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      estimates: {
+        Row: {
+          created_at: string | null
+          gst_percentage: number | null
+          id: string
+          margin_percentage: number | null
+          overhead_percentage: number | null
+          project_id: string
+          subtotal: number | null
+          total_inc_gst: number | null
+          total_labour: number | null
+          total_materials: number | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          gst_percentage?: number | null
+          id?: string
+          margin_percentage?: number | null
+          overhead_percentage?: number | null
+          project_id: string
+          subtotal?: number | null
+          total_inc_gst?: number | null
+          total_labour?: number | null
+          total_materials?: number | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          gst_percentage?: number | null
+          id?: string
+          margin_percentage?: number | null
+          overhead_percentage?: number | null
+          project_id?: string
+          subtotal?: number | null
+          total_inc_gst?: number | null
+          total_labour?: number | null
+          total_materials?: number | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "estimates_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          abn: string | null
+          address: string | null
+          company_name: string | null
+          created_at: string | null
+          id: string
+          logo_url: string | null
+          phone: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          abn?: string | null
+          address?: string | null
+          company_name?: string | null
+          created_at?: string | null
+          id: string
+          logo_url?: string | null
+          phone?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          abn?: string | null
+          address?: string | null
+          company_name?: string | null
+          created_at?: string | null
+          id?: string
+          logo_url?: string | null
+          phone?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      projects: {
+        Row: {
+          client_name: string | null
+          created_at: string | null
+          id: string
+          name: string
+          plan_file_name: string | null
+          plan_file_url: string | null
+          site_address: string | null
+          status: string | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          client_name?: string | null
+          created_at?: string | null
+          id?: string
+          name: string
+          plan_file_name?: string | null
+          plan_file_url?: string | null
+          site_address?: string | null
+          status?: string | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          client_name?: string | null
+          created_at?: string | null
+          id?: string
+          name?: string
+          plan_file_name?: string | null
+          plan_file_url?: string | null
+          site_address?: string | null
+          status?: string | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      tenders: {
+        Row: {
+          created_at: string | null
+          deposit_percentage: number | null
+          estimate_id: string
+          exclusions: string[] | null
+          final_payment_percentage: number | null
+          id: string
+          inclusions: string[] | null
+          payment_terms: string | null
+          pdf_url: string | null
+          progress_payment_percentage: number | null
+          project_id: string
+          status: string | null
+          tender_number: string | null
+          updated_at: string | null
+          user_id: string
+          validity_days: number | null
+        }
+        Insert: {
+          created_at?: string | null
+          deposit_percentage?: number | null
+          estimate_id: string
+          exclusions?: string[] | null
+          final_payment_percentage?: number | null
+          id?: string
+          inclusions?: string[] | null
+          payment_terms?: string | null
+          pdf_url?: string | null
+          progress_payment_percentage?: number | null
+          project_id: string
+          status?: string | null
+          tender_number?: string | null
+          updated_at?: string | null
+          user_id: string
+          validity_days?: number | null
+        }
+        Update: {
+          created_at?: string | null
+          deposit_percentage?: number | null
+          estimate_id?: string
+          exclusions?: string[] | null
+          final_payment_percentage?: number | null
+          id?: string
+          inclusions?: string[] | null
+          payment_terms?: string | null
+          pdf_url?: string | null
+          progress_payment_percentage?: number | null
+          project_id?: string
+          status?: string | null
+          tender_number?: string | null
+          updated_at?: string | null
+          user_id?: string
+          validity_days?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tenders_estimate_id_fkey"
+            columns: ["estimate_id"]
+            isOneToOne: false
+            referencedRelation: "estimates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tenders_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
