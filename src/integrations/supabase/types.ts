@@ -55,6 +55,33 @@ export type Database = {
           },
         ]
       }
+      au_pricing_regions: {
+        Row: {
+          cost_index: number | null
+          created_at: string
+          description: string | null
+          id: string
+          region: string
+          state: string
+        }
+        Insert: {
+          cost_index?: number | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          region: string
+          state: string
+        }
+        Update: {
+          cost_index?: number | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          region?: string
+          state?: string
+        }
+        Relationships: []
+      }
       chat_conversations: {
         Row: {
           created_at: string
@@ -285,31 +312,43 @@ export type Database = {
         Row: {
           abn: string | null
           address: string | null
+          city: string | null
           company_name: string | null
           created_at: string | null
           id: string
           logo_url: string | null
           phone: string | null
+          postcode: string | null
+          region: string | null
+          state: string | null
           updated_at: string | null
         }
         Insert: {
           abn?: string | null
           address?: string | null
+          city?: string | null
           company_name?: string | null
           created_at?: string | null
           id: string
           logo_url?: string | null
           phone?: string | null
+          postcode?: string | null
+          region?: string | null
+          state?: string | null
           updated_at?: string | null
         }
         Update: {
           abn?: string | null
           address?: string | null
+          city?: string | null
           company_name?: string | null
           created_at?: string | null
           id?: string
           logo_url?: string | null
           phone?: string | null
+          postcode?: string | null
+          region?: string | null
+          state?: string | null
           updated_at?: string | null
         }
         Relationships: []
