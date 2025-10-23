@@ -44,9 +44,17 @@ const Dashboard = () => {
   }, [navigate]);
 
   const loadProjects = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
     const { data, error } = await supabase
       .from("projects")
-      .select("*")
+      .select(`
+        *,
+        estimates(total_inc_gst),
+        overhead_items(amount)
+      `)
+      .eq("user_id", user.id)
       .order("updated_at", { ascending: false })
       .limit(5);
 
@@ -132,7 +140,12 @@ const Dashboard = () => {
               </div>
               <span className="text-sm text-muted-foreground">Total Value</span>
             </div>
-            <div className="font-mono text-3xl font-bold">$0</div>
+            <div className="font-mono text-3xl font-bold">
+              ${projects.reduce((sum, p) => {
+                const estimateTotal = p.estimates?.[0]?.total_inc_gst || 0;
+                return sum + parseFloat(estimateTotal);
+              }, 0).toFixed(2)}
+            </div>
           </Card>
 
           <Card className="p-6 bg-background border-border">

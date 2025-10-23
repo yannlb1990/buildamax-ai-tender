@@ -5,7 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { ArrowLeft, FileText, DollarSign, CheckCircle, Loader2, Sparkles } from "lucide-react";
+import { ArrowLeft, FileText, DollarSign, CheckCircle, Loader2, Sparkles, Settings } from "lucide-react";
+import { OverheadManager } from "@/components/OverheadManager";
 
 const ProjectDetail = () => {
   const { projectId } = useParams();
@@ -104,7 +105,7 @@ const ProjectDetail = () => {
         </div>
 
         <Tabs defaultValue="takeoff" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid w-full grid-cols-5">
             <TabsTrigger value="takeoff">
               <CheckCircle className="h-4 w-4 mr-2" />
               Takeoff
@@ -112,6 +113,10 @@ const ProjectDetail = () => {
             <TabsTrigger value="pricing">
               <DollarSign className="h-4 w-4 mr-2" />
               Pricing
+            </TabsTrigger>
+            <TabsTrigger value="overheads">
+              <Settings className="h-4 w-4 mr-2" />
+              Overheads
             </TabsTrigger>
             <TabsTrigger value="tender">
               <FileText className="h-4 w-4 mr-2" />
@@ -175,6 +180,10 @@ const ProjectDetail = () => {
                 </div>
               )}
             </Card>
+          </TabsContent>
+
+          <TabsContent value="overheads">
+            <OverheadManager projectId={projectId!} />
           </TabsContent>
 
           <TabsContent value="tender">
