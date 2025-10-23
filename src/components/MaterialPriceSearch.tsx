@@ -8,23 +8,76 @@ import { toast } from "sonner";
 interface SearchResult {
   supplier: string;
   title: string;
-  price: string;
+  priceRange: string;
   url: string;
   description?: string;
+  category: string;
 }
+
+// Material categories and their relevant suppliers with indicative price ranges
+const MATERIAL_SUPPLIERS: Record<string, { supplier: string; priceRange: string; url: string; description: string }[]> = {
+  timber: [
+    { supplier: "Bunnings", priceRange: "$8-45/LM", url: "https://www.bunnings.com.au/our-range/building-hardware/timber", description: "Structural & framing timber" },
+    { supplier: "Mitre 10", priceRange: "$10-50/LM", url: "https://www.mitre10.com.au/building-construction/timber-sheet-materials/timber", description: "Quality timber supplies" },
+    { supplier: "Tradelink", priceRange: "$12-55/LM", url: "https://www.tradelink.com.au/", description: "Trade timber specialist" },
+  ],
+  plumbing: [
+    { supplier: "Reece", priceRange: "$5-250/unit", url: "https://www.reece.com.au/plumbing", description: "Premium plumbing supplies" },
+    { supplier: "Tradelink", priceRange: "$4-220/unit", url: "https://www.tradelink.com.au/categories/plumbing", description: "Trade plumbing solutions" },
+    { supplier: "Bunnings", priceRange: "$3-180/unit", url: "https://www.bunnings.com.au/our-range/building-hardware/plumbing", description: "Retail plumbing range" },
+  ],
+  electrical: [
+    { supplier: "Total Tools", priceRange: "$15-350/item", url: "https://www.totaltools.com.au/electrical", description: "Professional electrical supplies" },
+    { supplier: "Bunnings", priceRange: "$8-280/item", url: "https://www.bunnings.com.au/our-range/building-hardware/electrical", description: "Electrical hardware & cables" },
+  ],
+  cladding: [
+    { supplier: "Bunnings", priceRange: "$35-180/sheet", url: "https://www.bunnings.com.au/our-range/building-hardware/external-cladding", description: "External cladding systems" },
+    { supplier: "Mitre 10", priceRange: "$40-200/sheet", url: "https://www.mitre10.com.au/building-construction/cladding", description: "Weatherboard & cladding" },
+  ],
+  roofing: [
+    { supplier: "Bunnings", priceRange: "$18-85/LM", url: "https://www.bunnings.com.au/our-range/building-hardware/roofing", description: "Colorbond & roofing materials" },
+    { supplier: "Mitre 10", priceRange: "$20-90/LM", url: "https://www.mitre10.com.au/building-construction/roofing", description: "Roof sheets & accessories" },
+  ],
+  concrete: [
+    { supplier: "Bunnings", priceRange: "$8-25/bag", url: "https://www.bunnings.com.au/our-range/building-hardware/cement-concrete-sand", description: "Cement, concrete & premix" },
+    { supplier: "Mitre 10", priceRange: "$9-28/bag", url: "https://www.mitre10.com.au/building-construction/concrete-cement", description: "Concrete supplies" },
+  ],
+  tiles: [
+    { supplier: "Bunnings", priceRange: "$15-120/m²", url: "https://www.bunnings.com.au/our-range/bathrooms-plumbing/tiles", description: "Wall & floor tiles" },
+    { supplier: "Reece", priceRange: "$25-180/m²", url: "https://www.reece.com.au/bathrooms/tiles", description: "Premium tile range" },
+  ],
+  paint: [
+    { supplier: "Bunnings", priceRange: "$45-185/4L", url: "https://www.bunnings.com.au/our-range/paint-decorating/paint", description: "Interior & exterior paints" },
+    { supplier: "Mitre 10", priceRange: "$48-195/4L", url: "https://www.mitre10.com.au/decorating/paint", description: "Trade quality paints" },
+  ],
+  insulation: [
+    { supplier: "Bunnings", priceRange: "$8-35/m²", url: "https://www.bunnings.com.au/our-range/building-hardware/insulation", description: "Thermal & acoustic insulation" },
+    { supplier: "Mitre 10", priceRange: "$9-38/m²", url: "https://www.mitre10.com.au/building-construction/insulation", description: "Insulation batts & boards" },
+  ],
+  hardware: [
+    { supplier: "Total Tools", priceRange: "$2-150/item", url: "https://www.totaltools.com.au/", description: "Professional tools & hardware" },
+    { supplier: "Bunnings", priceRange: "$1-120/item", url: "https://www.bunnings.com.au/our-range/tools", description: "General hardware & fixings" },
+  ]
+};
 
 export const MaterialPriceSearch = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState<SearchResult[]>([]);
 
-  const australianSuppliers = [
-    { name: "Bunnings", domain: "bunnings.com.au" },
-    { name: "Mitre 10", domain: "mitre10.com.au" },
-    { name: "Reece", domain: "reece.com.au" },
-    { name: "Tradelink", domain: "tradelink.com.au" },
-    { name: "Total Tools", domain: "totaltools.com.au" },
-  ];
+  const detectMaterialCategory = (term: string): string => {
+    const lower = term.toLowerCase();
+    if (lower.includes("timber") || lower.includes("wood") || lower.includes("framing") || lower.includes("mgp")) return "timber";
+    if (lower.includes("pipe") || lower.includes("plumb") || lower.includes("tap") || lower.includes("drain")) return "plumbing";
+    if (lower.includes("cable") || lower.includes("wire") || lower.includes("switch") || lower.includes("electrical")) return "electrical";
+    if (lower.includes("clad") || lower.includes("weatherboard") || lower.includes("panel")) return "cladding";
+    if (lower.includes("roof") || lower.includes("colorbond") || lower.includes("gutter") || lower.includes("flashing")) return "roofing";
+    if (lower.includes("concrete") || lower.includes("cement") || lower.includes("mix")) return "concrete";
+    if (lower.includes("tile") || lower.includes("porcelain") || lower.includes("ceramic")) return "tiles";
+    if (lower.includes("paint") || lower.includes("primer") || lower.includes("sealer")) return "paint";
+    if (lower.includes("insulation") || lower.includes("batt") || lower.includes("sarking")) return "insulation";
+    return "hardware";
+  };
 
   const handleSearch = async () => {
     if (!searchTerm.trim()) {
@@ -34,48 +87,49 @@ export const MaterialPriceSearch = () => {
 
     setLoading(true);
     
-    // Create direct search links to Australian suppliers
-    const searchResults: SearchResult[] = [
-      {
-        supplier: "Bunnings Warehouse",
-        title: searchTerm,
-        price: "View pricing online",
-        url: `https://www.bunnings.com.au/search/products?q=${encodeURIComponent(searchTerm)}`,
-        description: "Australia's leading hardware and building supplies retailer"
-      },
-      {
-        supplier: "Mitre 10",
-        title: searchTerm,
-        price: "Compare prices",
-        url: `https://www.mitre10.com.au/search?text=${encodeURIComponent(searchTerm)}`,
-        description: "Home improvement and hardware specialist"
-      },
-      {
-        supplier: "Reece",
-        title: searchTerm,
-        price: "Trade pricing available",
-        url: `https://www.reece.com.au/search/${encodeURIComponent(searchTerm)}`,
-        description: "Plumbing, bathroom and HVAC supplies"
-      },
-      {
-        supplier: "Tradelink",
-        title: searchTerm,
-        price: "Professional trade pricing",
-        url: `https://www.tradelink.com.au/search?q=${encodeURIComponent(searchTerm)}`,
-        description: "Trade plumbing and bathroom supplies"
-      },
-      {
-        supplier: "Total Tools",
-        title: searchTerm,
-        price: "Tools and equipment",
-        url: `https://www.totaltools.com.au/search?q=${encodeURIComponent(searchTerm)}`,
-        description: "Professional tools and equipment supplier"
-      }
-    ];
+    const category = detectMaterialCategory(searchTerm);
+    const categorySuppliers = MATERIAL_SUPPLIERS[category] || [];
+    
+    // Get relevant suppliers or fallback to general search
+    const searchResults: SearchResult[] = categorySuppliers.length > 0 
+      ? categorySuppliers.map(s => ({
+          supplier: s.supplier,
+          title: searchTerm,
+          priceRange: s.priceRange,
+          url: s.url,
+          description: s.description,
+          category: category
+        }))
+      : [
+          {
+            supplier: "Bunnings Warehouse",
+            title: searchTerm,
+            priceRange: "View pricing",
+            url: `https://www.bunnings.com.au/search/products?q=${encodeURIComponent(searchTerm)}`,
+            description: "Australia's leading hardware retailer",
+            category: "general"
+          },
+          {
+            supplier: "Mitre 10",
+            title: searchTerm,
+            priceRange: "Compare prices",
+            url: `https://www.mitre10.com.au/search?text=${encodeURIComponent(searchTerm)}`,
+            description: "Home improvement specialist",
+            category: "general"
+          },
+          {
+            supplier: "Reece",
+            title: searchTerm,
+            priceRange: "Trade pricing",
+            url: `https://www.reece.com.au/search/${encodeURIComponent(searchTerm)}`,
+            description: "Plumbing & bathroom specialist",
+            category: "general"
+          }
+        ];
     
     setResults(searchResults);
     setLoading(false);
-    toast.success(`Opening search links for ${searchResults.length} suppliers`);
+    toast.success(`Found ${searchResults.length} relevant suppliers for ${category}`);
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -132,7 +186,8 @@ export const MaterialPriceSearch = () => {
                     <div className="flex items-center gap-2 mb-1">
                       <span className="font-semibold text-sm">{result.supplier}</span>
                       <span className="text-xs text-muted-foreground">•</span>
-                      <span className="font-mono text-lg font-bold text-accent">{result.price}</span>
+                      <span className="font-mono text-lg font-bold text-accent">{result.priceRange}</span>
+                      <span className="text-xs px-2 py-0.5 bg-primary/10 text-primary rounded-full">{result.category}</span>
                     </div>
                     <p className="text-sm text-muted-foreground mb-2">{result.description}</p>
                     <a

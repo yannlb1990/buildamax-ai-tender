@@ -25,6 +25,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Textarea } from "@/components/ui/textarea";
 import { AIPlanAnalyzer } from "./AIPlanAnalyzer";
 import { PreliminariesSection } from "./PreliminariesSection";
+import { OverheadsSection } from "./OverheadsSection";
 import { NCCSearchBar } from "./NCCSearchBar";
 
 const AU_TRADES = [
@@ -108,6 +109,7 @@ interface EstimateItem {
   labour_rate: number;
   material_wastage_pct: number;
   labour_wastage_pct: number;
+  markup_pct: number;
   notes: string;
   expanded: boolean;
   item_number?: string;
@@ -143,6 +145,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
     defaultLabourRate: 90,
     materialWastage: 10,
     labourWastage: 5,
+    defaultMarkup: 20,
     supervisionPct: 8,
     overheadPct: 12,
     marginPct: 15,
@@ -222,6 +225,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
           labour_rate: parseFloat(item.labour_rate) || config.defaultLabourRate,
           material_wastage_pct: parseFloat(item.material_wastage_pct) || config.materialWastage,
           labour_wastage_pct: parseFloat(item.labour_wastage_pct) || config.labourWastage,
+          markup_pct: parseFloat(item.markup_pct) || config.defaultMarkup,
           notes: "",
           expanded: false,
           item_number: itemNumber,
@@ -768,6 +772,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
                 <TableHead className="text-right">$/Unit</TableHead>
                 <TableHead className="text-center">URL</TableHead>
                 <TableHead className="text-right">Labour Hrs</TableHead>
+                <TableHead className="text-right">Markup %</TableHead>
                 <TableHead className="text-right">Line Total</TableHead>
                 <TableHead></TableHead>
               </TableRow>
@@ -778,7 +783,9 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
                 const matWaste = matBase * (item.material_wastage_pct / 100);
                 const labBase = item.labour_hours * item.labour_rate;
                 const labWaste = labBase * (item.labour_wastage_pct / 100);
-                const lineTotal = matBase + matWaste + labBase + labWaste;
+                const subtotal = matBase + matWaste + labBase + labWaste;
+                const markup = subtotal * (item.markup_pct / 100);
+                const lineTotal = subtotal + markup;
                 const isEditing = editingId === item.id;
                 const relatedMats = SOW_RELATED_MATERIALS[item.scope_of_work] || [];
 
@@ -866,6 +873,17 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
                           />
                         ) : <span className="font-mono">{item.labour_hours}</span>}
                       </TableCell>
+                      <TableCell className="text-right">
+                        {isEditing ? (
+                          <Input
+                            type="number"
+                            step="0.1"
+                            value={editValues.markup_pct}
+                            onChange={(e) => setEditValues({ ...editValues, markup_pct: parseFloat(e.target.value) })}
+                            className="h-8 w-16 text-right"
+                          />
+                        ) : <span className="font-mono">{item.markup_pct}%</span>}
+                      </TableCell>
                       <TableCell className="text-right font-mono font-bold">${lineTotal.toFixed(2)}</TableCell>
                       <TableCell>
                         <div className="flex gap-1">
@@ -913,7 +931,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
                     </TableRow>
                     {item.expanded && relatedMats.length > 0 && (
                       <TableRow key={`${item.id}-related`} className="bg-muted/30">
-                        <TableCell colSpan={13} className="py-0">
+                        <TableCell colSpan={14} className="py-0">
                           <div className="p-4 space-y-3">
                             <div className="flex items-center justify-between">
                               <p className="text-sm font-semibold text-muted-foreground">Related Materials for {item.scope_of_work}:</p>
@@ -930,6 +948,15 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
                             </div>
                             {item.relatedMaterials && item.relatedMaterials.length > 0 && (
                               <div className="space-y-2">
+                                <div className="grid grid-cols-12 gap-2 px-3 pb-2 text-xs font-semibold text-muted-foreground border-b">
+                                  <div className="col-span-3">Material Name</div>
+                                  <div className="col-span-1 text-center">Qty</div>
+                                  <div className="col-span-1 text-center">Unit</div>
+                                  <div className="col-span-1 text-right">$/Unit</div>
+                                  <div className="col-span-1 text-center">URL</div>
+                                  <div className="col-span-4">Comment</div>
+                                  <div className="col-span-1 text-right">Total</div>
+                                </div>
                                 {item.relatedMaterials.map(rm => (
                                   <div key={rm.id} className="bg-background rounded border border-border p-3 grid grid-cols-12 gap-2 items-center">
                                     <div className="col-span-3 text-sm font-medium">{rm.name}</div>
@@ -1033,6 +1060,9 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Overheads Section */}
+      <OverheadsSection projectId={projectId} onTotalChange={setOverheadTotal} />
 
       {/* Consumables Section */}
       <Card className="p-6">
