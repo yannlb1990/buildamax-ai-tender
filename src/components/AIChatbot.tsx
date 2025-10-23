@@ -175,14 +175,14 @@ export const AIChatbot = () => {
               <div className="text-center text-muted-foreground py-8">
                 <Bot className="h-12 w-12 mx-auto mb-4 text-accent" />
                 <p className="text-sm">
-                  Ask me anything about construction calculations, formulas, or estimates!
+                  Ask me anything about Australian construction calculations, formulas, or standards!
                 </p>
                 <div className="mt-4 space-y-2">
                   <p className="text-xs font-medium">Try asking:</p>
                   <div className="space-y-1 text-xs">
-                    <p>"How do I calculate the volume of a cylinder?"</p>
-                    <p>"What's the formula for concrete coverage?"</p>
-                    <p>"How much waste factor for timber?"</p>
+                    <p>"How do I calculate concrete volume in cubic metres?"</p>
+                    <p>"What's the NCC requirement for footing depth?"</p>
+                    <p>"Typical waste factor for timber framing in Australia?"</p>
                   </div>
                 </div>
               </div>

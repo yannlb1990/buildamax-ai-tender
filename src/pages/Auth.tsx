@@ -13,6 +13,9 @@ const authSchema = z.object({
   email: z.string().email("Invalid email address").max(255),
   password: z.string().min(6, "Password must be at least 6 characters").max(100),
   companyName: z.string().min(1, "Company name required").max(100).optional(),
+  state: z.string().min(1, "State required").optional(),
+  city: z.string().min(1, "City required").max(100).optional(),
+  postcode: z.string().min(4, "Valid postcode required").max(4).optional(),
 });
 
 const Auth = () => {
@@ -22,6 +25,9 @@ const Auth = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [companyName, setCompanyName] = useState("");
+  const [state, setState] = useState("");
+  const [city, setCity] = useState("");
+  const [postcode, setPostcode] = useState("");
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -38,6 +44,9 @@ const Auth = () => {
         email: email.trim(),
         password,
         companyName: !isLogin ? companyName.trim() : undefined,
+        state: !isLogin ? state : undefined,
+        city: !isLogin ? city.trim() : undefined,
+        postcode: !isLogin ? postcode.trim() : undefined,
       });
 
       if (isLogin) {
@@ -65,6 +74,9 @@ const Auth = () => {
             emailRedirectTo: `${window.location.origin}/dashboard`,
             data: {
               company_name: validData.companyName,
+              state: validData.state,
+              city: validData.city,
+              postcode: validData.postcode,
             },
           },
         });
@@ -114,18 +126,70 @@ const Auth = () => {
 
             <form onSubmit={handleAuth} className="space-y-4">
               {!isLogin && (
-                <div>
-                  <Label htmlFor="companyName">Company Name</Label>
-                  <Input
-                    id="companyName"
-                    type="text"
-                    value={companyName}
-                    onChange={(e) => setCompanyName(e.target.value)}
-                    placeholder="Your Company Pty Ltd"
-                    required={!isLogin}
-                    maxLength={100}
-                  />
-                </div>
+                <>
+                  <div>
+                    <Label htmlFor="companyName">Company Name</Label>
+                    <Input
+                      id="companyName"
+                      type="text"
+                      value={companyName}
+                      onChange={(e) => setCompanyName(e.target.value)}
+                      placeholder="Your Company Pty Ltd"
+                      required={!isLogin}
+                      maxLength={100}
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="state">State</Label>
+                      <select
+                        id="state"
+                        value={state}
+                        onChange={(e) => setState(e.target.value)}
+                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        required={!isLogin}
+                      >
+                        <option value="">Select state</option>
+                        <option value="NSW">NSW</option>
+                        <option value="VIC">VIC</option>
+                        <option value="QLD">QLD</option>
+                        <option value="WA">WA</option>
+                        <option value="SA">SA</option>
+                        <option value="TAS">TAS</option>
+                        <option value="NT">NT</option>
+                        <option value="ACT">ACT</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <Label htmlFor="postcode">Postcode</Label>
+                      <Input
+                        id="postcode"
+                        type="text"
+                        value={postcode}
+                        onChange={(e) => setPostcode(e.target.value)}
+                        placeholder="2000"
+                        required={!isLogin}
+                        maxLength={4}
+                        pattern="[0-9]{4}"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <Label htmlFor="city">City/Suburb</Label>
+                    <Input
+                      id="city"
+                      type="text"
+                      value={city}
+                      onChange={(e) => setCity(e.target.value)}
+                      placeholder="Sydney"
+                      required={!isLogin}
+                      maxLength={100}
+                    />
+                  </div>
+                </>
               )}
 
               <div>
@@ -184,6 +248,9 @@ const Auth = () => {
                   setEmail("");
                   setPassword("");
                   setCompanyName("");
+                  setState("");
+                  setCity("");
+                  setPostcode("");
                 }}
                 className="text-sm text-secondary hover:underline"
               >

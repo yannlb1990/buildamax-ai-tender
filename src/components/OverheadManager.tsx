@@ -15,12 +15,13 @@ import { toast } from "sonner";
 import { Plus, Trash2, DollarSign } from "lucide-react";
 
 const SUGGESTED_OVERHEADS = [
-  { category: "Transport", items: ["Fuel", "Vehicle Lease", "Parking", "Tolls"] },
-  { category: "Communication", items: ["Mobile Phone", "Internet", "Software Subscriptions"] },
-  { category: "Equipment", items: ["Tool Hire", "Equipment Maintenance", "Safety Gear"] },
-  { category: "Insurance", items: ["Public Liability", "Workers Compensation", "Vehicle Insurance"] },
-  { category: "Office", items: ["Rent", "Utilities", "Stationery", "Accountant Fees"] },
-  { category: "Marketing", items: ["Advertising", "Website", "Business Cards"] },
+  { category: "Transport", items: ["Fuel", "Vehicle Lease", "Rego & Insurance", "Tolls", "Parking"] },
+  { category: "Communication", items: ["Mobile Phone", "Internet", "Software (Xero, etc)", "Cloud Storage"] },
+  { category: "Equipment", items: ["Tool Hire", "Equipment Maintenance", "Safety Gear PPE", "First Aid Supplies"] },
+  { category: "Insurance", items: ["Public Liability", "Workers Comp", "Professional Indemnity", "Vehicle Insurance"] },
+  { category: "Office", items: ["Rent", "Electricity", "Stationery", "Accountant Fees", "Legal Fees"] },
+  { category: "Marketing", items: ["Advertising", "Website Hosting", "Business Cards", "Trade Shows"] },
+  { category: "Compliance", items: ["Licenses & Permits", "QBCC Fees", "Industry Association Fees", "Training & Certs"] },
 ];
 
 interface OverheadManagerProps {
