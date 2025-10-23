@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/table";
 import { toast } from "sonner";
 import { Plus, Trash2, ChevronDown, ChevronRight, DollarSign } from "lucide-react";
+import { AIPlanAnalyzer } from "./AIPlanAnalyzer";
 
 const AU_TRADES = [
   "Carpenter", "Plumber", "Electrician", "Bricklayer", "Plasterer",
@@ -257,8 +258,31 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
 
   const totals = calculateTotals();
 
+  const handleAIItems = (aiItems: any[]) => {
+    aiItems.forEach(item => {
+      setNewItem({
+        area: item.area,
+        trade: item.trade,
+        scope_of_work: item.scope_of_work,
+        material_type: item.material_type,
+        quantity: item.quantity,
+        unit: item.unit,
+        unit_price: item.unit_price,
+        labour_hours: item.labour_hours
+      });
+      setTimeout(() => addItem(), 100);
+    });
+  };
+
   return (
     <div className="space-y-6">
+      {/* AI Plan Analyzer */}
+      <AIPlanAnalyzer 
+        projectId={projectId} 
+        estimateId={estimateId}
+        onAddItems={handleAIItems}
+      />
+
       {/* Summary Card */}
       <Card className="p-6 bg-gradient-to-br from-primary/20 to-accent/20">
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
