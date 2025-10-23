@@ -35,7 +35,11 @@ const CTA = () => {
               </div>
 
               {/* CTA Button */}
-              <Button size="lg" className="bg-accent text-accent-foreground hover:bg-accent/90 shadow-glow text-lg px-10 py-7 h-auto">
+              <Button 
+                size="lg" 
+                onClick={() => window.location.href = "/auth"}
+                className="bg-accent text-accent-foreground hover:bg-accent/90 shadow-glow text-lg px-10 py-7 h-auto"
+              >
                 Start Your Free Trial
                 <ArrowRight className="ml-2 h-5 w-5" />
               </Button>

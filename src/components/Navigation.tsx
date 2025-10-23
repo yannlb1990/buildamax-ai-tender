@@ -25,10 +25,10 @@ const Navigation = () => {
             <a href="#insights" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-smooth">
               Market Insights
             </a>
-            <Button variant="ghost" size="sm">
+            <Button variant="ghost" size="sm" onClick={() => window.location.href = "/auth"}>
               Sign In
             </Button>
-            <Button size="sm" className="bg-accent text-accent-foreground hover:bg-accent/90">
+            <Button size="sm" onClick={() => window.location.href = "/auth"} className="bg-accent text-accent-foreground hover:bg-accent/90">
               Start Free Trial
             </Button>
           </div>

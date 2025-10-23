@@ -1,1 +1,4 @@
 project_id = "tpvhkhphufdgfnqofwxf"
+
+[functions.analyze-plan]
+verify_jwt = true

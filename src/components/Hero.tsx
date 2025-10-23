@@ -35,7 +35,11 @@ const Hero = () => {
 
           {/* CTA Buttons */}
           <div className="flex flex-col sm:flex-row gap-4 justify-center items-center mb-16 animate-fade-in">
-            <Button size="lg" className="bg-accent text-accent-foreground hover:bg-accent/90 shadow-glow text-lg px-8 py-6 h-auto">
+            <Button 
+              size="lg" 
+              onClick={() => window.location.href = "/auth"}
+              className="bg-accent text-accent-foreground hover:bg-accent/90 shadow-glow text-lg px-8 py-6 h-auto"
+            >
               Start Free Trial
               <ArrowRight className="ml-2 h-5 w-5" />
             </Button>
