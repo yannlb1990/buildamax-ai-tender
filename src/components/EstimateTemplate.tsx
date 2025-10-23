@@ -65,14 +65,33 @@ interface EstimateTemplateProps {
 
 export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProps) => {
   const [items, setItems] = useState<EstimateItem[]>([]);
+  const [overheadTotal, setOverheadTotal] = useState(0);
   const [config, setConfig] = useState({
     defaultLabourRate: 90,
     materialWastage: 10,
     labourWastage: 5,
-    overheadPct: 15,
-    marginPct: 10,
+    supervisionPct: 8,
+    overheadPct: 12,
+    marginPct: 15,
     gstPct: 10
   });
+  const [showConfig, setShowConfig] = useState(false);
+
+  useEffect(() => {
+    loadOverheads();
+  }, [projectId]);
+
+  const loadOverheads = async () => {
+    const { data } = await supabase
+      .from("overhead_items")
+      .select("amount")
+      .eq("project_id", projectId);
+    
+    if (data) {
+      const total = data.reduce((sum, item) => sum + item.amount, 0);
+      setOverheadTotal(total);
+    }
+  };
 
   const [newItem, setNewItem] = useState({
     area: "",
@@ -190,8 +209,10 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
     });
 
     const baseSubtotal = totalMaterials + totalLabour;
-    const overheads = baseSubtotal * (config.overheadPct / 100);
-    const preMargin = baseSubtotal + overheads;
+    const supervision = totalLabour * (config.supervisionPct / 100);
+    const overheadsPct = baseSubtotal * (config.overheadPct / 100);
+    const totalOverheads = overheadsPct + overheadTotal;
+    const preMargin = baseSubtotal + supervision + totalOverheads;
     const margin = preMargin * (config.marginPct / 100);
     const taxable = preMargin + margin;
     const gst = taxable * (config.gstPct / 100);
@@ -201,7 +222,10 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
       totalMaterials,
       totalLabour,
       baseSubtotal,
-      overheads,
+      supervision,
+      overheadsPct,
+      overheadTotal,
+      totalOverheads,
       preMargin,
       margin,
       taxable,
@@ -215,33 +239,120 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
   return (
     <div className="space-y-6">
       {/* Summary Card */}
-      <Card className="p-6 bg-gradient-primary">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <Card className="p-6 bg-gradient-to-br from-primary/20 to-accent/20">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
           <div>
-            <p className="text-sm text-primary-foreground/70">Materials</p>
-            <p className="text-2xl font-mono font-bold text-primary-foreground">
+            <p className="text-sm text-muted-foreground">Materials</p>
+            <p className="text-2xl font-mono font-bold">
               ${totals.totalMaterials.toFixed(2)}
             </p>
           </div>
           <div>
-            <p className="text-sm text-primary-foreground/70">Labour</p>
-            <p className="text-2xl font-mono font-bold text-primary-foreground">
+            <p className="text-sm text-muted-foreground">Labour</p>
+            <p className="text-2xl font-mono font-bold">
               ${totals.totalLabour.toFixed(2)}
             </p>
           </div>
           <div>
-            <p className="text-sm text-primary-foreground/70">GST</p>
-            <p className="text-2xl font-mono font-bold text-primary-foreground">
-              ${totals.gst.toFixed(2)}
+            <p className="text-sm text-muted-foreground">Supervision</p>
+            <p className="text-2xl font-mono font-bold text-secondary">
+              ${totals.supervision.toFixed(2)}
             </p>
           </div>
-          <div className="border-l border-primary-foreground/20 pl-4">
-            <p className="text-sm text-primary-foreground/70">TOTAL PRICE</p>
-            <p className="text-3xl font-mono font-bold text-accent">
+          <div>
+            <p className="text-sm text-muted-foreground">Overheads</p>
+            <p className="text-2xl font-mono font-bold text-secondary">
+              ${totals.totalOverheads.toFixed(2)}
+            </p>
+          </div>
+          <div>
+            <p className="text-sm text-muted-foreground">Margin</p>
+            <p className="text-2xl font-mono font-bold text-secondary">
+              ${totals.margin.toFixed(2)}
+            </p>
+          </div>
+        </div>
+        <div className="border-t border-border pt-4 flex items-center justify-between">
+          <div>
+            <p className="text-sm text-muted-foreground">GST ({config.gstPct}%)</p>
+            <p className="text-xl font-mono font-bold">${totals.gst.toFixed(2)}</p>
+          </div>
+          <div className="text-right">
+            <p className="text-sm text-muted-foreground">TOTAL PRICE (inc GST)</p>
+            <p className="text-4xl font-mono font-bold text-accent">
               ${totals.totalPrice.toFixed(2)}
             </p>
           </div>
         </div>
+      </Card>
+
+      {/* Configuration Card */}
+      <Card className="p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="font-display text-xl font-bold">Estimate Configuration</h3>
+          <Button variant="outline" size="sm" onClick={() => setShowConfig(!showConfig)}>
+            <DollarSign className="h-4 w-4 mr-2" />
+            {showConfig ? "Hide" : "Show"} Settings
+          </Button>
+        </div>
+        {showConfig && (
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+            <div>
+              <Label>Labour Rate ($/hr)</Label>
+              <Input
+                type="number"
+                step="1"
+                value={config.defaultLabourRate}
+                onChange={(e) => setConfig({ ...config, defaultLabourRate: parseFloat(e.target.value) || 0 })}
+              />
+            </div>
+            <div>
+              <Label>Material Waste (%)</Label>
+              <Input
+                type="number"
+                step="0.5"
+                value={config.materialWastage}
+                onChange={(e) => setConfig({ ...config, materialWastage: parseFloat(e.target.value) || 0 })}
+              />
+            </div>
+            <div>
+              <Label>Labour Waste (%)</Label>
+              <Input
+                type="number"
+                step="0.5"
+                value={config.labourWastage}
+                onChange={(e) => setConfig({ ...config, labourWastage: parseFloat(e.target.value) || 0 })}
+              />
+            </div>
+            <div>
+              <Label>Supervision (%)</Label>
+              <Input
+                type="number"
+                step="0.5"
+                value={config.supervisionPct}
+                onChange={(e) => setConfig({ ...config, supervisionPct: parseFloat(e.target.value) || 0 })}
+              />
+            </div>
+            <div>
+              <Label>Overheads (%)</Label>
+              <Input
+                type="number"
+                step="0.5"
+                value={config.overheadPct}
+                onChange={(e) => setConfig({ ...config, overheadPct: parseFloat(e.target.value) || 0 })}
+              />
+            </div>
+            <div>
+              <Label>Margin (%)</Label>
+              <Input
+                type="number"
+                step="0.5"
+                value={config.marginPct}
+                onChange={(e) => setConfig({ ...config, marginPct: parseFloat(e.target.value) || 0 })}
+              />
+            </div>
+          </div>
+        )}
       </Card>
 
       {/* Add Item Form */}

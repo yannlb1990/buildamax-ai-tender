@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { ArrowLeft, FileText, DollarSign, CheckCircle, Loader2, Sparkles, Settings, Calculator } from "lucide-react";
 import { OverheadManager } from "@/components/OverheadManager";
 import { EstimateTemplate } from "@/components/EstimateTemplate";
+import { PlanViewer } from "@/components/PlanViewer";
 
 const ProjectDetail = () => {
   const { projectId } = useParams();
@@ -132,11 +133,17 @@ const ProjectDetail = () => {
         </div>
 
         <Tabs defaultValue="estimate" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-6">
+          <TabsList className="grid w-full grid-cols-7">
             <TabsTrigger value="estimate">
               <Calculator className="h-4 w-4 mr-2" />
               Estimate
             </TabsTrigger>
+            {project.plan_file_url && (
+              <TabsTrigger value="plans">
+                <FileText className="h-4 w-4 mr-2" />
+                Plans
+              </TabsTrigger>
+            )}
             <TabsTrigger value="takeoff">
               <CheckCircle className="h-4 w-4 mr-2" />
               AI Takeoff
@@ -225,6 +232,12 @@ const ProjectDetail = () => {
               )}
             </Card>
           </TabsContent>
+
+          {project.plan_file_url && (
+            <TabsContent value="plans">
+              <PlanViewer planUrl={project.plan_file_url} />
+            </TabsContent>
+          )}
 
           <TabsContent value="overheads">
             <OverheadManager projectId={projectId!} />
