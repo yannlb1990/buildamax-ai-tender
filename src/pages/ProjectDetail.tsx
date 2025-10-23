@@ -5,8 +5,9 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { ArrowLeft, FileText, DollarSign, CheckCircle, Loader2, Sparkles, Settings } from "lucide-react";
+import { ArrowLeft, FileText, DollarSign, CheckCircle, Loader2, Sparkles, Settings, Calculator } from "lucide-react";
 import { OverheadManager } from "@/components/OverheadManager";
+import { EstimateTemplate } from "@/components/EstimateTemplate";
 
 const ProjectDetail = () => {
   const { projectId } = useParams();
@@ -14,6 +15,7 @@ const ProjectDetail = () => {
   const [loading, setLoading] = useState(true);
   const [project, setProject] = useState<any>(null);
   const [analyses, setAnalyses] = useState<any[]>([]);
+  const [estimate, setEstimate] = useState<any>(null);
 
   useEffect(() => {
     loadProject();
@@ -38,6 +40,31 @@ const ProjectDetail = () => {
 
       if (!analysesError) {
         setAnalyses(analysesData || []);
+      }
+
+      // Load or create estimate
+      const { data: estimateData } = await supabase
+        .from("estimates")
+        .select("*")
+        .eq("project_id", projectId)
+        .single();
+
+      if (estimateData) {
+        setEstimate(estimateData);
+      } else {
+        // Create new estimate
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const { data: newEstimate } = await supabase
+            .from("estimates")
+            .insert({
+              project_id: projectId,
+              user_id: user.id,
+            })
+            .select()
+            .single();
+          setEstimate(newEstimate);
+        }
       }
     } catch (error) {
       console.error("Error loading project:", error);
@@ -104,15 +131,19 @@ const ProjectDetail = () => {
           </div>
         </div>
 
-        <Tabs defaultValue="takeoff" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-5">
+        <Tabs defaultValue="estimate" className="space-y-6">
+          <TabsList className="grid w-full grid-cols-6">
+            <TabsTrigger value="estimate">
+              <Calculator className="h-4 w-4 mr-2" />
+              Estimate
+            </TabsTrigger>
             <TabsTrigger value="takeoff">
               <CheckCircle className="h-4 w-4 mr-2" />
-              Takeoff
+              AI Takeoff
             </TabsTrigger>
             <TabsTrigger value="pricing">
               <DollarSign className="h-4 w-4 mr-2" />
-              Pricing
+              AI Pricing
             </TabsTrigger>
             <TabsTrigger value="overheads">
               <Settings className="h-4 w-4 mr-2" />
@@ -124,9 +155,22 @@ const ProjectDetail = () => {
             </TabsTrigger>
             <TabsTrigger value="insights">
               <Sparkles className="h-4 w-4 mr-2" />
-              AI Insights
+              Insights
             </TabsTrigger>
           </TabsList>
+
+          <TabsContent value="estimate">
+            {estimate ? (
+              <EstimateTemplate projectId={projectId!} estimateId={estimate.id} />
+            ) : (
+              <Card className="p-6">
+                <div className="text-center py-12">
+                  <Loader2 className="h-12 w-12 animate-spin text-secondary mx-auto mb-4" />
+                  <p className="text-muted-foreground">Loading estimate...</p>
+                </div>
+              </Card>
+            )}
+          </TabsContent>
 
           <TabsContent value="takeoff">
             <Card className="p-6">

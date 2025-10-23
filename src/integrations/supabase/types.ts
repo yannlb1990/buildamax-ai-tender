@@ -171,7 +171,12 @@ export type Database = {
           estimate_id: string
           id: string
           item_type: string
+          labour_hours: number | null
+          labour_rate: number | null
+          labour_wastage_pct: number | null
+          material_wastage_pct: number | null
           quantity: number
+          section_id: string | null
           supplier: string | null
           total_price: number
           unit: string | null
@@ -184,7 +189,12 @@ export type Database = {
           estimate_id: string
           id?: string
           item_type: string
+          labour_hours?: number | null
+          labour_rate?: number | null
+          labour_wastage_pct?: number | null
+          material_wastage_pct?: number | null
           quantity?: number
+          section_id?: string | null
           supplier?: string | null
           total_price?: number
           unit?: string | null
@@ -197,7 +207,12 @@ export type Database = {
           estimate_id?: string
           id?: string
           item_type?: string
+          labour_hours?: number | null
+          labour_rate?: number | null
+          labour_wastage_pct?: number | null
+          material_wastage_pct?: number | null
           quantity?: number
+          section_id?: string | null
           supplier?: string | null
           total_price?: number
           unit?: string | null
@@ -212,6 +227,45 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      estimate_sections: {
+        Row: {
+          area: string
+          created_at: string
+          estimate_id: string
+          id: string
+          notes: string | null
+          scope_of_work: string
+          sequence_order: number | null
+          trade: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          area: string
+          created_at?: string
+          estimate_id: string
+          id?: string
+          notes?: string | null
+          scope_of_work: string
+          sequence_order?: number | null
+          trade: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          area?: string
+          created_at?: string
+          estimate_id?: string
+          id?: string
+          notes?: string | null
+          scope_of_work?: string
+          sequence_order?: number | null
+          trade?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
       }
       estimates: {
         Row: {
@@ -361,6 +415,7 @@ export type Database = {
           name: string
           plan_file_name: string | null
           plan_file_url: string | null
+          scope_of_work: string[] | null
           site_address: string | null
           status: string | null
           updated_at: string | null
@@ -373,6 +428,7 @@ export type Database = {
           name: string
           plan_file_name?: string | null
           plan_file_url?: string | null
+          scope_of_work?: string[] | null
           site_address?: string | null
           status?: string | null
           updated_at?: string | null
@@ -385,6 +441,7 @@ export type Database = {
           name?: string
           plan_file_name?: string | null
           plan_file_url?: string | null
+          scope_of_work?: string[] | null
           site_address?: string | null
           status?: string | null
           updated_at?: string | null
