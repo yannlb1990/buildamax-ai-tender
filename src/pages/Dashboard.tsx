@@ -188,7 +188,10 @@ const Dashboard = () => {
             </Button>
           </Card>
 
-          <Card className="p-6 bg-background border-border hover:shadow-lg transition-smooth">
+          <Card 
+            onClick={() => navigate("/project/new?mode=manual")}
+            className="p-6 bg-background border-border hover:shadow-lg transition-smooth cursor-pointer"
+          >
             <div className="mb-4">
               <Zap className="h-10 w-10 text-secondary" />
             </div>
@@ -201,7 +204,10 @@ const Dashboard = () => {
             </Button>
           </Card>
 
-          <Card className="p-6 bg-background border-border hover:shadow-lg transition-smooth">
+          <Card 
+            onClick={() => navigate("/insights")}
+            className="p-6 bg-background border-border hover:shadow-lg transition-smooth cursor-pointer"
+          >
             <div className="mb-4">
               <BarChart3 className="h-10 w-10 text-accent" />
             </div>
