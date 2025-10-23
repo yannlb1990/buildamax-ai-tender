@@ -34,20 +34,48 @@ export const MaterialPriceSearch = () => {
 
     setLoading(true);
     
-    // Simulate search results (in production, this would call actual APIs or web scraping services)
-    setTimeout(() => {
-      const mockResults: SearchResult[] = australianSuppliers.map((supplier, idx) => ({
-        supplier: supplier.name,
-        title: `${searchTerm} - ${supplier.name}`,
-        price: `$${(Math.random() * 500 + 50).toFixed(2)}`,
-        url: `https://www.${supplier.domain}/search?q=${encodeURIComponent(searchTerm)}`,
-        description: `Find ${searchTerm} at ${supplier.name} with competitive pricing`
-      }));
-      
-      setResults(mockResults);
-      setLoading(false);
-      toast.success(`Found ${mockResults.length} suppliers`);
-    }, 1500);
+    // Create direct search links to Australian suppliers
+    const searchResults: SearchResult[] = [
+      {
+        supplier: "Bunnings Warehouse",
+        title: searchTerm,
+        price: "View pricing online",
+        url: `https://www.bunnings.com.au/search/products?q=${encodeURIComponent(searchTerm)}`,
+        description: "Australia's leading hardware and building supplies retailer"
+      },
+      {
+        supplier: "Mitre 10",
+        title: searchTerm,
+        price: "Compare prices",
+        url: `https://www.mitre10.com.au/search?text=${encodeURIComponent(searchTerm)}`,
+        description: "Home improvement and hardware specialist"
+      },
+      {
+        supplier: "Reece",
+        title: searchTerm,
+        price: "Trade pricing available",
+        url: `https://www.reece.com.au/search/${encodeURIComponent(searchTerm)}`,
+        description: "Plumbing, bathroom and HVAC supplies"
+      },
+      {
+        supplier: "Tradelink",
+        title: searchTerm,
+        price: "Professional trade pricing",
+        url: `https://www.tradelink.com.au/search?q=${encodeURIComponent(searchTerm)}`,
+        description: "Trade plumbing and bathroom supplies"
+      },
+      {
+        supplier: "Total Tools",
+        title: searchTerm,
+        price: "Tools and equipment",
+        url: `https://www.totaltools.com.au/search?q=${encodeURIComponent(searchTerm)}`,
+        description: "Professional tools and equipment supplier"
+      }
+    ];
+    
+    setResults(searchResults);
+    setLoading(false);
+    toast.success(`Opening search links for ${searchResults.length} suppliers`);
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {

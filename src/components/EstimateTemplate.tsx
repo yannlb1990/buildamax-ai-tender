@@ -1143,6 +1143,191 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
           </Table>
         )}
       </Card>
+
+      {/* Comprehensive Totals Summary Table */}
+      <Card className="p-6 bg-gradient-to-br from-primary/10 via-secondary/10 to-accent/10">
+        <h3 className="font-display text-2xl font-bold mb-6 flex items-center gap-2">
+          <DollarSign className="h-6 w-6 text-primary" />
+          Project Cost Summary
+        </h3>
+        
+        <div className="grid gap-6">
+          {/* Breakdown by Section */}
+          <div className="grid md:grid-cols-3 gap-4">
+            <div className="bg-card p-4 rounded-lg border border-border">
+              <p className="text-xs text-muted-foreground mb-1">Estimate Lines</p>
+              <p className="text-xl font-mono font-bold text-primary">
+                ${(() => {
+                  let total = 0;
+                  items.forEach(item => {
+                    const matBase = (item.quantity || 0) * (item.unit_price || 0);
+                    const matWaste = matBase * ((item.material_wastage_pct || 0) / 100);
+                    const labBase = (item.labour_hours || 0) * (item.labour_rate || config.defaultLabourRate);
+                    const labWaste = labBase * ((item.labour_wastage_pct || 0) / 100);
+                    total += matBase + matWaste + labBase + labWaste;
+                  });
+                  return total.toFixed(2);
+                })()}
+              </p>
+              <p className="text-xs text-muted-foreground mt-1">{items.length} line items</p>
+            </div>
+
+            <div className="bg-card p-4 rounded-lg border border-border">
+              <p className="text-xs text-muted-foreground mb-1">Related Materials</p>
+              <p className="text-xl font-mono font-bold text-secondary">
+                ${(() => {
+                  let total = 0;
+                  items.forEach(item => {
+                    if (item.relatedMaterials) {
+                      item.relatedMaterials.forEach(rm => {
+                        total += (rm.quantity || 0) * (rm.unit_price || 0);
+                      });
+                    }
+                  });
+                  return total.toFixed(2);
+                })()}
+              </p>
+              <p className="text-xs text-muted-foreground mt-1">
+                {items.reduce((sum, item) => sum + (item.relatedMaterials?.length || 0), 0)} items
+              </p>
+            </div>
+
+            <div className="bg-card p-4 rounded-lg border border-border">
+              <p className="text-xs text-muted-foreground mb-1">Consumables</p>
+              <p className="text-xl font-mono font-bold text-accent">
+                ${consumables.reduce((sum, c) => sum + (c.quantity * c.unit_price), 0).toFixed(2)}
+              </p>
+              <p className="text-xs text-muted-foreground mt-1">{consumables.length} items</p>
+            </div>
+          </div>
+
+          {/* Detailed Financial Breakdown */}
+          <Table>
+            <TableHeader>
+              <TableRow className="bg-muted/50">
+                <TableHead className="font-bold">Cost Component</TableHead>
+                <TableHead className="text-right font-bold">Amount</TableHead>
+                <TableHead className="text-right font-bold">Percentage</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              <TableRow>
+                <TableCell className="font-medium">Base Materials</TableCell>
+                <TableCell className="text-right font-mono">${totals.totalMaterials.toFixed(2)}</TableCell>
+                <TableCell className="text-right font-mono text-muted-foreground">
+                  {((totals.totalMaterials / totals.totalPrice) * 100).toFixed(1)}%
+                </TableCell>
+              </TableRow>
+              <TableRow>
+                <TableCell className="font-medium">Labour Costs</TableCell>
+                <TableCell className="text-right font-mono">${totals.totalLabour.toFixed(2)}</TableCell>
+                <TableCell className="text-right font-mono text-muted-foreground">
+                  {((totals.totalLabour / totals.totalPrice) * 100).toFixed(1)}%
+                </TableCell>
+              </TableRow>
+              <TableRow className="border-t border-border">
+                <TableCell className="font-medium text-muted-foreground">Base Subtotal</TableCell>
+                <TableCell className="text-right font-mono font-semibold">${totals.baseSubtotal.toFixed(2)}</TableCell>
+                <TableCell className="text-right font-mono text-muted-foreground">
+                  {((totals.baseSubtotal / totals.totalPrice) * 100).toFixed(1)}%
+                </TableCell>
+              </TableRow>
+              <TableRow>
+                <TableCell className="font-medium">
+                  Supervision ({config.supervisionPct}%)
+                </TableCell>
+                <TableCell className="text-right font-mono">${totals.supervision.toFixed(2)}</TableCell>
+                <TableCell className="text-right font-mono text-muted-foreground">
+                  {((totals.supervision / totals.totalPrice) * 100).toFixed(1)}%
+                </TableCell>
+              </TableRow>
+              <TableRow>
+                <TableCell className="font-medium">
+                  Overheads (Percentage: {config.overheadPct}%)
+                </TableCell>
+                <TableCell className="text-right font-mono">${totals.overheadsPct.toFixed(2)}</TableCell>
+                <TableCell className="text-right font-mono text-muted-foreground">
+                  {((totals.overheadsPct / totals.totalPrice) * 100).toFixed(1)}%
+                </TableCell>
+              </TableRow>
+              <TableRow>
+                <TableCell className="font-medium">Overheads (Fixed Items)</TableCell>
+                <TableCell className="text-right font-mono">${totals.overheadTotal.toFixed(2)}</TableCell>
+                <TableCell className="text-right font-mono text-muted-foreground">
+                  {((totals.overheadTotal / totals.totalPrice) * 100).toFixed(1)}%
+                </TableCell>
+              </TableRow>
+              <TableRow className="border-t border-border">
+                <TableCell className="font-medium text-muted-foreground">Total Overheads</TableCell>
+                <TableCell className="text-right font-mono font-semibold">${totals.totalOverheads.toFixed(2)}</TableCell>
+                <TableCell className="text-right font-mono text-muted-foreground">
+                  {((totals.totalOverheads / totals.totalPrice) * 100).toFixed(1)}%
+                </TableCell>
+              </TableRow>
+              <TableRow>
+                <TableCell className="font-medium">
+                  Margin ({config.marginPct}%)
+                </TableCell>
+                <TableCell className="text-right font-mono">${totals.margin.toFixed(2)}</TableCell>
+                <TableCell className="text-right font-mono text-muted-foreground">
+                  {((totals.margin / totals.totalPrice) * 100).toFixed(1)}%
+                </TableCell>
+              </TableRow>
+              <TableRow className="border-t border-border">
+                <TableCell className="font-medium text-muted-foreground">Subtotal (Pre-GST)</TableCell>
+                <TableCell className="text-right font-mono font-semibold">${totals.taxable.toFixed(2)}</TableCell>
+                <TableCell className="text-right font-mono text-muted-foreground">
+                  {((totals.taxable / totals.totalPrice) * 100).toFixed(1)}%
+                </TableCell>
+              </TableRow>
+              <TableRow>
+                <TableCell className="font-medium">
+                  GST ({config.gstPct}%)
+                </TableCell>
+                <TableCell className="text-right font-mono">${totals.gst.toFixed(2)}</TableCell>
+                <TableCell className="text-right font-mono text-muted-foreground">
+                  {((totals.gst / totals.totalPrice) * 100).toFixed(1)}%
+                </TableCell>
+              </TableRow>
+              <TableRow className="border-t-2 border-primary bg-primary/5">
+                <TableCell className="font-bold text-lg">TOTAL PROJECT COST</TableCell>
+                <TableCell className="text-right font-mono font-bold text-2xl text-primary">
+                  ${totals.totalPrice.toFixed(2)}
+                </TableCell>
+                <TableCell className="text-right font-mono font-bold text-primary">100%</TableCell>
+              </TableRow>
+            </TableBody>
+          </Table>
+
+          {/* Quick Stats */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-4">
+            <div className="text-center p-3 bg-muted/30 rounded-lg">
+              <p className="text-xs text-muted-foreground mb-1">Material %</p>
+              <p className="text-lg font-bold font-mono">
+                {((totals.totalMaterials / totals.baseSubtotal) * 100).toFixed(1)}%
+              </p>
+            </div>
+            <div className="text-center p-3 bg-muted/30 rounded-lg">
+              <p className="text-xs text-muted-foreground mb-1">Labour %</p>
+              <p className="text-lg font-bold font-mono">
+                {((totals.totalLabour / totals.baseSubtotal) * 100).toFixed(1)}%
+              </p>
+            </div>
+            <div className="text-center p-3 bg-muted/30 rounded-lg">
+              <p className="text-xs text-muted-foreground mb-1">Gross Margin</p>
+              <p className="text-lg font-bold font-mono">
+                {((totals.margin / totals.taxable) * 100).toFixed(1)}%
+              </p>
+            </div>
+            <div className="text-center p-3 bg-muted/30 rounded-lg">
+              <p className="text-xs text-muted-foreground mb-1">GST Collected</p>
+              <p className="text-lg font-bold font-mono">
+                ${totals.gst.toFixed(2)}
+              </p>
+            </div>
+          </div>
+        </div>
+      </Card>
     </div>
   );
 };

@@ -80,9 +80,11 @@ export const NCCSearchBar = () => {
     );
     
     if (match) {
-      window.open(match[1].url, '_blank');
+      window.open(match[1].url, '_blank', 'noopener,noreferrer');
+      toast.success("Opening NCC reference in new tab");
     } else {
-      window.open('https://ncc.abcb.gov.au/', '_blank');
+      window.open('https://ncc.abcb.gov.au/', '_blank', 'noopener,noreferrer');
+      toast.info("Opening NCC main website");
     }
   };
 
