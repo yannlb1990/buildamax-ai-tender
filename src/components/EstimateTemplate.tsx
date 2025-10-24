@@ -25,8 +25,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Textarea } from "@/components/ui/textarea";
 import { AIPlanAnalyzer } from "./AIPlanAnalyzer";
 import { PreliminariesSection } from "./PreliminariesSection";
-import { OverheadsSection } from "./OverheadsSection";
 import { NCCSearchBar } from "./NCCSearchBar";
+import { LabourRatesSection } from "./LabourRatesSection";
+import { PricingHistory } from "./PricingHistory";
 
 const AU_TRADES = [
   "Carpenter", "Plumber", "Electrician", "Bricklayer", "Plasterer",
@@ -140,6 +141,18 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
   const [newConsumable, setNewConsumable] = useState({ name: "", quantity: "", unit: "ea", unit_price: "" });
   const [urlDialog, setUrlDialog] = useState<{ open: boolean; url: string; type: 'item' | 'related'; itemId?: string; materialId?: string }>({ 
     open: false, url: "", type: 'item' 
+  });
+  const [labourRates, setLabourRates] = useState<Record<string, number>>({
+    Carpenter: 90,
+    Plumber: 95,
+    Electrician: 100,
+    Bricklayer: 85,
+    Plasterer: 80,
+    Painter: 75,
+    Tiler: 85,
+    Concreter: 90,
+    Roofer: 95,
+    Landscaper: 80
   });
   const [config, setConfig] = useState({
     defaultLabourRate: 90,
@@ -530,6 +543,12 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
 
       {/* Preliminaries Section */}
       <PreliminariesSection />
+
+      {/* Labour Rates Section */}
+      <LabourRatesSection rates={labourRates} onRatesChange={setLabourRates} />
+
+      {/* Pricing History */}
+      <PricingHistory projectId={projectId} />
 
       {/* Summary Card */}
       <Card className="p-6 bg-gradient-to-br from-primary/20 to-accent/20">
@@ -1061,8 +1080,6 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
         </DialogContent>
       </Dialog>
 
-      {/* Overheads Section */}
-      <OverheadsSection projectId={projectId} onTotalChange={setOverheadTotal} />
 
       {/* Consumables Section */}
       <Card className="p-6">

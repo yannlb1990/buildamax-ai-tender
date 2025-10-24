@@ -174,15 +174,20 @@ export const AIChatbot = () => {
             {messages.length === 0 ? (
               <div className="text-center text-muted-foreground py-8">
                 <Bot className="h-12 w-12 mx-auto mb-4 text-accent" />
-                <p className="text-sm">
-                  Ask me anything about Australian construction calculations, formulas, or standards!
+                <p className="text-sm font-semibold mb-2">
+                  Your AI Pricing & Estimating Assistant
+                </p>
+                <p className="text-xs mb-4">
+                  I can help with calculations, pricing advice, material quantities, and Australian construction standards!
                 </p>
                 <div className="mt-4 space-y-2">
                   <p className="text-xs font-medium">Try asking:</p>
                   <div className="space-y-1 text-xs">
-                    <p>"How do I calculate concrete volume in cubic metres?"</p>
-                    <p>"What's the NCC requirement for footing depth?"</p>
-                    <p>"Typical waste factor for timber framing in Australia?"</p>
+                    <p>"Calculate concrete for a 10x8m slab at 100mm thick"</p>
+                    <p>"What's a fair price for timber framing in Sydney?"</p>
+                    <p>"Compare my $85/m² quote to market rates"</p>
+                    <p>"How much wastage should I allow for roof tiles?"</p>
+                    <p>"What are current plasterboard prices in Melbourne?"</p>
                   </div>
                 </div>
               </div>

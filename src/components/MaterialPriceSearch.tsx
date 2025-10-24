@@ -17,18 +17,18 @@ interface SearchResult {
 // Material categories and their relevant suppliers with indicative price ranges
 const MATERIAL_SUPPLIERS: Record<string, { supplier: string; priceRange: string; url: string; description: string }[]> = {
   timber: [
-    { supplier: "Bunnings", priceRange: "$8-45/LM", url: "https://www.bunnings.com.au/our-range/building-hardware/timber", description: "Structural & framing timber" },
-    { supplier: "Mitre 10", priceRange: "$10-50/LM", url: "https://www.mitre10.com.au/building-construction/timber-sheet-materials/timber", description: "Quality timber supplies" },
-    { supplier: "Tradelink", priceRange: "$12-55/LM", url: "https://www.tradelink.com.au/", description: "Trade timber specialist" },
+    { supplier: "Bunnings", priceRange: "$8-45/LM", url: "https://www.bunnings.com.au/search/products?search=timber%20framing", description: "Structural & framing timber" },
+    { supplier: "Mitre 10", priceRange: "$10-50/LM", url: "https://www.mitre10.com.au/search?text=timber", description: "Quality timber supplies" },
+    { supplier: "Tradelink", priceRange: "$12-55/LM", url: "https://www.tradelink.com.au/search?q=timber", description: "Trade timber specialist" },
   ],
   plumbing: [
-    { supplier: "Reece", priceRange: "$5-250/unit", url: "https://www.reece.com.au/plumbing", description: "Premium plumbing supplies" },
-    { supplier: "Tradelink", priceRange: "$4-220/unit", url: "https://www.tradelink.com.au/categories/plumbing", description: "Trade plumbing solutions" },
-    { supplier: "Bunnings", priceRange: "$3-180/unit", url: "https://www.bunnings.com.au/our-range/building-hardware/plumbing", description: "Retail plumbing range" },
+    { supplier: "Reece", priceRange: "$5-250/unit", url: "https://www.reece.com.au/search?q=plumbing", description: "Premium plumbing supplies" },
+    { supplier: "Tradelink", priceRange: "$4-220/unit", url: "https://www.tradelink.com.au/search?q=plumbing", description: "Trade plumbing solutions" },
+    { supplier: "Bunnings", priceRange: "$3-180/unit", url: "https://www.bunnings.com.au/search/products?search=plumbing", description: "Retail plumbing range" },
   ],
   electrical: [
-    { supplier: "Total Tools", priceRange: "$15-350/item", url: "https://www.totaltools.com.au/electrical", description: "Professional electrical supplies" },
-    { supplier: "Bunnings", priceRange: "$8-280/item", url: "https://www.bunnings.com.au/our-range/building-hardware/electrical", description: "Electrical hardware & cables" },
+    { supplier: "Total Tools", priceRange: "$15-350/item", url: "https://www.totaltools.com.au/search?q=electrical", description: "Professional electrical supplies" },
+    { supplier: "Bunnings", priceRange: "$8-280/item", url: "https://www.bunnings.com.au/search/products?search=electrical", description: "Electrical hardware & cables" },
   ],
   cladding: [
     { supplier: "Bunnings", priceRange: "$35-180/sheet", url: "https://www.bunnings.com.au/our-range/building-hardware/external-cladding", description: "External cladding systems" },
