@@ -168,7 +168,7 @@ export const AIPlanAnalyzer = ({ projectId, estimateId, onAddItems }: AIPlanAnal
       <Card className="p-6 bg-gradient-to-br from-secondary/5 to-accent/5">
         <div className="flex items-center gap-3 mb-4">
           <Sparkles className="h-6 w-6 text-secondary" />
-          <h3 className="text-xl font-semibold">AI Plan Analyzer</h3>
+          <h3 className="text-xl font-semibold">AI Plan Analyser</h3>
         </div>
         
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

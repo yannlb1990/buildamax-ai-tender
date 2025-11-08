@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ArrowLeft, TrendingUp, DollarSign, Search, Download } from "lucide-react";
 import { toast } from "sonner";
-import { MaterialPriceSearch } from "@/components/MaterialPriceSearch";
+import { SmartMaterialSearch } from "@/components/SmartMaterialSearch";
 
 interface CostItem {
   category: string;
@@ -163,8 +163,8 @@ const MarketInsights = () => {
           </p>
         </div>
 
-        {/* Material Price Search */}
-        <MaterialPriceSearch />
+        {/* Smart Material Search */}
+        <SmartMaterialSearch />
 
         {/* Stats Overview */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
