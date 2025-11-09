@@ -10,6 +10,7 @@ import Dashboard from "./pages/Dashboard";
 import NewProject from "./pages/NewProject";
 import ProjectDetail from "./pages/ProjectDetail";
 import MarketInsights from "./pages/MarketInsights";
+import Pricing from "./pages/Pricing";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -24,6 +25,7 @@ const App = () => (
         <Routes>
           <Route path="/" element={<Index />} />
           <Route path="/auth" element={<Auth />} />
+          <Route path="/pricing" element={<Pricing />} />
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/project/new" element={<NewProject />} />
           <Route path="/project/:projectId" element={<ProjectDetail />} />

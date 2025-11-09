@@ -8,6 +8,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ArrowLeft, TrendingUp, DollarSign, Search, Download } from "lucide-react";
 import { toast } from "sonner";
 import { SmartMaterialSearch } from "@/components/SmartMaterialSearch";
+import { LabourRatesSection } from "@/components/LabourRatesSection";
+import { MaterialsPricingSection } from "@/components/MaterialsPricingSection";
+import { SOWRatesSection } from "@/components/SOWRatesSection";
 
 interface CostItem {
   category: string;
@@ -29,6 +32,7 @@ const MarketInsights = () => {
   const [selectedTrade, setSelectedTrade] = useState("all");
   const [selectedSOW, setSelectedSOW] = useState("all");
   const [selectedCategory, setSelectedCategory] = useState("all");
+  const [labourRates, setLabourRates] = useState<Record<string, number>>({});
   
   // Multi-source pricing data (Cordell, Rawlinsons, Archicentre, Master Builders, BMTQS)
   const [costData] = useState<CostItem[]>([
@@ -164,7 +168,24 @@ const MarketInsights = () => {
         </div>
 
         {/* Smart Material Search */}
-        <SmartMaterialSearch />
+        <div className="mb-8">
+          <SmartMaterialSearch />
+        </div>
+
+        {/* Labour Rates Section */}
+        <div className="mb-8">
+          <LabourRatesSection rates={labourRates} onRatesChange={setLabourRates} />
+        </div>
+
+        {/* Materials Pricing Section */}
+        <div className="mb-8">
+          <MaterialsPricingSection />
+        </div>
+
+        {/* SOW Rates Section */}
+        <div className="mb-8">
+          <SOWRatesSection />
+        </div>
 
         {/* Stats Overview */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">

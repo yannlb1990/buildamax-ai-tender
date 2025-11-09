@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Database, TrendingUp, TrendingDown, Minus } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -10,6 +11,7 @@ interface PricingRecord {
   material_type: string;
   avg_unit_price: number;
   avg_labour_rate: number;
+  unit: string;
   count: number;
   last_updated: string;
 }
@@ -27,6 +29,7 @@ interface PricingHistoryProps {
 export const PricingHistory = ({ projectId, currentItem }: PricingHistoryProps) => {
   const [history, setHistory] = useState<PricingRecord[]>([]);
   const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState("");
 
   useEffect(() => {
     loadPricingHistory();
@@ -39,7 +42,7 @@ export const PricingHistory = ({ projectId, currentItem }: PricingHistoryProps) 
 
       const { data, error } = await supabase
         .from("estimate_items")
-        .select("item_type, description, unit_price, labour_rate, created_at")
+        .select("item_type, description, unit_price, labour_rate, unit, created_at")
         .neq("estimate_id", projectId) as any;
 
       if (error) throw error;
@@ -55,6 +58,7 @@ export const PricingHistory = ({ projectId, currentItem }: PricingHistoryProps) 
             material_type: item.description,
             avg_unit_price: 0,
             avg_labour_rate: 0,
+            unit: item.unit || "unit",
             count: 0,
             last_updated: item.created_at
           };
@@ -101,6 +105,11 @@ export const PricingHistory = ({ projectId, currentItem }: PricingHistoryProps) 
     }
   };
 
+  const filteredHistory = history.filter(h =>
+    h.material_type.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    h.scope_of_work.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
   const matchingHistory = currentItem 
     ? history.find(h => 
         h.scope_of_work === currentItem.scope_of_work && 
@@ -145,20 +154,31 @@ export const PricingHistory = ({ projectId, currentItem }: PricingHistoryProps) 
           <div className="mt-3 grid grid-cols-2 gap-4 text-sm">
             <div>
               <p className="text-muted-foreground">Your Price</p>
-              <p className="font-mono font-bold">${currentItem.unit_price.toFixed(2)}</p>
+              <p className="font-mono font-bold">${currentItem.unit_price.toFixed(2)}/{matchingHistory.unit}</p>
             </div>
             <div>
               <p className="text-muted-foreground">Market Average</p>
-              <p className="font-mono font-bold">${matchingHistory.avg_unit_price.toFixed(2)}</p>
+              <p className="font-mono font-bold">${matchingHistory.avg_unit_price.toFixed(2)}/{matchingHistory.unit}</p>
             </div>
           </div>
         </div>
       )}
 
-      {history.length > 0 ? (
+      {history.length > 0 && (
+        <div className="mb-4">
+          <Input
+            placeholder="Search pricing history..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="max-w-md"
+          />
+        </div>
+      )}
+
+      {filteredHistory.length > 0 ? (
         <div className="space-y-2 max-h-60 overflow-y-auto">
           <p className="text-xs text-muted-foreground mb-2">Historical pricing data from your past quotes:</p>
-          {history.slice(0, 10).map((record, idx) => (
+          {filteredHistory.slice(0, 10).map((record, idx) => (
             <div key={idx} className="p-3 bg-background rounded border border-border text-sm">
               <div className="flex justify-between items-start">
                 <div className="flex-1">
@@ -166,7 +186,7 @@ export const PricingHistory = ({ projectId, currentItem }: PricingHistoryProps) 
                   <p className="text-xs text-muted-foreground">{record.scope_of_work}</p>
                 </div>
                 <div className="text-right">
-                  <p className="font-mono font-bold">${record.avg_unit_price.toFixed(2)}/unit</p>
+                  <p className="font-mono font-bold">${record.avg_unit_price.toFixed(2)}/{record.unit}</p>
                   <p className="text-xs text-muted-foreground">
                     {record.count} {record.count === 1 ? 'quote' : 'quotes'}
                   </p>
@@ -174,6 +194,10 @@ export const PricingHistory = ({ projectId, currentItem }: PricingHistoryProps) 
               </div>
             </div>
           ))}
+        </div>
+      ) : history.length > 0 ? (
+        <div className="text-center py-8 text-muted-foreground">
+          <p className="text-sm">No results found</p>
         </div>
       ) : (
         <div className="text-center py-8 text-muted-foreground">

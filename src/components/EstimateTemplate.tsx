@@ -323,6 +323,10 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
       quantity: item.quantity,
       unit_price: item.unit_price,
       labour_hours: item.labour_hours,
+      labour_rate: item.labour_rate,
+      material_wastage_pct: item.material_wastage_pct,
+      labour_wastage_pct: item.labour_wastage_pct,
+      markup_pct: item.markup_pct,
       material_type: item.material_type,
       area: item.area
     });
@@ -340,6 +344,10 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
         quantity: editValues.quantity,
         unit_price: editValues.unit_price,
         labour_hours: editValues.labour_hours,
+        labour_rate: editValues.labour_rate,
+        material_wastage_pct: editValues.material_wastage_pct,
+        labour_wastage_pct: editValues.labour_wastage_pct,
+        markup_pct: editValues.markup_pct,
         description: `${editValues.area} - ${editValues.material_type}`
       })
       .eq("id", id);

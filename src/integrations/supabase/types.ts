@@ -163,6 +163,30 @@ export type Database = {
         }
         Relationships: []
       }
+      custom_trades: {
+        Row: {
+          created_at: string | null
+          default_rate: number | null
+          id: string
+          trade_name: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          default_rate?: number | null
+          id?: string
+          trade_name: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          default_rate?: number | null
+          id?: string
+          trade_name?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       estimate_items: {
         Row: {
           category: string
@@ -174,6 +198,7 @@ export type Database = {
           labour_hours: number | null
           labour_rate: number | null
           labour_wastage_pct: number | null
+          markup_pct: number | null
           material_wastage_pct: number | null
           quantity: number
           section_id: string | null
@@ -192,6 +217,7 @@ export type Database = {
           labour_hours?: number | null
           labour_rate?: number | null
           labour_wastage_pct?: number | null
+          markup_pct?: number | null
           material_wastage_pct?: number | null
           quantity?: number
           section_id?: string | null
@@ -210,6 +236,7 @@ export type Database = {
           labour_hours?: number | null
           labour_rate?: number | null
           labour_wastage_pct?: number | null
+          markup_pct?: number | null
           material_wastage_pct?: number | null
           quantity?: number
           section_id?: string | null
