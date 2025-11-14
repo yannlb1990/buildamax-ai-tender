@@ -51,8 +51,8 @@ const Dashboard = () => {
       .from("projects")
       .select(`
         *,
-        estimates(total_inc_gst),
-        overhead_items(amount)
+        estimates!left(total_inc_gst),
+        overhead_items!left(amount)
       `)
       .eq("user_id", user.id)
       .order("updated_at", { ascending: false })

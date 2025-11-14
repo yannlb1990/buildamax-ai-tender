@@ -905,8 +905,9 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
                           <Input
                             type="number"
                             step="0.1"
-                            value={editValues.markup_pct}
-                            onChange={(e) => setEditValues({ ...editValues, markup_pct: parseFloat(e.target.value) })}
+                            min="0"
+                            value={editValues.markup_pct || 0}
+                            onChange={(e) => setEditValues({ ...editValues, markup_pct: parseFloat(e.target.value) || 0 })}
                             className="h-8 w-16 text-right"
                           />
                         ) : <span className="font-mono">{item.markup_pct}%</span>}

@@ -389,6 +389,116 @@ export type Database = {
         }
         Relationships: []
       }
+      plan_sections: {
+        Row: {
+          analysis_results: Json | null
+          analysis_status: string | null
+          created_at: string | null
+          file_name: string
+          file_url: string
+          id: string
+          project_id: string
+          section_type: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          analysis_results?: Json | null
+          analysis_status?: string | null
+          created_at?: string | null
+          file_name: string
+          file_url: string
+          id?: string
+          project_id: string
+          section_type: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          analysis_results?: Json | null
+          analysis_status?: string | null
+          created_at?: string | null
+          file_name?: string
+          file_url?: string
+          id?: string
+          project_id?: string
+          section_type?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "plan_sections_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pricing_history: {
+        Row: {
+          created_at: string | null
+          estimate_id: string | null
+          id: string
+          material_description: string
+          project_id: string | null
+          quantity: number
+          region: string | null
+          sow: string
+          supplier: string | null
+          trade: string
+          unit: string
+          unit_price: number
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          estimate_id?: string | null
+          id?: string
+          material_description: string
+          project_id?: string | null
+          quantity?: number
+          region?: string | null
+          sow: string
+          supplier?: string | null
+          trade: string
+          unit: string
+          unit_price?: number
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          estimate_id?: string | null
+          id?: string
+          material_description?: string
+          project_id?: string | null
+          quantity?: number
+          region?: string | null
+          sow?: string
+          supplier?: string | null
+          trade?: string
+          unit?: string
+          unit_price?: number
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pricing_history_estimate_id_fkey"
+            columns: ["estimate_id"]
+            isOneToOne: false
+            referencedRelation: "estimates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pricing_history_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           abn: string | null
@@ -471,6 +581,36 @@ export type Database = {
           scope_of_work?: string[] | null
           site_address?: string | null
           status?: string | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      tender_templates: {
+        Row: {
+          content: Json
+          created_at: string | null
+          id: string
+          is_default: boolean | null
+          name: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          content: Json
+          created_at?: string | null
+          id?: string
+          is_default?: boolean | null
+          name: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          content?: Json
+          created_at?: string | null
+          id?: string
+          is_default?: boolean | null
+          name?: string
           updated_at?: string | null
           user_id?: string
         }
