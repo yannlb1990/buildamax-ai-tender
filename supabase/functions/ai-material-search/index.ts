@@ -70,6 +70,28 @@ serve(async (req) => {
     });
 
     if (!aiResponse.ok) {
+      if (aiResponse.status === 402) {
+        return new Response(JSON.stringify({
+          error: "AI credits depleted. Please add credits in Settings → Workspace → Usage to continue using AI-powered material search.",
+          needsClarification: false,
+          results: []
+        }), {
+          status: 402,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      if (aiResponse.status === 429) {
+        return new Response(JSON.stringify({
+          error: "Rate limit exceeded. Please try again in a moment.",
+          needsClarification: false,
+          results: []
+        }), {
+          status: 429,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      const errorText = await aiResponse.text();
+      console.error('AI API error:', aiResponse.status, errorText);
       throw new Error(`AI API error: ${aiResponse.status}`);
     }
 

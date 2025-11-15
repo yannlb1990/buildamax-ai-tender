@@ -163,6 +163,81 @@ export type Database = {
         }
         Relationships: []
       }
+      custom_materials: {
+        Row: {
+          avg_price: number
+          category: string
+          created_at: string | null
+          id: string
+          name: string
+          notes: string | null
+          subcategory: string | null
+          supplier: string | null
+          unit: string
+          user_id: string
+        }
+        Insert: {
+          avg_price: number
+          category: string
+          created_at?: string | null
+          id?: string
+          name: string
+          notes?: string | null
+          subcategory?: string | null
+          supplier?: string | null
+          unit: string
+          user_id: string
+        }
+        Update: {
+          avg_price?: number
+          category?: string
+          created_at?: string | null
+          id?: string
+          name?: string
+          notes?: string | null
+          subcategory?: string | null
+          supplier?: string | null
+          unit?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      custom_sow_rates: {
+        Row: {
+          created_at: string | null
+          description: string | null
+          id: string
+          rate: number
+          sow_name: string
+          state: string | null
+          trade: string
+          unit: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          rate: number
+          sow_name: string
+          state?: string | null
+          trade: string
+          unit: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          rate?: number
+          sow_name?: string
+          state?: string | null
+          trade?: string
+          unit?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       custom_trades: {
         Row: {
           created_at: string | null
