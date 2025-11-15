@@ -43,7 +43,22 @@ export const SmartMaterialSearch = () => {
         body: { searchTerm }
       });
 
-      if (error) throw error;
+      if (error) {
+        if (error.message?.includes('402') || error.message?.includes('credits')) {
+          toast.error("AI credits depleted. Please add credits in Settings → Workspace → Usage.");
+        } else if (error.message?.includes('429') || error.message?.includes('rate limit')) {
+          toast.error("Rate limit exceeded. Please try again in a moment.");
+        } else {
+          toast.error("Search failed. Please try again.");
+        }
+        throw error;
+      }
+
+      if (data.error) {
+        toast.error(data.error);
+        setLoading(false);
+        return;
+      }
 
       if (data.needsClarification) {
         setSuggestions(data.suggestions || []);
