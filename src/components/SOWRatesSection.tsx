@@ -5,7 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Wrench, Plus, Search } from "lucide-react";
 import { SCOPE_OF_WORK_RATES, getSOWCategories } from "@/data/scopeOfWorkRates";
 import { supabase } from "@/integrations/supabase/client";
@@ -80,153 +81,159 @@ export const SOWRatesSection = () => {
   };
 
   return (
-    <Card className="p-6">
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-2">
-          <Wrench className="h-5 w-5 text-accent" />
-          <h3 className="font-display text-xl font-bold">Scope of Work Rates</h3>
+    <Card className="p-6 shadow-lg">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
+        <div className="flex items-center gap-3">
+          <Wrench className="h-6 w-6 text-accent flex-shrink-0" />
+          <div>
+            <h2 className="text-xl sm:text-2xl font-semibold text-foreground">Scope of Work Rates</h2>
+            <p className="text-sm text-muted-foreground mt-1">
+              Market rates for common construction scopes across Australia
+            </p>
+          </div>
         </div>
-        <Button onClick={() => setShowAddDialog(true)} size="sm">
+        <Button onClick={() => setShowAddDialog(true)} size="sm" className="bg-accent text-accent-foreground hover:bg-accent/90 whitespace-nowrap">
           <Plus className="h-4 w-4 mr-2" />
           Add Custom SOW
         </Button>
       </div>
 
-      <p className="text-sm text-muted-foreground mb-4">
-        Complete job pricing including materials and labour by state (100+ items)
-      </p>
-
-      <div className="flex gap-4 mb-4">
-        <div className="flex-1 relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search scope of work, trade, or description..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-10"
-          />
+      <div className="space-y-4 mb-6">
+        <div className="flex flex-col sm:flex-row gap-4">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search scope of work..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-10"
+            />
+          </div>
+          <Select value={selectedState} onValueChange={(value) => setSelectedState(value as State)}>
+            <SelectTrigger className="w-full sm:w-48">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="NSW">NSW Pricing</SelectItem>
+              <SelectItem value="VIC">VIC Pricing</SelectItem>
+              <SelectItem value="QLD">QLD Pricing</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
-        <Select value={selectedState} onValueChange={(v) => setSelectedState(v as State)}>
-          <SelectTrigger className="w-[180px]">
-            <SelectValue placeholder="Select state" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="NSW">NSW Pricing</SelectItem>
-            <SelectItem value="VIC">VIC Pricing</SelectItem>
-            <SelectItem value="QLD">QLD Pricing</SelectItem>
-          </SelectContent>
-        </Select>
+
+        <Tabs value={selectedCategory} onValueChange={setSelectedCategory} className="w-full">
+          <TabsList className="w-full flex flex-wrap justify-start h-auto gap-2 bg-transparent p-0">
+            {categories.map((cat) => (
+              <TabsTrigger 
+                key={cat} 
+                value={cat} 
+                className="capitalize text-xs sm:text-sm px-3 py-2 data-[state=active]:bg-accent data-[state=active]:text-accent-foreground"
+              >
+                {cat === "all" ? "All" : cat}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </Tabs>
       </div>
 
-      <Tabs value={selectedCategory} onValueChange={setSelectedCategory}>
-        <TabsList className="grid grid-cols-3 lg:grid-cols-6 w-full mb-4">
-          <TabsTrigger value="all">All</TabsTrigger>
-          {categories.slice(1).map(cat => (
-            <TabsTrigger key={cat} value={cat} className="text-xs">
-              {cat}
-            </TabsTrigger>
-          ))}
-        </TabsList>
-
-        <TabsContent value={selectedCategory}>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border">
-                  <th className="text-left py-3 px-2 font-semibold">Trade</th>
-                  <th className="text-left py-3 px-2 font-semibold">Scope of Work</th>
-                  <th className="text-left py-3 px-2 font-semibold">Description</th>
-                  <th className="text-center py-3 px-2 font-semibold">Unit</th>
-                  <th className="text-right py-3 px-2 font-semibold">{selectedState} Rate</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredSOW.slice(0, 100).map((item, idx) => (
-                  <tr key={idx} className="border-b border-border/50 hover:bg-muted/50">
-                    <td className="py-3 px-2 text-muted-foreground">{item.trade}</td>
-                    <td className="py-3 px-2 font-medium">{item.sow}</td>
-                    <td className="py-3 px-2 text-xs text-muted-foreground max-w-xs truncate">
-                      {item.description}
-                    </td>
-                    <td className="py-3 px-2 text-center text-muted-foreground">{item.unit}</td>
-                    <td className="py-3 px-2 text-right font-mono font-bold">
+      <div className="border rounded-lg overflow-hidden">
+        <div className="overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="min-w-[140px]">Trade</TableHead>
+                <TableHead className="min-w-[180px]">Scope of Work</TableHead>
+                <TableHead className="min-w-[250px]">Description</TableHead>
+                <TableHead className="min-w-[80px]">Unit</TableHead>
+                <TableHead className="text-right min-w-[100px]">{selectedState} Rate</TableHead>
+                <TableHead className="min-w-[100px]">Category</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filteredSOW.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={6} className="text-center py-12 text-muted-foreground">
+                    No items found. Try adjusting your search or filters.
+                  </TableCell>
+                </TableRow>
+              ) : (
+                filteredSOW.map((item, index) => (
+                  <TableRow key={index} className="hover:bg-muted/50 transition-colors">
+                    <TableCell className="font-medium">{item.trade}</TableCell>
+                    <TableCell className="font-medium">{item.sow}</TableCell>
+                    <TableCell className="text-muted-foreground text-sm">{item.description}</TableCell>
+                    <TableCell className="uppercase text-xs font-mono">{item.unit}</TableCell>
+                    <TableCell className="text-right font-mono font-semibold">
                       ${getRate(item).toFixed(2)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            {filteredSOW.length > 100 && (
-              <p className="text-sm text-muted-foreground mt-3 text-center">
-                Showing 100 of {filteredSOW.length} results. Refine your search to see more.
-              </p>
-            )}
-            {filteredSOW.length === 0 && (
-              <p className="text-sm text-muted-foreground mt-3 text-center py-8">
-                No scope of work items found. Try a different search term or category.
-              </p>
-            )}
-          </div>
-        </TabsContent>
-      </Tabs>
+                    </TableCell>
+                    <TableCell>
+                      <span className="inline-block px-2 py-1 text-xs bg-accent/20 text-accent-foreground rounded-md">
+                        {item.category}
+                      </span>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </div>
+      </div>
+
+      <div className="mt-4 text-sm text-muted-foreground">
+        Showing {filteredSOW.length} of {SCOPE_OF_WORK_RATES.length} items
+      </div>
 
       <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
-        <DialogContent>
+        <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Add Custom Scope of Work Rate</DialogTitle>
+            <DialogTitle>Add Custom SOW Rate</DialogTitle>
             <DialogDescription>
-              Add a custom SOW rate for your project-specific pricing.
+              Add your own custom scope of work rate for {newSOW.state}
             </DialogDescription>
           </DialogHeader>
-          
-          <div className="space-y-4 py-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="trade">Trade *</Label>
-                <Input
-                  id="trade"
-                  value={newSOW.trade}
-                  onChange={(e) => setNewSOW({ ...newSOW, trade: e.target.value })}
-                  placeholder="e.g., Carpenter"
-                />
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="sowName">SOW Name *</Label>
-                <Input
-                  id="sowName"
-                  value={newSOW.sowName}
-                  onChange={(e) => setNewSOW({ ...newSOW, sowName: e.target.value })}
-                  placeholder="e.g., Wall Framing"
-                />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="description">Description</Label>
+          <div className="space-y-4">
+            <div>
+              <Label>Trade</Label>
               <Input
-                id="description"
-                value={newSOW.description}
-                onChange={(e) => setNewSOW({ ...newSOW, description: e.target.value })}
-                placeholder="e.g., Supply and install wall framing"
+                value={newSOW.trade}
+                onChange={(e) => setNewSOW({ ...newSOW, trade: e.target.value })}
+                placeholder="e.g., Carpenter"
               />
             </div>
-
-            <div className="grid grid-cols-3 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="unit">Unit *</Label>
-                <Input
-                  id="unit"
-                  value={newSOW.unit}
-                  onChange={(e) => setNewSOW({ ...newSOW, unit: e.target.value })}
-                  placeholder="e.g., m², lm, unit"
-                />
+            <div>
+              <Label>Scope of Work Name</Label>
+              <Input
+                value={newSOW.sowName}
+                onChange={(e) => setNewSOW({ ...newSOW, sowName: e.target.value })}
+                placeholder="e.g., Wall Framing"
+              />
+            </div>
+            <div>
+              <Label>Description</Label>
+              <Input
+                value={newSOW.description}
+                onChange={(e) => setNewSOW({ ...newSOW, description: e.target.value })}
+                placeholder="Detailed description"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label>Unit</Label>
+                <Select value={newSOW.unit} onValueChange={(value) => setNewSOW({ ...newSOW, unit: value })}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select unit" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="lm">LM (Linear Metre)</SelectItem>
+                    <SelectItem value="m²">M² (Square Metre)</SelectItem>
+                    <SelectItem value="m³">M³ (Cubic Metre)</SelectItem>
+                    <SelectItem value="ea">EA (Each)</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="rate">Rate ($) *</Label>
+              <div>
+                <Label>Rate (AUD)</Label>
                 <Input
-                  id="rate"
                   type="number"
                   step="0.01"
                   value={newSOW.rate}
@@ -234,33 +241,26 @@ export const SOWRatesSection = () => {
                   placeholder="0.00"
                 />
               </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="state">State</Label>
-                <Select value={newSOW.state} onValueChange={(v) => setNewSOW({ ...newSOW, state: v })}>
-                  <SelectTrigger id="state">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="NSW">NSW</SelectItem>
-                    <SelectItem value="VIC">VIC</SelectItem>
-                    <SelectItem value="QLD">QLD</SelectItem>
-                    <SelectItem value="SA">SA</SelectItem>
-                    <SelectItem value="WA">WA</SelectItem>
-                    <SelectItem value="TAS">TAS</SelectItem>
-                    <SelectItem value="NT">NT</SelectItem>
-                    <SelectItem value="ACT">ACT</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+            </div>
+            <div>
+              <Label>State</Label>
+              <Select value={newSOW.state} onValueChange={(value) => setNewSOW({ ...newSOW, state: value })}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="NSW">NSW</SelectItem>
+                  <SelectItem value="VIC">VIC</SelectItem>
+                  <SelectItem value="QLD">QLD</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
-
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowAddDialog(false)}>
               Cancel
             </Button>
-            <Button onClick={handleAddSOW}>
+            <Button onClick={handleAddSOW} className="bg-accent text-accent-foreground hover:bg-accent/90">
               Add SOW Rate
             </Button>
           </DialogFooter>
