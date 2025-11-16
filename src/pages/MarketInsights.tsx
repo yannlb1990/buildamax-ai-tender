@@ -8,9 +8,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ArrowLeft, TrendingUp, DollarSign, Search, Download } from "lucide-react";
 import { toast } from "sonner";
 import { SmartMaterialSearch } from "@/components/SmartMaterialSearch";
-import { LabourRatesSection } from "@/components/LabourRatesSection";
 import { MaterialsPricingSection } from "@/components/MaterialsPricingSection";
 import { SOWRatesSection } from "@/components/SOWRatesSection";
+import { PreferredPricingSection } from "@/components/PreferredPricingSection";
 
 interface CostItem {
   category: string;
@@ -172,11 +172,6 @@ const MarketInsights = () => {
           <SmartMaterialSearch />
         </div>
 
-        {/* Labour Rates Section */}
-        <div className="mb-8">
-          <LabourRatesSection rates={labourRates} onRatesChange={setLabourRates} />
-        </div>
-
         {/* Materials Pricing Section */}
         <div className="mb-8">
           <MaterialsPricingSection />
@@ -186,6 +181,12 @@ const MarketInsights = () => {
         <div className="mb-8">
           <SOWRatesSection />
         </div>
+
+        {/* Preferred Pricing Section */}
+        <div className="mb-8">
+          <PreferredPricingSection />
+        </div>
+
 
         {/* Stats Overview */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
