@@ -9,6 +9,7 @@ import { ArrowLeft, FileText, DollarSign, CheckCircle, Loader2, Sparkles, Settin
 import { OverheadManager } from "@/components/OverheadManager";
 import { EstimateTemplate } from "@/components/EstimateTemplate";
 import { PlanViewer } from "@/components/PlanViewer";
+import { TenderDocuments } from "@/components/TenderDocuments";
 
 const ProjectDetail = () => {
   const { projectId } = useParams();
@@ -243,19 +244,18 @@ const ProjectDetail = () => {
             <OverheadManager projectId={projectId!} />
           </TabsContent>
 
-          <TabsContent value="tender">
+          <TabsContent value="tender" className="space-y-6">
+            <TenderDocuments projectId={projectId!} />
+            
             <Card className="p-6">
-              <h2 className="font-display text-2xl font-bold mb-4">Tender Documents</h2>
-              <div className="text-center py-12">
-                <FileText className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
-                <h3 className="font-display text-xl font-bold mb-2">Ready to Generate</h3>
-                <p className="text-muted-foreground mb-6">
-                  Create professional tender documents from your estimates
-                </p>
-                <Button className="bg-accent text-accent-foreground hover:bg-accent/90">
-                  Generate Tender Now
-                </Button>
-              </div>
+              <h3 className="font-display text-xl font-bold mb-4">Generate Tender Document</h3>
+              <p className="text-muted-foreground mb-4">
+                Create a professional tender document based on your estimate and project details.
+              </p>
+              <Button className="bg-accent text-accent-foreground hover:bg-accent/90">
+                <FileText className="mr-2 h-4 w-4" />
+                Generate Tender PDF
+              </Button>
             </Card>
           </TabsContent>
 

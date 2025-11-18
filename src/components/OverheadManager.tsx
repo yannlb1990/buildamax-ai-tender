@@ -152,20 +152,19 @@ export const OverheadManager = ({ projectId }: OverheadManagerProps) => {
             />
           </div>
           <div>
-            <Label>Category *</Label>
-            <Select
+            <Label htmlFor="category">Category</Label>
+            <Input
+              id="category"
+              list="overhead-categories"
+              placeholder="Select or type custom category"
               value={newItem.category}
-              onValueChange={(value) => setNewItem({ ...newItem, category: value })}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select category" />
-              </SelectTrigger>
-              <SelectContent>
-                {OVERHEAD_CATEGORIES.map(cat => (
-                  <SelectItem key={cat} value={cat}>{cat}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              onChange={(e) => setNewItem({ ...newItem, category: e.target.value })}
+            />
+            <datalist id="overhead-categories">
+              {OVERHEAD_CATEGORIES.map((cat) => (
+                <option key={cat} value={cat} />
+              ))}
+            </datalist>
           </div>
           <div>
             <Label>Amount ($) *</Label>
