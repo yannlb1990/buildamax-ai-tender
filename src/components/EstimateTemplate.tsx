@@ -28,6 +28,7 @@ import { PreliminariesSection } from "./PreliminariesSection";
 import { NCCSearchBar } from "./NCCSearchBar";
 import { LabourRatesSection } from "./LabourRatesSection";
 import { PricingHistory } from "./PricingHistory";
+import { CustomMaterialDialog } from "./CustomMaterialDialog";
 
 const AU_TRADES = [
   "Carpenter", "Plumber", "Electrician", "Bricklayer", "Plasterer",
@@ -138,6 +139,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
   const [overheadTotal, setOverheadTotal] = useState(0);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValues, setEditValues] = useState<Partial<EstimateItem>>({});
+  const [showCustomMaterialDialog, setShowCustomMaterialDialog] = useState(false);
   const [newConsumable, setNewConsumable] = useState({ name: "", quantity: "", unit: "ea", unit_price: "" });
   const [urlDialog, setUrlDialog] = useState<{ open: boolean; url: string; type: 'item' | 'related'; itemId?: string; materialId?: string }>({ 
     open: false, url: "", type: 'item' 
@@ -238,7 +240,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
           labour_rate: parseFloat(item.labour_rate) || config.defaultLabourRate,
           material_wastage_pct: parseFloat(item.material_wastage_pct) || config.materialWastage,
           labour_wastage_pct: parseFloat(item.labour_wastage_pct) || config.labourWastage,
-          markup_pct: parseFloat(item.markup_pct) || config.defaultMarkup,
+          markup_pct: item.markup_pct !== null && item.markup_pct !== undefined ? parseFloat(item.markup_pct) : config.defaultMarkup,
           notes: "",
           expanded: false,
           item_number: itemNumber,
@@ -906,8 +908,11 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
                             type="number"
                             step="0.1"
                             min="0"
-                            value={editValues.markup_pct || 0}
-                            onChange={(e) => setEditValues({ ...editValues, markup_pct: parseFloat(e.target.value) || 0 })}
+                            value={editValues.markup_pct !== undefined ? editValues.markup_pct : 0}
+                            onChange={(e) => {
+                              const value = e.target.value;
+                              setEditValues({ ...editValues, markup_pct: value === '' ? 0 : parseFloat(value) });
+                            }}
                             className="h-8 w-16 text-right"
                           />
                         ) : <span className="font-mono">{item.markup_pct}%</span>}
@@ -963,11 +968,20 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
                           <div className="p-4 space-y-3">
                             <div className="flex items-center justify-between">
                               <p className="text-sm font-semibold text-muted-foreground">Related Materials for {item.scope_of_work}:</p>
-                              <Select onValueChange={(value) => addRelatedMaterial(item.id, value)}>
+                              <Select onValueChange={(value) => {
+                                if (value === "__custom__") {
+                                  setShowCustomMaterialDialog(true);
+                                } else {
+                                  addRelatedMaterial(item.id, value);
+                                }
+                              }}>
                                 <SelectTrigger className="w-64 h-8">
                                   <SelectValue placeholder="Add material..." />
                                 </SelectTrigger>
                                 <SelectContent>
+                                  <SelectItem value="__custom__" className="font-semibold text-primary">
+                                    + Add Custom Material
+                                  </SelectItem>
                                   {relatedMats.map(mat => (
                                     <SelectItem key={mat} value={mat}>{mat}</SelectItem>
                                   ))}
@@ -1384,6 +1398,36 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
           </div>
         </div>
       </Card>
+
+      <CustomMaterialDialog
+        open={showCustomMaterialDialog}
+        onOpenChange={setShowCustomMaterialDialog}
+        onAdd={(material) => {
+          const newItem: EstimateItem = {
+            id: crypto.randomUUID(),
+            section_id: null,
+            area: material.area,
+            trade: material.trade,
+            scope_of_work: material.scope_of_work,
+            material_type: material.material_type,
+            quantity: material.quantity,
+            unit: material.unit,
+            unit_price: material.unit_cost,
+            labour_hours: material.labour_hours,
+            labour_rate: labourRates[material.trade] || config.defaultLabourRate,
+            material_wastage_pct: config.materialWastage,
+            labour_wastage_pct: config.labourWastage,
+            markup_pct: config.defaultMarkup,
+            notes: '',
+            relatedMaterials: [],
+            expanded: false,
+            item_number: `${items.length + 1}`,
+            isEditing: false
+          };
+          setItems([...items, newItem]);
+          toast.success("Custom material added");
+        }}
+      />
     </div>
   );
 };

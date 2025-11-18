@@ -4,83 +4,34 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Search, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
+import { searchNCC } from "@/data/nccReferences";
 
 export const NCCSearchBar = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [summary, setSummary] = useState("");
+  const [currentUrl, setCurrentUrl] = useState("");
   const [isSearching, setIsSearching] = useState(false);
-
-  const nccSections = {
-    "footings": {
-      url: "https://ncc.abcb.gov.au/editions/ncc-2022/adopted/volume-two/section-b-structure/part-b1-structural-provisions/b1p1-acceptable-construction-manual-structural-provisions",
-      summary: "Footing depth: min 150mm below ground, 600mm from surface for good soil. Width based on soil bearing capacity and loads."
-    },
-    "framing": {
-      url: "https://ncc.abcb.gov.au/editions/ncc-2022/adopted/volume-two/section-b-structure/part-b1-structural-provisions",
-      summary: "Timber framing: studs max 600mm centres, lintels sized per span tables, bracing per AS1684."
-    },
-    "spacing": {
-      url: "https://ncc.abcb.gov.au/editions/ncc-2022/adopted/volume-two/section-b-structure",
-      summary: "Stud spacing: max 600mm. Joist spacing: per span tables (typically 450-600mm). Rafter spacing: per AS1684."
-    },
-    "insulation": {
-      url: "https://ncc.abcb.gov.au/editions/ncc-2022/adopted/volume-two/section-j-energy-efficiency",
-      summary: "R-values vary by climate zone. Walls: R1.5-R2.5, Ceiling: R3.5-R6.0, Floor: R1.0-R2.0 depending on zone."
-    },
-    "waterproofing": {
-      url: "https://ncc.abcb.gov.au/editions/ncc-2022/adopted/volume-two/section-f-health-and-amenity/part-f1-damp-and-weatherproofing",
-      summary: "Wet areas require AS3740 compliance. Min 100mm upstand for shower hobs. Membrane under all tiles in wet areas."
-    },
-    "fire": {
-      url: "https://ncc.abcb.gov.au/editions/ncc-2022/adopted/volume-two/section-f-health-and-amenity/part-f3-fire-safety",
-      summary: "Fire ratings: walls to garage 30min FRL, smoke alarms all bedrooms + hallways, BAL ratings for bushfire zones."
-    },
-    "ceiling height": {
-      url: "https://ncc.abcb.gov.au/editions/ncc-2022/adopted/volume-two/section-f-health-and-amenity/part-f2-room-heights",
-      summary: "Minimum ceiling height: 2.4m for habitable rooms, 2.1m for non-habitable, bathrooms, laundries."
-    },
-    "stairs": {
-      url: "https://ncc.abcb.gov.au/editions/ncc-2022/adopted/volume-two/section-d-access-and-egress/part-d2-construction-of-exits",
-      summary: "Riser: 115-190mm, Going: min 250mm, Landing width: min stair width. Handrail height: 865-1000mm."
-    },
-    "ventilation": {
-      url: "https://ncc.abcb.gov.au/editions/ncc-2022/adopted/volume-two/section-f-health-and-amenity/part-f4-light-and-ventilation",
-      summary: "Natural ventilation: min 5% of floor area for habitable rooms. Mechanical alternatives allowed per AS1668."
-    },
-    "glazing": {
-      url: "https://ncc.abcb.gov.au/editions/ncc-2022/adopted/volume-two/section-f-health-and-amenity/part-f6-safety-glazing",
-      summary: "Safety glazing required within 2m of floor if pane >0.5m wide, doors, side panels. Use AS1288 compliant glass."
-    }
-  };
 
   const handleSearch = () => {
     setIsSearching(true);
-    const query = searchQuery.toLowerCase();
+    const results = searchNCC(searchQuery);
     
-    // Find matching NCC section
-    const match = Object.entries(nccSections).find(([key]) => 
-      query.includes(key) || key.includes(query)
-    );
-
-    if (match) {
-      const [_, data] = match;
-      setSummary(data.summary);
+    if (results.length > 0) {
+      const topResult = results[0];
+      setSummary(topResult.description);
+      setCurrentUrl(topResult.url);
       toast.success("NCC reference found");
     } else {
-      setSummary("No specific NCC reference found. Try keywords like: footings, framing, spacing, insulation, waterproofing, fire, ceiling height, stairs, ventilation, glazing");
+      setSummary("No specific NCC reference found. Try keywords like: footings, framing, spacing, insulation, waterproofing, fire, ceiling height, stairs, ventilation, glazing, BAL ratings, energy efficiency");
+      setCurrentUrl("");
       toast.info("Try different keywords");
     }
     setIsSearching(false);
   };
 
   const openNccLink = () => {
-    const query = searchQuery.toLowerCase();
-    const match = Object.entries(nccSections).find(([key]) => 
-      query.includes(key) || key.includes(query)
-    );
-    
-    if (match) {
-      window.open(match[1].url, '_blank', 'noopener,noreferrer');
+    if (currentUrl) {
+      window.open(currentUrl, '_blank', 'noopener,noreferrer');
       toast.success("Opening NCC reference in new tab");
     } else {
       window.open('https://ncc.abcb.gov.au/', '_blank', 'noopener,noreferrer');
