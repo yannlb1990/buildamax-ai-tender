@@ -158,7 +158,7 @@ const Pricing = () => {
 
         <div className="mt-12 text-center">
           <p className="text-muted-foreground mb-4">Have questions about pricing?</p>
-          <Button variant="outline" onClick={() => window.location.href = "mailto:support@buildamax.com.au"}>
+          <Button variant="outline" onClick={() => window.open("mailto:support@esti-mate.com.au", "_blank")}>
             Contact Sales Team
           </Button>
         </div>

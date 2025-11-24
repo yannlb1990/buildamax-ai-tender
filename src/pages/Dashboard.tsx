@@ -91,9 +91,9 @@ const Dashboard = () => {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <div className="w-8 h-8 bg-gradient-accent rounded-lg flex items-center justify-center">
-                <span className="font-display font-bold text-primary">B</span>
+                <span className="font-display font-bold text-primary">E</span>
               </div>
-              <span className="font-display text-xl font-bold">Buildamax</span>
+              <span className="font-display text-xl font-bold">Esti-mate</span>
             </div>
 
             <div className="flex items-center gap-4">
