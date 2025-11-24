@@ -5,11 +5,15 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { ArrowLeft, FileText, DollarSign, CheckCircle, Loader2, Sparkles, Settings, Calculator } from "lucide-react";
+import { ArrowLeft, FileText, DollarSign, CheckCircle, Loader2, Sparkles, Settings, Calculator, TrendingUp, ShieldCheck } from "lucide-react";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Lightbulb } from "lucide-react";
 import { OverheadManager } from "@/components/OverheadManager";
 import { EstimateTemplate } from "@/components/EstimateTemplate";
 import { PlanViewer } from "@/components/PlanViewer";
 import { TenderDocuments } from "@/components/TenderDocuments";
+import { ProjectInsightsTab } from "@/components/ProjectInsightsTab";
+import { NCCComplianceCard } from "@/components/NCCComplianceCard";
 
 const ProjectDetail = () => {
   const { projectId } = useParams();
@@ -134,7 +138,7 @@ const ProjectDetail = () => {
         </div>
 
         <Tabs defaultValue="estimate" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-7">
+          <TabsList className="grid w-full grid-cols-8 lg:grid-cols-8">
             <TabsTrigger value="estimate">
               <Calculator className="h-4 w-4 mr-2" />
               Estimate
@@ -153,6 +157,14 @@ const ProjectDetail = () => {
               <DollarSign className="h-4 w-4 mr-2" />
               AI Pricing
             </TabsTrigger>
+            <TabsTrigger value="insights">
+              <TrendingUp className="h-4 w-4 mr-2" />
+              Insights
+            </TabsTrigger>
+            <TabsTrigger value="compliance">
+              <ShieldCheck className="h-4 w-4 mr-2" />
+              NCC
+            </TabsTrigger>
             <TabsTrigger value="overheads">
               <Settings className="h-4 w-4 mr-2" />
               Overheads
@@ -160,10 +172,6 @@ const ProjectDetail = () => {
             <TabsTrigger value="tender">
               <FileText className="h-4 w-4 mr-2" />
               Tender
-            </TabsTrigger>
-            <TabsTrigger value="insights">
-              <Sparkles className="h-4 w-4 mr-2" />
-              Insights
             </TabsTrigger>
           </TabsList>
 
@@ -181,21 +189,16 @@ const ProjectDetail = () => {
           </TabsContent>
 
           <TabsContent value="takeoff">
-            <Card className="p-6 mb-6 bg-secondary/5 border-secondary/20">
-              <div className="flex items-start gap-3">
-                <CheckCircle className="h-5 w-5 text-secondary mt-0.5" />
-                <div>
-                  <h4 className="font-semibold mb-1">What is AI Takeoff?</h4>
-                  <p className="text-sm text-muted-foreground">
-                    Upload your architectural plans (PDF, PNG, JPG) and our AI will automatically detect and quantify 
-                    walls, doors, windows, rooms, fixtures, and finishes. This creates a Bill of Quantities for pricing.
-                  </p>
-                  <p className="text-sm text-muted-foreground mt-2">
-                    <strong>Next step:</strong> After takeoff, go to "AI Pricing" to get cost estimates based on current Australian market rates.
-                  </p>
-                </div>
-              </div>
-            </Card>
+            <Alert className="mb-6 bg-primary/5 border-primary/20">
+              <Lightbulb className="h-4 w-4" />
+              <AlertTitle>What is AI Takeoff?</AlertTitle>
+              <AlertDescription>
+                Upload your architectural plans (PDF, PNG, JPG) and our AI will automatically detect and quantify:
+                walls, doors, windows, rooms, fixtures, and finishes. This creates a Bill of Quantities for pricing.
+                <br/><br/>
+                <strong>Next step:</strong> After takeoff, go to "AI Pricing" to get cost estimates.
+              </AlertDescription>
+            </Alert>
             
             <Card className="p-6">
               <h2 className="font-display text-2xl font-bold mb-4">Quantity Takeoff</h2>
@@ -224,21 +227,16 @@ const ProjectDetail = () => {
           </TabsContent>
 
           <TabsContent value="pricing">
-            <Card className="p-6 mb-6 bg-accent/5 border-accent/20">
-              <div className="flex items-start gap-3">
-                <DollarSign className="h-5 w-5 text-accent mt-0.5" />
-                <div>
-                  <h4 className="font-semibold mb-1">What is AI Pricing?</h4>
-                  <p className="text-sm text-muted-foreground">
-                    Our AI matches your takeoff quantities to current Australian market rates (materials + labour). 
-                    Pricing is based on your region and includes overheads, margins, and GST.
-                  </p>
-                  <p className="text-sm text-muted-foreground mt-2">
-                    <strong>Requirement:</strong> Complete "AI Takeoff" first, or manually add items to the estimate tab.
-                  </p>
-                </div>
-              </div>
-            </Card>
+            <Alert className="mb-6 bg-accent/5 border-accent/20">
+              <DollarSign className="h-4 w-4" />
+              <AlertTitle>What is AI Pricing?</AlertTitle>
+              <AlertDescription>
+                Our AI matches your takeoff quantities to current Australian market rates (materials + labour). 
+                Pricing is based on your region and includes overheads, margins, and GST.
+                <br/><br/>
+                <strong>Requirement:</strong> Complete "AI Takeoff" first, or manually add items to the estimate tab.
+              </AlertDescription>
+            </Alert>
             
             <Card className="p-6">
               <h2 className="font-display text-2xl font-bold mb-4">Cost Estimate</h2>
@@ -292,29 +290,15 @@ const ProjectDetail = () => {
           </TabsContent>
 
           <TabsContent value="insights">
-            <Card className="p-6">
-              <h2 className="font-display text-2xl font-bold mb-4">AI Insights & Analysis</h2>
-              <div className="space-y-4">
-                {analyses.map((analysis) => (
-                  <Card key={analysis.id} className="p-4 bg-muted/30">
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-2">
-                        <Sparkles className="h-4 w-4 text-accent" />
-                        <span className="font-semibold capitalize">{analysis.analysis_type}</span>
-                      </div>
-                      <span className="text-xs text-muted-foreground">
-                        {new Date(analysis.created_at).toLocaleString()}
-                      </span>
-                    </div>
-                    {analysis.confidence_score && (
-                      <p className="text-sm text-muted-foreground">
-                        Confidence: {analysis.confidence_score}%
-                      </p>
-                    )}
-                  </Card>
-                ))}
-              </div>
-            </Card>
+            <ProjectInsightsTab 
+              estimateItems={estimate?.estimate_items || []} 
+            />
+          </TabsContent>
+
+          <TabsContent value="compliance">
+            <NCCComplianceCard 
+              estimateItems={estimate?.estimate_items || []} 
+            />
           </TabsContent>
         </Tabs>
       </div>

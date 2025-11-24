@@ -7,7 +7,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Wrench, Plus, Search } from "lucide-react";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { Badge } from "@/components/ui/badge";
+import { Wrench, Plus, Search, List, Grid3x3 } from "lucide-react";
 import { SCOPE_OF_WORK_RATES, getSOWCategories } from "@/data/scopeOfWorkRates";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -18,6 +20,7 @@ export const SOWRatesSection = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedState, setSelectedState] = useState<State>("NSW");
   const [selectedCategory, setSelectedCategory] = useState("all");
+  const [viewMode, setViewMode] = useState<"table" | "grouped">("table");
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [newSOW, setNewSOW] = useState({
     trade: "",
@@ -38,6 +41,15 @@ export const SOWRatesSection = () => {
     const matchesCategory = selectedCategory === "all" || item.category === selectedCategory;
     return matchesSearch && matchesCategory;
   });
+
+  // Group SOW items by trade
+  const groupedByTrade = filteredSOW.reduce((acc, item) => {
+    if (!acc[item.trade]) {
+      acc[item.trade] = [];
+    }
+    acc[item.trade].push(item);
+    return acc;
+  }, {} as Record<string, typeof SCOPE_OF_WORK_RATES>);
 
   const getRate = (item: typeof SCOPE_OF_WORK_RATES[0]) => {
     switch(selectedState) {
@@ -109,16 +121,36 @@ export const SOWRatesSection = () => {
               className="pl-10"
             />
           </div>
-          <Select value={selectedState} onValueChange={(value) => setSelectedState(value as State)}>
-            <SelectTrigger className="w-full sm:w-48">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="NSW">NSW Pricing</SelectItem>
-              <SelectItem value="VIC">VIC Pricing</SelectItem>
-              <SelectItem value="QLD">QLD Pricing</SelectItem>
-            </SelectContent>
-          </Select>
+          <div className="flex gap-2">
+            <Select value={selectedState} onValueChange={(value) => setSelectedState(value as State)}>
+              <SelectTrigger className="w-full sm:w-48">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="NSW">NSW Pricing</SelectItem>
+                <SelectItem value="VIC">VIC Pricing</SelectItem>
+                <SelectItem value="QLD">QLD Pricing</SelectItem>
+              </SelectContent>
+            </Select>
+            <div className="flex border rounded-md">
+              <Button
+                variant={viewMode === "table" ? "default" : "ghost"}
+                size="sm"
+                onClick={() => setViewMode("table")}
+                className="rounded-r-none"
+              >
+                <List className="h-4 w-4" />
+              </Button>
+              <Button
+                variant={viewMode === "grouped" ? "default" : "ghost"}
+                size="sm"
+                onClick={() => setViewMode("grouped")}
+                className="rounded-l-none"
+              >
+                <Grid3x3 className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
         </div>
 
         <Tabs value={selectedCategory} onValueChange={setSelectedCategory} className="w-full">
@@ -136,52 +168,107 @@ export const SOWRatesSection = () => {
         </Tabs>
       </div>
 
-      <div className="border rounded-lg overflow-hidden">
-        <div className="overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="min-w-[140px]">Trade</TableHead>
-                <TableHead className="min-w-[180px]">Scope of Work</TableHead>
-                <TableHead className="min-w-[250px]">Description</TableHead>
-                <TableHead className="min-w-[80px]">Unit</TableHead>
-                <TableHead className="text-right min-w-[100px]">{selectedState} Rate</TableHead>
-                <TableHead className="min-w-[100px]">Category</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredSOW.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={6} className="text-center py-12 text-muted-foreground">
-                    No items found. Try adjusting your search or filters.
-                  </TableCell>
-                </TableRow>
-              ) : (
-                filteredSOW.map((item, index) => (
-                  <TableRow key={index} className="hover:bg-muted/50 transition-colors">
-                    <TableCell className="font-medium">{item.trade}</TableCell>
-                    <TableCell className="font-medium">{item.sow}</TableCell>
-                    <TableCell className="text-muted-foreground text-sm">{item.description}</TableCell>
-                    <TableCell className="uppercase text-xs font-mono">{item.unit}</TableCell>
-                    <TableCell className="text-right font-mono font-semibold">
-                      ${getRate(item).toFixed(2)}
-                    </TableCell>
-                    <TableCell>
-                      <span className="inline-block px-2 py-1 text-xs bg-accent/20 text-accent-foreground rounded-md">
-                        {item.category}
-                      </span>
-                    </TableCell>
+      {viewMode === "table" ? (
+        <>
+          <div className="border rounded-lg overflow-hidden">
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="min-w-[140px]">Trade</TableHead>
+                    <TableHead className="min-w-[180px]">Scope of Work</TableHead>
+                    <TableHead className="min-w-[250px]">Description</TableHead>
+                    <TableHead className="min-w-[80px]">Unit</TableHead>
+                    <TableHead className="text-right min-w-[100px]">{selectedState} Rate</TableHead>
+                    <TableHead className="min-w-[100px]">Category</TableHead>
                   </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </div>
-      </div>
-
-      <div className="mt-4 text-sm text-muted-foreground">
-        Showing {filteredSOW.length} of {SCOPE_OF_WORK_RATES.length} items
-      </div>
+                </TableHeader>
+                <TableBody>
+                  {filteredSOW.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={6} className="text-center py-12 text-muted-foreground">
+                        No items found. Try adjusting your search or filters.
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    filteredSOW.map((item, index) => (
+                      <TableRow key={index} className="hover:bg-muted/50 transition-colors">
+                        <TableCell className="font-medium">{item.trade}</TableCell>
+                        <TableCell className="font-medium">{item.sow}</TableCell>
+                        <TableCell className="text-muted-foreground text-sm">{item.description}</TableCell>
+                        <TableCell className="uppercase text-xs font-mono">{item.unit}</TableCell>
+                        <TableCell className="text-right font-mono font-semibold">
+                          ${getRate(item).toFixed(2)}
+                        </TableCell>
+                        <TableCell>
+                          <span className="inline-block px-2 py-1 text-xs bg-accent/20 text-accent-foreground rounded-md">
+                            {item.category}
+                          </span>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          </div>
+          <div className="mt-4 text-sm text-muted-foreground">
+            Showing {filteredSOW.length} of {SCOPE_OF_WORK_RATES.length} items
+          </div>
+        </>
+      ) : (
+        <Accordion type="multiple" className="w-full">
+          {Object.entries(groupedByTrade).map(([trade, items]) => {
+            const avgRate = items.reduce((sum, item) => sum + getRate(item), 0) / items.length;
+            const minRate = Math.min(...items.map(getRate));
+            const maxRate = Math.max(...items.map(getRate));
+            
+            return (
+              <AccordionItem key={trade} value={trade}>
+                <AccordionTrigger className="hover:bg-muted/50 px-4">
+                  <div className="flex items-center justify-between w-full pr-4">
+                    <div className="flex items-center gap-3">
+                      <span className="font-semibold">{trade}</span>
+                      <Badge variant="secondary">{items.length} items</Badge>
+                    </div>
+                    <div className="text-sm text-muted-foreground">
+                      Avg: ${avgRate.toFixed(2)} | Range: ${minRate.toFixed(2)} - ${maxRate.toFixed(2)}
+                    </div>
+                  </div>
+                </AccordionTrigger>
+                <AccordionContent>
+                  <div className="px-4 pb-4">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Scope of Work</TableHead>
+                          <TableHead>Description</TableHead>
+                          <TableHead className="text-center">Unit</TableHead>
+                          <TableHead className="text-right">{selectedState} Rate</TableHead>
+                          <TableHead>Category</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {items.map((item, idx) => (
+                          <TableRow key={idx}>
+                            <TableCell className="font-medium">{item.sow}</TableCell>
+                            <TableCell className="text-sm text-muted-foreground">{item.description}</TableCell>
+                            <TableCell className="text-center uppercase text-xs font-mono">{item.unit}</TableCell>
+                            <TableCell className="text-right font-mono font-semibold">${getRate(item).toFixed(2)}</TableCell>
+                            <TableCell>
+                              <Badge variant="outline" className="text-xs">{item.category}</Badge>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </AccordionContent>
+              </AccordionItem>
+            );
+          })}
+        </Accordion>
+      )}
 
       <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
         <DialogContent className="max-w-md">
