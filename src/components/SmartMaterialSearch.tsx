@@ -3,9 +3,12 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Badge } from "@/components/ui/badge";
 import { Search, ExternalLink, Loader2, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import Fuse from "fuse.js";
+import { AUSTRALIAN_MATERIALS } from "@/data/australianMaterials";
 
 interface SearchSuggestion {
   type: string;
@@ -38,25 +41,28 @@ export const SmartMaterialSearch = () => {
     setLoading(true);
 
     try {
-      // Call AI to analyze search intent
+      // Try AI search first
       const { data, error } = await supabase.functions.invoke('ai-material-search', {
         body: { searchTerm }
       });
 
       if (error) {
-        if (error.message?.includes('402') || error.message?.includes('credits')) {
-          toast.error("AI credits depleted. Please add credits in Settings → Workspace → Usage.");
-        } else if (error.message?.includes('429') || error.message?.includes('rate limit')) {
-          toast.error("Rate limit exceeded. Please try again in a moment.");
+        // If AI credits depleted (402) or rate limited (429), fallback to local search
+        if (error.message?.includes('402') || error.message?.includes('credits') || 
+            error.message?.includes('429') || error.message?.includes('rate limit')) {
+          toast.info("Using local search (AI unavailable)");
+          performLocalSearch();
+          return;
         } else {
-          toast.error("Search failed. Please try again.");
+          toast.error("Search failed. Using local fallback.");
+          performLocalSearch();
+          return;
         }
-        throw error;
       }
 
       if (data.error) {
-        toast.error(data.error);
-        setLoading(false);
+        toast.error("Using local search");
+        performLocalSearch();
         return;
       }
 
@@ -71,10 +77,52 @@ export const SmartMaterialSearch = () => {
       toast.success(`Found ${data.results?.length || 0} suppliers`);
     } catch (error) {
       console.error("Search error:", error);
-      toast.error("Search failed. Please try again.");
+      toast.info("Using local search");
+      performLocalSearch();
     } finally {
       setLoading(false);
     }
+  };
+
+  const performLocalSearch = () => {
+    // Fuzzy search with Fuse.js
+    const fuse = new Fuse(AUSTRALIAN_MATERIALS, {
+      keys: [
+        { name: 'name', weight: 0.4 },
+        { name: 'category', weight: 0.2 },
+        { name: 'subcategory', weight: 0.2 },
+        { name: 'description', weight: 0.1 }
+      ],
+      threshold: 0.3,
+      includeScore: true,
+    });
+
+    const fuseResults = fuse.search(searchTerm);
+    
+    // Convert to SearchResult format
+    const localResults: SearchResult[] = fuseResults.slice(0, 10).map(result => {
+      const item = result.item;
+      const avgPrice = item.avgPrice;
+      
+      // Determine benchmark based on price range
+      let benchmark: "low" | "medium" | "high" = "medium";
+      if (avgPrice < 10) benchmark = "low";
+      else if (avgPrice > 50) benchmark = "high";
+      
+      return {
+        supplier: item.suppliers[0] || "Various",
+        title: item.name,
+        priceRange: item.priceRange || `$${avgPrice.toFixed(2)}`,
+        url: `https://www.bunnings.com.au/search?q=${encodeURIComponent(item.name)}`,
+        description: `${item.subcategory} - ${item.unit}`,
+        category: item.category,
+        benchmark: benchmark
+      };
+    });
+
+    setResults(localResults);
+    setLoading(false);
+    toast.success(`Found ${localResults.length} local matches`);
   };
 
   const handleSuggestionClick = (suggestion: string) => {

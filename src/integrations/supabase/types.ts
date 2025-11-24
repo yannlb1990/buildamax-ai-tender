@@ -133,6 +133,105 @@ export type Database = {
         }
         Relationships: []
       }
+      client_projects: {
+        Row: {
+          client_id: string
+          created_at: string | null
+          id: string
+          project_id: string
+          role: string | null
+        }
+        Insert: {
+          client_id: string
+          created_at?: string | null
+          id?: string
+          project_id: string
+          role?: string | null
+        }
+        Update: {
+          client_id?: string
+          created_at?: string | null
+          id?: string
+          project_id?: string
+          role?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_projects_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_projects_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      clients: {
+        Row: {
+          abn: string | null
+          address: string | null
+          city: string | null
+          client_type: string | null
+          company_name: string | null
+          contact_name: string
+          created_at: string | null
+          email: string
+          id: string
+          mobile: string | null
+          notes: string | null
+          phone: string | null
+          postcode: string | null
+          state: string | null
+          tags: string[] | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          abn?: string | null
+          address?: string | null
+          city?: string | null
+          client_type?: string | null
+          company_name?: string | null
+          contact_name: string
+          created_at?: string | null
+          email: string
+          id?: string
+          mobile?: string | null
+          notes?: string | null
+          phone?: string | null
+          postcode?: string | null
+          state?: string | null
+          tags?: string[] | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          abn?: string | null
+          address?: string | null
+          city?: string | null
+          client_type?: string | null
+          company_name?: string | null
+          contact_name?: string
+          created_at?: string | null
+          email?: string
+          id?: string
+          mobile?: string | null
+          notes?: string | null
+          phone?: string | null
+          postcode?: string | null
+          state?: string | null
+          tags?: string[] | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       cost_centers: {
         Row: {
           created_at: string

@@ -6,8 +6,10 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Package, Plus, Search, ExternalLink } from "lucide-react";
+import { Package, Plus, Search, Download } from "lucide-react";
 import { AUSTRALIAN_MATERIALS, getMaterialCategories } from "@/data/australianMaterials";
+import { SCOPE_OF_WORK_RATES } from "@/data/scopeOfWorkRates";
+import { MARKET_LABOUR_RATES } from "@/data/marketLabourRates";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
@@ -35,6 +37,40 @@ export const MaterialsPricingSection = () => {
     const matchesCategory = selectedCategory === "all" || m.category === selectedCategory;
     return matchesSearch && matchesCategory;
   });
+
+  const exportComprehensiveCSV = () => {
+    // Combine all data sources into one CSV
+    let csvContent = "Type,Trade,Category,Item,Description,Unit,NSW Rate,VIC Rate,QLD Rate,Suppliers,Price Range,Notes\n";
+    
+    // Add materials
+    AUSTRALIAN_MATERIALS.forEach(m => {
+      const suppliers = m.suppliers.join(';');
+      csvContent += `Material,General,${m.category},"${m.name}","${m.subcategory}",${m.unit},${m.avgPrice.toFixed(2)},${m.avgPrice.toFixed(2)},${m.avgPrice.toFixed(2)},"${suppliers}","${m.priceRange}",Avg price shown\n`;
+    });
+    
+    // Add SOW rates
+    SCOPE_OF_WORK_RATES.forEach(s => {
+      csvContent += `SOW,${s.trade},${s.category},"${s.sow}","${s.description}",${s.unit},${s.nswRate.toFixed(2)},${s.vicRate.toFixed(2)},${s.qldRate.toFixed(2)},-,-,Complete rate\n`;
+    });
+    
+    // Add labour rates
+    MARKET_LABOUR_RATES.forEach(l => {
+      csvContent += `Labour,${l.trade},-,"${l.trade} Labour","Hourly labour rate",hr,${l.NSW.toFixed(2)},${l.VIC.toFixed(2)},${l.QLD.toFixed(2)},-,-,Market rate\n`;
+    });
+
+    // Download CSV
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `Esti-mate_Comprehensive_Pricing_${new Date().toISOString().split('T')[0]}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    
+    toast.success(`Exported ${AUSTRALIAN_MATERIALS.length + SCOPE_OF_WORK_RATES.length + MARKET_LABOUR_RATES.length} items to CSV`);
+  };
 
   const handleAddMaterial = async () => {
     if (!newMaterial.name || !newMaterial.category || !newMaterial.unit || !newMaterial.avgPrice) {
@@ -77,10 +113,16 @@ export const MaterialsPricingSection = () => {
           <Package className="h-5 w-5 text-accent" />
           <h3 className="font-display text-xl font-bold">Materials Pricing</h3>
         </div>
-        <Button onClick={() => setShowAddDialog(true)} size="sm">
-          <Plus className="h-4 w-4 mr-2" />
-          Add Custom Material
-        </Button>
+        <div className="flex gap-2">
+          <Button onClick={exportComprehensiveCSV} variant="outline" size="sm">
+            <Download className="h-4 w-4 mr-2" />
+            Export All Data (CSV)
+          </Button>
+          <Button onClick={() => setShowAddDialog(true)} size="sm">
+            <Plus className="h-4 w-4 mr-2" />
+            Add Custom Material
+          </Button>
+        </div>
       </div>
 
       <p className="text-sm text-muted-foreground mb-4">
