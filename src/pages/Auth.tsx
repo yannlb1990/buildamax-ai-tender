@@ -112,9 +112,9 @@ const Auth = () => {
             <div className="text-center mb-8">
               <div className="flex items-center justify-center gap-2 mb-4">
                 <div className="w-10 h-10 bg-gradient-accent rounded-lg flex items-center justify-center">
-                  <span className="font-display font-bold text-primary text-xl">B</span>
+                  <span className="font-display font-bold text-primary text-xl">E</span>
                 </div>
-                <span className="font-display text-2xl font-bold">Buildamax</span>
+                <span className="font-display text-2xl font-bold">Esti-mate</span>
               </div>
               <h1 className="font-display text-2xl font-bold mb-2">
                 {isLogin ? "Welcome Back" : "Get Started"}

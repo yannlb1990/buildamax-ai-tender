@@ -181,6 +181,22 @@ const ProjectDetail = () => {
           </TabsContent>
 
           <TabsContent value="takeoff">
+            <Card className="p-6 mb-6 bg-secondary/5 border-secondary/20">
+              <div className="flex items-start gap-3">
+                <CheckCircle className="h-5 w-5 text-secondary mt-0.5" />
+                <div>
+                  <h4 className="font-semibold mb-1">What is AI Takeoff?</h4>
+                  <p className="text-sm text-muted-foreground">
+                    Upload your architectural plans (PDF, PNG, JPG) and our AI will automatically detect and quantify 
+                    walls, doors, windows, rooms, fixtures, and finishes. This creates a Bill of Quantities for pricing.
+                  </p>
+                  <p className="text-sm text-muted-foreground mt-2">
+                    <strong>Next step:</strong> After takeoff, go to "AI Pricing" to get cost estimates based on current Australian market rates.
+                  </p>
+                </div>
+              </div>
+            </Card>
+            
             <Card className="p-6">
               <h2 className="font-display text-2xl font-bold mb-4">Quantity Takeoff</h2>
               {takeoffAnalysis ? (
@@ -208,6 +224,22 @@ const ProjectDetail = () => {
           </TabsContent>
 
           <TabsContent value="pricing">
+            <Card className="p-6 mb-6 bg-accent/5 border-accent/20">
+              <div className="flex items-start gap-3">
+                <DollarSign className="h-5 w-5 text-accent mt-0.5" />
+                <div>
+                  <h4 className="font-semibold mb-1">What is AI Pricing?</h4>
+                  <p className="text-sm text-muted-foreground">
+                    Our AI matches your takeoff quantities to current Australian market rates (materials + labour). 
+                    Pricing is based on your region and includes overheads, margins, and GST.
+                  </p>
+                  <p className="text-sm text-muted-foreground mt-2">
+                    <strong>Requirement:</strong> Complete "AI Takeoff" first, or manually add items to the estimate tab.
+                  </p>
+                </div>
+              </div>
+            </Card>
+            
             <Card className="p-6">
               <h2 className="font-display text-2xl font-bold mb-4">Cost Estimate</h2>
               {pricingAnalysis ? (
