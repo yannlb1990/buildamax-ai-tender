@@ -563,6 +563,218 @@ export type Database = {
         }
         Relationships: []
       }
+      plan_measurements: {
+        Row: {
+          created_at: string | null
+          id: string
+          label: string | null
+          measurement_type: string
+          plan_page_id: string | null
+          points: Json
+          raw_value: number | null
+          real_unit: string | null
+          real_value: number | null
+          room_name: string | null
+          trade: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          label?: string | null
+          measurement_type: string
+          plan_page_id?: string | null
+          points: Json
+          raw_value?: number | null
+          real_unit?: string | null
+          real_value?: number | null
+          room_name?: string | null
+          trade?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          label?: string | null
+          measurement_type?: string
+          plan_page_id?: string | null
+          points?: Json
+          raw_value?: number | null
+          real_unit?: string | null
+          real_value?: number | null
+          room_name?: string | null
+          trade?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "plan_measurements_plan_page_id_fkey"
+            columns: ["plan_page_id"]
+            isOneToOne: false
+            referencedRelation: "plan_pages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      plan_pages: {
+        Row: {
+          canvas_height: number | null
+          canvas_width: number | null
+          created_at: string | null
+          detected_scale_text: string | null
+          file_url: string
+          id: string
+          page_number: number | null
+          project_id: string | null
+          scale_factor: number | null
+          scale_known_distance_mm: number | null
+          scale_point_a: Json | null
+          scale_point_b: Json | null
+          status: string | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          canvas_height?: number | null
+          canvas_width?: number | null
+          created_at?: string | null
+          detected_scale_text?: string | null
+          file_url: string
+          id?: string
+          page_number?: number | null
+          project_id?: string | null
+          scale_factor?: number | null
+          scale_known_distance_mm?: number | null
+          scale_point_a?: Json | null
+          scale_point_b?: Json | null
+          status?: string | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          canvas_height?: number | null
+          canvas_width?: number | null
+          created_at?: string | null
+          detected_scale_text?: string | null
+          file_url?: string
+          id?: string
+          page_number?: number | null
+          project_id?: string | null
+          scale_factor?: number | null
+          scale_known_distance_mm?: number | null
+          scale_point_a?: Json | null
+          scale_point_b?: Json | null
+          status?: string | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "plan_pages_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      plan_quantities: {
+        Row: {
+          created_at: string | null
+          id: string
+          project_id: string | null
+          quantity: number
+          quantity_type: string
+          room_name: string | null
+          source: string | null
+          trade: string | null
+          unit: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          project_id?: string | null
+          quantity: number
+          quantity_type: string
+          room_name?: string | null
+          source?: string | null
+          trade?: string | null
+          unit: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          project_id?: string | null
+          quantity?: number
+          quantity_type?: string
+          room_name?: string | null
+          source?: string | null
+          trade?: string | null
+          unit?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "plan_quantities_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      plan_schedules: {
+        Row: {
+          created_at: string | null
+          description: string | null
+          height_mm: number | null
+          id: string
+          material: string | null
+          plan_page_id: string | null
+          raw_data: Json | null
+          schedule_id: string
+          schedule_type: string
+          user_id: string
+          width_mm: number | null
+        }
+        Insert: {
+          created_at?: string | null
+          description?: string | null
+          height_mm?: number | null
+          id?: string
+          material?: string | null
+          plan_page_id?: string | null
+          raw_data?: Json | null
+          schedule_id: string
+          schedule_type: string
+          user_id: string
+          width_mm?: number | null
+        }
+        Update: {
+          created_at?: string | null
+          description?: string | null
+          height_mm?: number | null
+          id?: string
+          material?: string | null
+          plan_page_id?: string | null
+          raw_data?: Json | null
+          schedule_id?: string
+          schedule_type?: string
+          user_id?: string
+          width_mm?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "plan_schedules_plan_page_id_fkey"
+            columns: ["plan_page_id"]
+            isOneToOne: false
+            referencedRelation: "plan_pages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       plan_sections: {
         Row: {
           analysis_results: Json | null
@@ -606,6 +818,59 @@ export type Database = {
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      plan_symbols: {
+        Row: {
+          bounding_box: Json
+          center_point: Json | null
+          confidence: number | null
+          created_at: string | null
+          id: string
+          plan_page_id: string | null
+          room_name: string | null
+          schedule_id: string | null
+          size_height_mm: number | null
+          size_width_mm: number | null
+          symbol_type: string
+          user_id: string
+        }
+        Insert: {
+          bounding_box: Json
+          center_point?: Json | null
+          confidence?: number | null
+          created_at?: string | null
+          id?: string
+          plan_page_id?: string | null
+          room_name?: string | null
+          schedule_id?: string | null
+          size_height_mm?: number | null
+          size_width_mm?: number | null
+          symbol_type: string
+          user_id: string
+        }
+        Update: {
+          bounding_box?: Json
+          center_point?: Json | null
+          confidence?: number | null
+          created_at?: string | null
+          id?: string
+          plan_page_id?: string | null
+          room_name?: string | null
+          schedule_id?: string | null
+          size_height_mm?: number | null
+          size_width_mm?: number | null
+          symbol_type?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "plan_symbols_plan_page_id_fkey"
+            columns: ["plan_page_id"]
+            isOneToOne: false
+            referencedRelation: "plan_pages"
             referencedColumns: ["id"]
           },
         ]
