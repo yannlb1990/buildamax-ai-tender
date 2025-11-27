@@ -569,42 +569,54 @@ export type Database = {
           id: string
           label: string | null
           measurement_type: string
+          notes: string | null
           plan_page_id: string | null
           points: Json
           raw_value: number | null
           real_unit: string | null
           real_value: number | null
           room_name: string | null
+          thickness_mm: number | null
           trade: string | null
+          unit: string | null
           user_id: string
+          volume_m3: number | null
         }
         Insert: {
           created_at?: string | null
           id?: string
           label?: string | null
           measurement_type: string
+          notes?: string | null
           plan_page_id?: string | null
           points: Json
           raw_value?: number | null
           real_unit?: string | null
           real_value?: number | null
           room_name?: string | null
+          thickness_mm?: number | null
           trade?: string | null
+          unit?: string | null
           user_id: string
+          volume_m3?: number | null
         }
         Update: {
           created_at?: string | null
           id?: string
           label?: string | null
           measurement_type?: string
+          notes?: string | null
           plan_page_id?: string | null
           points?: Json
           raw_value?: number | null
           real_unit?: string | null
           real_value?: number | null
           room_name?: string | null
+          thickness_mm?: number | null
           trade?: string | null
+          unit?: string | null
           user_id?: string
+          volume_m3?: number | null
         }
         Relationships: [
           {

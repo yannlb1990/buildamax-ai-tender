@@ -14,11 +14,14 @@ import {
 
 interface Measurement {
   id: string;
-  measurement_type: 'linear' | 'area';
+  measurement_type: 'linear' | 'area' | 'volume' | 'ea';
   label: string | null;
   real_value: number | null;
   real_unit: string | null;
+  unit: string;
   trade: string | null;
+  thickness_mm: number | null;
+  volume_m3: number | null;
   points: any;
 }
 
@@ -31,8 +34,11 @@ interface MeasurementsSidebarProps {
 export const MeasurementsSidebar = ({ measurements, onDelete, planPageId }: MeasurementsSidebarProps) => {
   const linesMeasurements = measurements.filter(m => m.measurement_type === 'linear');
   const areaMeasurements = measurements.filter(m => m.measurement_type === 'area');
+  const volumeMeasurements = measurements.filter(m => m.measurement_type === 'volume');
+  const eaMeasurements = measurements.filter(m => m.measurement_type === 'ea');
   
   const totalArea = areaMeasurements.reduce((sum, m) => sum + (m.real_value || 0), 0);
+  const totalVolume = volumeMeasurements.reduce((sum, m) => sum + (m.volume_m3 || 0), 0);
 
   const handleExport = (format: 'csv' | 'json') => {
     try {

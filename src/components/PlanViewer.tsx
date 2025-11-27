@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Canvas as FabricCanvas, Line, Textbox, FabricImage, Polygon, Rect } from "fabric";
+import { Canvas as FabricCanvas, Line, Textbox, FabricImage, Polygon, Rect, Circle } from "fabric";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Ruler, ZoomIn, ZoomOut, Move, Trash2, Square, Minus, Scan, Loader2, PenTool } from "lucide-react";
+import { Ruler, ZoomIn, ZoomOut, Trash2, Square, Minus, Scan, Loader2, PenTool, FileText, Box, Hash } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import * as pdfjsLib from "pdfjs-dist";
@@ -17,20 +17,25 @@ import { MeasurementsSidebar } from "./MeasurementsSidebar";
 // Configure PDF.js worker
 pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
 
+type ToolType = "plan" | "calibrate" | "measure-lm" | "measure-m2" | "measure-m3" | "measure-ea" | "detect" | "extract";
+
 interface PlanViewerProps {
   planUrl: string;
   projectId?: string;
   planPageId?: string;
   wizardMode?: boolean;
-  currentTool?: "pan" | "calibrate" | "measure-line" | "measure-area" | "detect" | "extract";
+  currentTool?: ToolType;
 }
 
 export const PlanViewer = ({ planUrl, projectId, planPageId: propPlanPageId, wizardMode = false, currentTool: initialTool }: PlanViewerProps) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [fabricCanvas, setFabricCanvas] = useState<FabricCanvas | null>(null);
   const [scale, setScale] = useState(1);
-  const [tool, setTool] = useState<"pan" | "measure-line" | "measure-area" | "calibrate" | "detect" | "extract">(initialTool || "pan");
+  const [tool, setTool] = useState<ToolType>(initialTool || "plan");
   const [scaleFactor, setScaleFactor] = useState<number | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const [lastPosX, setLastPosX] = useState(0);
+  const [lastPosY, setLastPosY] = useState(0);
   const [calibratePoints, setCalibratePoints] = useState<{ x: number; y: number }[]>([]);
   const [showCalibrationDialog, setShowCalibrationDialog] = useState(false);
   const [calibrationDistance, setCalibrationDistance] = useState("");
@@ -41,10 +46,16 @@ export const PlanViewer = ({ planUrl, projectId, planPageId: propPlanPageId, wiz
   const [symbols, setSymbols] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [showLabelDialog, setShowLabelDialog] = useState(false);
+  const [showThicknessDialog, setShowThicknessDialog] = useState(false);
+  const [slabThickness, setSlabThickness] = useState("");
+  const [pendingVolumeArea, setPendingVolumeArea] = useState<number | null>(null);
+  const [pendingVolumePoints, setPendingVolumePoints] = useState<{x: number, y: number}[]>([]);
   const [pendingMeasurement, setPendingMeasurement] = useState<{
-    type: 'line' | 'area';
+    type: 'linear' | 'area' | 'volume' | 'ea';
     points: { x: number; y: number }[];
     value: number;
+    area?: number;
+    thickness?: number;
   } | null>(null);
   const [measurementLabel, setMeasurementLabel] = useState("");
   const [measurementCategory, setMeasurementCategory] = useState("");
@@ -54,7 +65,7 @@ export const PlanViewer = ({ planUrl, projectId, planPageId: propPlanPageId, wiz
   // Update tool when initialTool changes (wizard mode)
   useEffect(() => {
     if (initialTool) {
-      setTool(initialTool as any);
+      setTool(initialTool);
     }
   }, [initialTool]);
 
@@ -203,6 +214,21 @@ export const PlanViewer = ({ planUrl, projectId, planPageId: propPlanPageId, wiz
     }
   };
 
+  const getCursorStyle = () => {
+    switch (tool) {
+      case "calibrate":
+      case "measure-lm":
+      case "measure-m2":
+      case "measure-m3":
+      case "measure-ea":
+        return "crosshair";
+      case "plan":
+        return "grab";
+      default:
+        return "default";
+    }
+  };
+
   // Handle mouse interactions based on tool
   useEffect(() => {
     if (!fabricCanvas) return;
@@ -210,30 +236,50 @@ export const PlanViewer = ({ planUrl, projectId, planPageId: propPlanPageId, wiz
     const handleMouseDown = (e: any) => {
       if (!e.pointer) return;
 
-      if (tool === "calibrate") {
+      if (tool === "plan") {
+        setIsDragging(true);
+        setLastPosX(e.pointer.x);
+        setLastPosY(e.pointer.y);
+      } else if (tool === "calibrate") {
         handleCalibrateClick(e.pointer);
-      } else if (tool === "measure-line") {
-        setMeasureStart({ x: e.pointer.x, y: e.pointer.y });
-      } else if (tool === "measure-area") {
-        handlePolygonClick(e.pointer);
+      } else if (tool === "measure-lm") {
+        handleLineClick(e.pointer);
+      } else if (tool === "measure-m2") {
+        handlePolygonClick(e.pointer, "area");
+      } else if (tool === "measure-m3") {
+        handlePolygonClick(e.pointer, "volume");
+      } else if (tool === "measure-ea") {
+        handleEAClick(e.pointer);
       }
     };
 
-    const handleMouseUp = (e: any) => {
-      if (tool === "measure-line" && measureStart && e.pointer) {
-        drawLineMeasurement(measureStart, e.pointer);
-        setMeasureStart(null);
+    const handleMouseMove = (e: any) => {
+      if (!fabricCanvas) return;
+      
+      if (tool === "plan" && isDragging && e.pointer) {
+        const vpt = fabricCanvas.viewportTransform!;
+        vpt[4] += e.pointer.x - lastPosX;
+        vpt[5] += e.pointer.y - lastPosY;
+        fabricCanvas.requestRenderAll();
+        setLastPosX(e.pointer.x);
+        setLastPosY(e.pointer.y);
       }
+    };
+
+    const handleMouseUp = () => {
+      setIsDragging(false);
     };
 
     fabricCanvas.on("mouse:down", handleMouseDown);
+    fabricCanvas.on("mouse:move", handleMouseMove);
     fabricCanvas.on("mouse:up", handleMouseUp);
 
     return () => {
       fabricCanvas.off("mouse:down", handleMouseDown);
+      fabricCanvas.off("mouse:move", handleMouseMove);
       fabricCanvas.off("mouse:up", handleMouseUp);
     };
-  }, [tool, fabricCanvas, measureStart, calibratePoints, polygonPoints, scaleFactor]);
+  }, [tool, fabricCanvas, calibratePoints, polygonPoints, scaleFactor]);
 
   // Handle calibration clicks
   const handleCalibrateClick = (pointer: { x: number; y: number }) => {
@@ -241,15 +287,29 @@ export const PlanViewer = ({ planUrl, projectId, planPageId: propPlanPageId, wiz
       const newPoints = [...calibratePoints, pointer];
       setCalibratePoints(newPoints);
 
-      const circle = new Rect({
-        left: pointer.x - 3,
-        top: pointer.y - 3,
-        width: 6,
-        height: 6,
-        fill: '#FF6B6B',
-        selectable: false
+      const pointLabel = newPoints.length === 1 ? "A" : "B";
+      const circle = new Circle({
+        radius: 4,
+        fill: "#FF6B6B",
+        left: pointer.x,
+        top: pointer.y,
+        originX: "center",
+        originY: "center",
+        selectable: false,
       });
+      
+      const text = new Textbox(pointLabel, {
+        left: pointer.x + 8,
+        top: pointer.y - 8,
+        fontSize: 12,
+        fontWeight: "bold",
+        fill: "#FF6B6B",
+        backgroundColor: "white",
+        selectable: false,
+      });
+
       fabricCanvas?.add(circle);
+      fabricCanvas?.add(text);
       fabricCanvas?.renderAll();
 
       if (newPoints.length === 2) {
@@ -302,19 +362,35 @@ export const PlanViewer = ({ planUrl, projectId, planPageId: propPlanPageId, wiz
     setShowCalibrationDialog(false);
     setCalibratePoints([]);
     setCalibrationDistance("");
-    setTool("pan");
+    setTool("plan");
+  };
+
+  // Handle line measurement click
+  const handleLineClick = (pointer: { x: number; y: number }) => {
+    if (!measureStart) {
+      setMeasureStart(pointer);
+    } else {
+      drawLineMeasurement(measureStart, pointer);
+      setMeasureStart(null);
+    }
   };
 
   // Handle polygon area measurement
-  const handlePolygonClick = (pointer: { x: number; y: number }) => {
-    if (polygonPoints.length >= 3) {
-      const startDist = Math.sqrt(
-        Math.pow(pointer.x - polygonPoints[0].x, 2) +
-        Math.pow(pointer.y - polygonPoints[0].y, 2)
+  const handlePolygonClick = (pointer: { x: number; y: number }, type: "area" | "volume") => {
+    if (!fabricCanvas) return;
+
+    if (polygonPoints.length > 2) {
+      const firstPoint = polygonPoints[0];
+      const distance = Math.sqrt(
+        Math.pow(pointer.x - firstPoint.x, 2) + Math.pow(pointer.y - firstPoint.y, 2)
       );
 
-      if (startDist < 20) {
-        closeAndMeasurePolygon();
+      if (distance < 20) {
+        if (type === "volume") {
+          closeAndMeasureVolume();
+        } else {
+          closeAndMeasurePolygon();
+        }
         return;
       }
     }
@@ -322,18 +398,124 @@ export const PlanViewer = ({ planUrl, projectId, planPageId: propPlanPageId, wiz
     const newPoints = [...polygonPoints, pointer];
     setPolygonPoints(newPoints);
 
-    const circle = new Rect({
-      left: pointer.x - 3,
-      top: pointer.y - 3,
-      width: 6,
-      height: 6,
-      fill: '#4CAF50',
-      selectable: false
+    const pointColor = type === "volume" ? "#2196F3" : "#4CAF50";
+    const point = new Circle({
+      radius: 4,
+      fill: pointColor,
+      left: pointer.x,
+      top: pointer.y,
+      originX: "center",
+      originY: "center",
+      selectable: false,
+      hoverCursor: "default",
     });
-    fabricCanvas?.add(circle);
-    fabricCanvas?.renderAll();
+    fabricCanvas.add(point);
+    
+    const label = new Textbox(String(newPoints.length), {
+      left: pointer.x + 8,
+      top: pointer.y - 8,
+      fontSize: 10,
+      fill: pointColor,
+      backgroundColor: "rgba(255, 255, 255, 0.8)",
+      selectable: false,
+    });
+    fabricCanvas.add(label);
+    fabricCanvas.renderAll();
   };
 
+  // Handle EA (each) marker click
+  const handleEAClick = (pointer: { x: number; y: number }) => {
+    if (!fabricCanvas) return;
+
+    const marker = new Rect({
+      left: pointer.x - 4,
+      top: pointer.y - 4,
+      width: 8,
+      height: 8,
+      fill: "#FF9800",
+      stroke: "#F57C00",
+      strokeWidth: 1,
+      selectable: false,
+      hoverCursor: "default",
+    });
+    fabricCanvas.add(marker);
+    fabricCanvas.renderAll();
+
+    setPendingMeasurement({ type: 'ea', value: 1, points: [pointer] });
+    setShowLabelDialog(true);
+  };
+
+  // Close polygon and calculate volume
+  const closeAndMeasureVolume = async () => {
+    if (!fabricCanvas || !scaleFactor) {
+      toast.error("Please set scale first");
+      return;
+    }
+
+    let area = 0;
+    const n = polygonPoints.length;
+    for (let i = 0; i < n; i++) {
+      const j = (i + 1) % n;
+      area += polygonPoints[i].x * polygonPoints[j].y;
+      area -= polygonPoints[j].x * polygonPoints[i].y;
+    }
+    area = Math.abs(area) / 2;
+    const areaRealMm2 = area * Math.pow(scaleFactor, 2);
+    const areaM2 = areaRealMm2 / 1000000;
+
+    setPendingVolumeArea(areaM2);
+    setPendingVolumePoints([...polygonPoints]);
+    setShowThicknessDialog(true);
+  };
+
+  const applyVolumeCalculation = async () => {
+    const thickness = parseFloat(slabThickness);
+    if (isNaN(thickness) || thickness <= 0) {
+      toast.error("Please enter a valid thickness in mm");
+      return;
+    }
+
+    const volumeM3 = pendingVolumeArea! * (thickness / 1000);
+    
+    const polygon = new Polygon(pendingVolumePoints, {
+      fill: "rgba(33, 150, 243, 0.3)",
+      stroke: "#2196F3",
+      strokeWidth: 2,
+      selectable: false,
+      hoverCursor: "default",
+    });
+    fabricCanvas?.add(polygon);
+
+    const centerX = pendingVolumePoints.reduce((sum, p) => sum + p.x, 0) / pendingVolumePoints.length;
+    const centerY = pendingVolumePoints.reduce((sum, p) => sum + p.y, 0) / pendingVolumePoints.length;
+
+    const label = new Textbox(`${volumeM3.toFixed(2)} m³\n${thickness}mm`, {
+      left: centerX,
+      top: centerY,
+      fontSize: 14,
+      fill: "#2196F3",
+      backgroundColor: "rgba(255, 255, 255, 0.9)",
+      textAlign: "center",
+      originX: "center",
+      originY: "center",
+      selectable: false,
+    });
+    fabricCanvas?.add(label);
+    fabricCanvas?.renderAll();
+
+    setPolygonPoints([]);
+    setPendingMeasurement({
+      type: "volume",
+      value: volumeM3,
+      area: pendingVolumeArea!,
+      thickness: thickness,
+      points: pendingVolumePoints,
+    });
+    setShowLabelDialog(true);
+    setShowThicknessDialog(false);
+    setSlabThickness("");
+  };
+  
   // Close polygon and calculate area
   const closeAndMeasurePolygon = async () => {
     if (!fabricCanvas || !scaleFactor) {
@@ -379,7 +561,6 @@ export const PlanViewer = ({ planUrl, projectId, planPageId: propPlanPageId, wiz
     fabricCanvas.add(label);
     fabricCanvas.renderAll();
 
-    // Show label dialog
     setPendingMeasurement({
       type: 'area',
       points: polygonPoints,
@@ -428,24 +609,8 @@ export const PlanViewer = ({ planUrl, projectId, planPageId: propPlanPageId, wiz
     fabricCanvas.add(text);
     fabricCanvas.renderAll();
 
-    if (planPageId) {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        await supabase.from('plan_measurements').insert({
-          plan_page_id: planPageId,
-          user_id: user.id,
-          measurement_type: 'linear',
-          points: [start, end],
-          raw_value: distance,
-          real_value: realValue,
-          real_unit: realUnit
-        });
-      }
-    }
-
-    // Show label dialog
     setPendingMeasurement({
-      type: 'line',
+      type: 'linear',
       points: [start, end],
       value: realValue
     });
@@ -558,25 +723,55 @@ export const PlanViewer = ({ planUrl, projectId, planPageId: propPlanPageId, wiz
   const saveMeasurement = async () => {
     if (!pendingMeasurement || !planPageId) return;
 
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      toast.error("Not authenticated");
+      return;
+    }
+
+    const label = measurementLabel.trim();
+    if (!label) {
+      toast.error("Please enter a label");
+      return;
+    }
+
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        toast.error("Not authenticated");
-        return;
+      let unit = "LM";
+      let realUnit = "m";
+      let volumeM3 = null;
+      let thicknessMm = null;
+      
+      if (pendingMeasurement.type === "area") {
+        unit = "M2";
+        realUnit = "m²";
+      } else if (pendingMeasurement.type === "volume") {
+        unit = "M3";
+        realUnit = "m³";
+        volumeM3 = pendingMeasurement.value;
+        thicknessMm = pendingMeasurement.thickness;
+      } else if (pendingMeasurement.type === "ea") {
+        unit = "EA";
+        realUnit = "ea";
       }
 
-      await supabase.from('plan_measurements').insert({
+      const { error } = await supabase.from("plan_measurements").insert({
         plan_page_id: planPageId,
         user_id: user.id,
-        measurement_type: pendingMeasurement.type === 'line' ? 'linear' : 'area',
+        measurement_type: pendingMeasurement.type,
         points: pendingMeasurement.points,
-        real_value: pendingMeasurement.value,
-        real_unit: pendingMeasurement.type === 'line' ? 'm' : 'm²',
-        label: measurementLabel || null,
-        trade: measurementCategory || null
+        raw_value: pendingMeasurement.value,
+        real_value: pendingMeasurement.type === "volume" ? pendingMeasurement.area : pendingMeasurement.value,
+        real_unit: realUnit,
+        unit: unit,
+        volume_m3: volumeM3,
+        thickness_mm: thicknessMm,
+        label: label,
+        trade: measurementCategory || null,
       });
 
-      toast.success(`Measurement saved: ${measurementLabel || 'Unnamed'}`);
+      if (error) throw error;
+
+      toast.success(`Measurement saved: ${label}`);
       setShowLabelDialog(false);
       setPendingMeasurement(null);
       setMeasurementLabel("");
@@ -645,12 +840,12 @@ export const PlanViewer = ({ planUrl, projectId, planPageId: propPlanPageId, wiz
           <Card className="p-4">
             <div className="flex flex-wrap gap-2">
             <Button
-              variant={tool === "pan" ? "default" : "outline"}
+              variant={tool === "plan" ? "default" : "outline"}
               size="sm"
-              onClick={() => setTool("pan")}
+              onClick={() => setTool("plan")}
             >
-              <Move className="h-4 w-4 mr-2" />
-              Pan
+              <FileText className="h-4 w-4 mr-2" />
+              Plan
             </Button>
 
             <Button
@@ -670,13 +865,21 @@ export const PlanViewer = ({ planUrl, projectId, planPageId: propPlanPageId, wiz
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent>
-                <DropdownMenuItem onClick={() => setTool("measure-line")}>
+                <DropdownMenuItem onClick={() => setTool("measure-lm")}>
                   <Minus className="h-4 w-4 mr-2" />
-                  Line (m)
+                  LM (Line)
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setTool("measure-area")}>
+                <DropdownMenuItem onClick={() => setTool("measure-m2")}>
                   <Square className="h-4 w-4 mr-2" />
-                  Area (m²)
+                  M² (Area)
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setTool("measure-m3")}>
+                  <Box className="h-4 w-4 mr-2" />
+                  M³ (Slab)
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setTool("measure-ea")}>
+                  <Hash className="h-4 w-4 mr-2" />
+                  EA (Each)
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -719,7 +922,7 @@ export const PlanViewer = ({ planUrl, projectId, planPageId: propPlanPageId, wiz
       )}
 
       <Card className="p-4">
-        <div className="border border-border rounded-lg overflow-hidden bg-background relative">
+        <div className="border border-border rounded-lg overflow-hidden bg-background relative" style={{ cursor: getCursorStyle() }}>
           {isLoading && (
             <div className="absolute inset-0 flex items-center justify-center bg-background/80 z-10">
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -729,9 +932,11 @@ export const PlanViewer = ({ planUrl, projectId, planPageId: propPlanPageId, wiz
         </div>
         <p className="text-xs text-muted-foreground mt-2">
           {tool === "calibrate" && "Click two points on a known dimension"}
-          {tool === "measure-line" && "Click and drag to measure distances"}
-          {tool === "measure-area" && "Click points to create a polygon. Click near start to close."}
-          {tool === "pan" && "Pan mode: drag to move the canvas"}
+          {tool === "measure-lm" && "Click start and end points to measure line distance"}
+          {tool === "measure-m2" && "Click points to create a polygon for area. Click near start to close."}
+          {tool === "measure-m3" && "Click points to create a polygon for slab volume. Click near start to close."}
+          {tool === "measure-ea" && "Click to place markers for counting fixtures"}
+          {tool === "plan" && "Plan mode: drag to pan the canvas"}
         </p>
       </Card>
 
@@ -765,6 +970,45 @@ export const PlanViewer = ({ planUrl, projectId, planPageId: propPlanPageId, wiz
         </DialogContent>
       </Dialog>
 
+      <Dialog open={showThicknessDialog} onOpenChange={setShowThicknessDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Enter Slab Thickness</DialogTitle>
+            <DialogDescription>
+              Area calculated: {pendingVolumeArea?.toFixed(2)} m². Enter slab thickness to calculate volume.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <Label>Thickness (mm)</Label>
+            <div className="flex gap-2 mt-2 flex-wrap">
+              {[100, 120, 150, 200].map(t => (
+                <Button
+                  key={t}
+                  variant={slabThickness === String(t) ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setSlabThickness(String(t))}
+                >
+                  {t}mm
+                </Button>
+              ))}
+            </div>
+            <Input
+              type="number"
+              value={slabThickness}
+              onChange={(e) => setSlabThickness(e.target.value)}
+              placeholder="Custom thickness in mm"
+              className="mt-3"
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowThicknessDialog(false)}>
+              Cancel
+            </Button>
+            <Button onClick={applyVolumeCalculation}>Calculate Volume</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={showLabelDialog} onOpenChange={setShowLabelDialog}>
         <DialogContent>
           <DialogHeader>
@@ -779,7 +1023,7 @@ export const PlanViewer = ({ planUrl, projectId, planPageId: propPlanPageId, wiz
               <Input
                 value={measurementLabel}
                 onChange={(e) => setMeasurementLabel(e.target.value)}
-                placeholder="e.g., Bedroom Wall N, Bathroom Floor"
+                placeholder="e.g., Bedroom Wall N, Bathroom Floor, Door D01"
                 autoFocus
               />
             </div>
@@ -795,6 +1039,9 @@ export const PlanViewer = ({ planUrl, projectId, planPageId: propPlanPageId, wiz
                   <SelectItem value="Framing">Framing</SelectItem>
                   <SelectItem value="Flooring">Flooring</SelectItem>
                   <SelectItem value="Painting">Painting</SelectItem>
+                  <SelectItem value="Concrete">Concrete</SelectItem>
+                  <SelectItem value="Doors">Doors</SelectItem>
+                  <SelectItem value="Windows">Windows</SelectItem>
                   <SelectItem value="Other">Other</SelectItem>
                 </SelectContent>
               </Select>
@@ -815,11 +1062,11 @@ export const PlanViewer = ({ planUrl, projectId, planPageId: propPlanPageId, wiz
       </Dialog>
       </div>
 
-      {showSidebar && planPageId && (
+      {!wizardMode && (
         <MeasurementsSidebar
           measurements={measurements}
           onDelete={deleteMeasurement}
-          planPageId={planPageId}
+          planPageId={planPageId || ""}
         />
       )}
     </div>

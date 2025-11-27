@@ -126,7 +126,7 @@ export const PlanAnalysisWizard = ({ projectId, planUrl }: PlanAnalysisWizardPro
                 planUrl={planUrl} 
                 projectId={projectId}
                 wizardMode={true}
-                currentTool="pan"
+                currentTool="plan"
               />
             </div>
           </div>
@@ -170,7 +170,7 @@ export const PlanAnalysisWizard = ({ projectId, planUrl }: PlanAnalysisWizardPro
                 planUrl={planUrl} 
                 projectId={projectId}
                 wizardMode={true}
-                currentTool="measure-area"
+                currentTool="measure-m2"
               />
             </div>
           </div>

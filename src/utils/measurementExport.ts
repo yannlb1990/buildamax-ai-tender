@@ -1,24 +1,36 @@
 interface Measurement {
   id: string;
-  measurement_type: 'linear' | 'area';
+  measurement_type: 'linear' | 'area' | 'volume' | 'ea';
   label: string | null;
   real_value: number | null;
   real_unit: string | null;
+  unit: string;
   trade: string | null;
+  thickness_mm: number | null;
+  volume_m3: number | null;
   points: any;
 }
 
 export const exportMeasurementsToCSV = (measurements: Measurement[], planPageId: string) => {
-  const headers = ['measurement_id', 'type', 'label', 'length_m', 'area_m2', 'category'];
+  const headers = ['measurement_id', 'type', 'label', 'quantity', 'unit', 'thickness_mm', 'category'];
   
-  const rows = measurements.map(m => [
-    m.id,
-    m.measurement_type,
-    m.label || '',
-    m.measurement_type === 'linear' ? (m.real_value || 0).toFixed(2) : '',
-    m.measurement_type === 'area' ? (m.real_value || 0).toFixed(2) : '',
-    m.trade || ''
-  ]);
+  const rows = measurements.map(m => {
+    let quantity = '';
+    if (m.measurement_type === 'linear') quantity = (m.real_value || 0).toFixed(2);
+    else if (m.measurement_type === 'area') quantity = (m.real_value || 0).toFixed(2);
+    else if (m.measurement_type === 'volume') quantity = (m.volume_m3 || 0).toFixed(2);
+    else if (m.measurement_type === 'ea') quantity = '1';
+    
+    return [
+      m.id,
+      m.measurement_type,
+      m.label || '',
+      quantity,
+      m.unit,
+      m.thickness_mm || '',
+      m.trade || ''
+    ];
+  });
 
   const csv = [
     headers.join(','),
@@ -39,24 +51,39 @@ export const exportMeasurementsToCSV = (measurements: Measurement[], planPageId:
 export const exportMeasurementsToJSON = (measurements: Measurement[], planPageId: string) => {
   const linesMeasurements = measurements.filter(m => m.measurement_type === 'linear');
   const areaMeasurements = measurements.filter(m => m.measurement_type === 'area');
+  const volumeMeasurements = measurements.filter(m => m.measurement_type === 'volume');
+  const eaMeasurements = measurements.filter(m => m.measurement_type === 'ea');
   
   const totalArea = areaMeasurements.reduce((sum, m) => sum + (m.real_value || 0), 0);
+  const totalVolume = volumeMeasurements.reduce((sum, m) => sum + (m.volume_m3 || 0), 0);
 
   const exportData = {
     plan_id: planPageId,
-    measurements: measurements.map(m => ({
-      measurement_id: m.id,
-      type: m.measurement_type,
-      label: m.label || '',
-      length_m: m.measurement_type === 'linear' ? m.real_value : null,
-      area_m2: m.measurement_type === 'area' ? m.real_value : null,
-      category: m.trade || null,
-      points: m.points
-    })),
+    measurements: measurements.map(m => {
+      let quantity = null;
+      if (m.measurement_type === 'linear') quantity = m.real_value;
+      else if (m.measurement_type === 'area') quantity = m.real_value;
+      else if (m.measurement_type === 'volume') quantity = m.volume_m3;
+      else if (m.measurement_type === 'ea') quantity = 1;
+      
+      return {
+        measurement_id: m.id,
+        type: m.measurement_type,
+        label: m.label || '',
+        quantity: quantity,
+        unit: m.unit,
+        thickness_mm: m.thickness_mm,
+        category: m.trade || null,
+        points: m.points
+      };
+    }),
     totals: {
       total_lines: linesMeasurements.length,
       total_areas: areaMeasurements.length,
-      total_area_m2: parseFloat(totalArea.toFixed(2))
+      total_volumes: volumeMeasurements.length,
+      total_ea: eaMeasurements.length,
+      total_area_m2: parseFloat(totalArea.toFixed(2)),
+      total_volume_m3: parseFloat(totalVolume.toFixed(2))
     }
   };
 
