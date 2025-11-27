@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { MeasurementsTable } from "./MeasurementsTable";
 import { Ruler, ZoomIn, ZoomOut, Trash2, Square, Minus, Scan, Loader2, PenTool, FileText, Box, Hash } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -279,7 +280,7 @@ export const PlanViewer = ({ planUrl, projectId, planPageId: propPlanPageId, wiz
       fabricCanvas.off("mouse:move", handleMouseMove);
       fabricCanvas.off("mouse:up", handleMouseUp);
     };
-  }, [tool, fabricCanvas, calibratePoints, polygonPoints, scaleFactor]);
+  }, [tool, fabricCanvas, calibratePoints, polygonPoints, scaleFactor, measureStart, isDragging, lastPosX, lastPosY]);
 
   // Handle calibration clicks
   const handleCalibrateClick = (pointer: { x: number; y: number }) => {
@@ -1060,6 +1061,16 @@ export const PlanViewer = ({ planUrl, projectId, planPageId: propPlanPageId, wiz
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {!wizardMode && measurements.length > 0 && (
+        <Card className="p-4 mt-4">
+          <h3 className="font-semibold mb-4">Measurements Table</h3>
+          <MeasurementsTable 
+            measurements={measurements}
+            onDelete={deleteMeasurement}
+          />
+        </Card>
+      )}
       </div>
 
       {!wizardMode && (
