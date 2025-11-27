@@ -153,7 +153,8 @@ export const PlanLibrary = ({ projectId, onOpenPlan }: PlanLibraryProps) => {
 
   const getScaleDisplay = (scaleFactor: number | null) => {
     if (!scaleFactor) return <Badge variant="destructive"><AlertCircle className="h-3 w-3 mr-1" />Not set</Badge>;
-    const ratio = Math.round(scaleFactor);
+    // scaleFactor is in mm per canvas unit, so 1000/scaleFactor gives proper ratio
+    const ratio = Math.round(1000 / scaleFactor);
     return <Badge variant="secondary">1:{ratio}</Badge>;
   };
 
