@@ -161,12 +161,15 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
     defaultLabourRate: 90,
     materialWastage: 10,
     labourWastage: 5,
+    contingencyPct: 5,
     defaultMarkup: 20,
     supervisionPct: 8,
     overheadPct: 12,
     marginPct: 15,
     gstPct: 10
   });
+  const [customConfigs, setCustomConfigs] = useState<{ id: string; name: string; value: number }[]>([]);
+  const [newCustomConfig, setNewCustomConfig] = useState({ name: "", value: "" });
   const [showConfig, setShowConfig] = useState(false);
 
   useEffect(() => {
@@ -501,8 +504,16 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
     const overheadsPct = (baseSubtotal + supervision) * (config.overheadPct / 100);
     const totalOverheads = overheadsPct + overheadTotal;
     const preMargin = baseSubtotal + supervision + totalOverheads;
+    const contingency = preMargin * (config.contingencyPct / 100);
+    
+    // Add custom configs
+    let customConfigsTotal = 0;
+    customConfigs.forEach(cc => {
+      customConfigsTotal += preMargin * (cc.value / 100);
+    });
+    
     const margin = preMargin * (config.marginPct / 100);
-    const taxable = preMargin + margin;
+    const taxable = preMargin + contingency + customConfigsTotal + margin;
     const gst = taxable * (config.gstPct / 100);
     const totalPrice = taxable + gst;
 
@@ -515,6 +526,8 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
       overheadTotal,
       totalOverheads,
       preMargin,
+      contingency,
+      customConfigsTotal,
       margin,
       taxable,
       gst,
@@ -544,9 +557,46 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
     const qty = parseFloat(newItem.quantity) || 0;
     const unitPrice = parseFloat(newItem.unit_price) || 0;
     const labourHrs = parseFloat(newItem.labour_hours) || 0;
+    
+    // Material with wastage
     const matBase = qty * unitPrice;
+    const matWithWaste = matBase * (1 + config.materialWastage / 100);
+    
+    // Labour with wastage
     const labBase = labourHrs * config.defaultLabourRate;
-    return matBase + labBase;
+    const labWithWaste = labBase * (1 + config.labourWastage / 100);
+    
+    return {
+      materials: matWithWaste,
+      labour: labWithWaste,
+      total: matWithWaste + labWithWaste
+    };
+  };
+
+  const addCustomConfig = () => {
+    if (!newCustomConfig.name || !newCustomConfig.value) {
+      toast.error("Please enter config name and value");
+      return;
+    }
+    const customConfig = {
+      id: crypto.randomUUID(),
+      name: newCustomConfig.name,
+      value: parseFloat(newCustomConfig.value) || 0
+    };
+    setCustomConfigs([...customConfigs, customConfig]);
+    setNewCustomConfig({ name: "", value: "" });
+    toast.success("Custom config added");
+  };
+
+  const removeCustomConfig = (id: string) => {
+    setCustomConfigs(customConfigs.filter(c => c.id !== id));
+    toast.success("Custom config removed");
+  };
+
+  const updateCustomConfig = (id: string, value: number) => {
+    setCustomConfigs(customConfigs.map(c => 
+      c.id === id ? { ...c, value } : c
+    ));
   };
 
   return (
@@ -602,6 +652,88 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
               onChange={(e) => setConfig({ ...config, supervisionPct: parseFloat(e.target.value) || 0 })}
             />
           </div>
+          <div>
+            <Label htmlFor="materialWaste">Material Waste %</Label>
+            <Input
+              id="materialWaste"
+              type="number"
+              min="0"
+              step="0.1"
+              value={config.materialWastage}
+              onChange={(e) => setConfig({ ...config, materialWastage: parseFloat(e.target.value) || 0 })}
+            />
+          </div>
+          <div>
+            <Label htmlFor="labourWaste">Labour Waste %</Label>
+            <Input
+              id="labourWaste"
+              type="number"
+              min="0"
+              step="0.1"
+              value={config.labourWastage}
+              onChange={(e) => setConfig({ ...config, labourWastage: parseFloat(e.target.value) || 0 })}
+            />
+          </div>
+          <div>
+            <Label htmlFor="contingency">Contingency %</Label>
+            <Input
+              id="contingency"
+              type="number"
+              min="0"
+              step="0.1"
+              value={config.contingencyPct}
+              onChange={(e) => setConfig({ ...config, contingencyPct: parseFloat(e.target.value) || 0 })}
+            />
+          </div>
+          
+          {/* Custom Config Items */}
+          {customConfigs.map(custom => (
+            <div key={custom.id} className="relative">
+              <Label>{custom.name} %</Label>
+              <div className="flex gap-1">
+                <Input
+                  type="number"
+                  min="0"
+                  step="0.1"
+                  value={custom.value}
+                  onChange={(e) => updateCustomConfig(custom.id, parseFloat(e.target.value) || 0)}
+                />
+                <Button 
+                  variant="ghost" 
+                  size="icon"
+                  onClick={() => removeCustomConfig(custom.id)}
+                  className="flex-shrink-0"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Add Custom Config Form */}
+        <div className="mt-4 flex items-end gap-2">
+          <div className="flex-1">
+            <Label>Custom Config Name</Label>
+            <Input
+              value={newCustomConfig.name}
+              onChange={(e) => setNewCustomConfig({ ...newCustomConfig, name: e.target.value })}
+              placeholder="e.g., Site Allowance"
+            />
+          </div>
+          <div className="w-32">
+            <Label>Value %</Label>
+            <Input
+              type="number"
+              value={newCustomConfig.value}
+              onChange={(e) => setNewCustomConfig({ ...newCustomConfig, value: e.target.value })}
+              placeholder="5"
+            />
+          </div>
+          <Button onClick={addCustomConfig} variant="outline">
+            <Plus className="h-4 w-4 mr-2" />
+            Add Custom
+          </Button>
         </div>
       </Card>
 
@@ -614,7 +746,7 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
       
       {/* 4. Price Summary */}
       <Card className="p-6 bg-gradient-to-br from-primary/5 to-accent/5 border-accent/20">
-        <div className="grid grid-cols-2 md:grid-cols-7 gap-4 text-center">
+        <div className="grid grid-cols-2 md:grid-cols-8 gap-4 text-center">
           <div>
             <p className="text-xs text-muted-foreground mb-1">Materials</p>
             <p className="text-lg font-bold">${totals.totalMaterials.toFixed(2)}</p>
@@ -630,6 +762,10 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
           <div>
             <p className="text-xs text-muted-foreground mb-1">Overheads</p>
             <p className="text-lg font-bold">${totals.totalOverheads.toFixed(2)}</p>
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground mb-1">Contingency</p>
+            <p className="text-lg font-bold">${totals.contingency.toFixed(2)}</p>
           </div>
           <div>
             <p className="text-xs text-muted-foreground mb-1">Margin</p>
@@ -769,11 +905,19 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
           </div>
         </div>
 
-        <div className="flex items-center justify-between gap-4 mt-6 p-4 bg-accent/10 rounded-lg">
-          <div className="text-sm">
-            Line Total: <span className="font-mono font-bold text-2xl text-accent ml-2">
-              ${calculateLineTotal().toFixed(2)}
-            </span>
+        <div className="col-span-full mt-6 p-4 bg-accent/10 rounded-lg flex items-center justify-between">
+          <div className="space-y-1">
+            <div className="text-sm">
+              <span className="text-muted-foreground">Materials:</span> ${calculateLineTotal().materials.toFixed(2)} 
+              <span className="text-xs text-muted-foreground ml-2">(incl. {config.materialWastage}% waste)</span>
+            </div>
+            <div className="text-sm">
+              <span className="text-muted-foreground">Labour:</span> ${calculateLineTotal().labour.toFixed(2)} 
+              <span className="text-xs text-muted-foreground ml-2">(incl. {config.labourWastage}% waste)</span>
+            </div>
+            <div className="text-lg font-bold">
+              Line Total: <span className="text-accent">${calculateLineTotal().total.toFixed(2)}</span>
+            </div>
           </div>
           <Button onClick={addItem} className="bg-accent text-accent-foreground hover:bg-accent/90">
             <CheckCircle className="h-4 w-4 mr-2" />

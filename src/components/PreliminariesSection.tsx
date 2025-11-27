@@ -28,6 +28,8 @@ interface PreliminaryItem {
 
 export const PreliminariesSection = () => {
   const [items, setItems] = useState<PreliminaryItem[]>([]);
+  const [customCategory, setCustomCategory] = useState("");
+  const [customItem, setCustomItem] = useState("");
   const [newItem, setNewItem] = useState({
     category: "",
     item: "",
@@ -38,12 +40,15 @@ export const PreliminariesSection = () => {
   });
 
   const addItem = () => {
-    if (!newItem.category || !newItem.item) return;
+    const categoryToUse = newItem.category === "__custom__" ? customCategory : newItem.category;
+    const itemToUse = newItem.category === "__custom__" ? customItem : newItem.item;
+    
+    if (!categoryToUse || !itemToUse) return;
 
     const item: PreliminaryItem = {
       id: crypto.randomUUID(),
-      category: newItem.category,
-      item: newItem.item,
+      category: categoryToUse,
+      item: itemToUse,
       quantity: parseFloat(newItem.quantity) || 1,
       unit: newItem.unit,
       unitPrice: parseFloat(newItem.unitPrice) || 0,
@@ -59,6 +64,8 @@ export const PreliminariesSection = () => {
       unitPrice: "",
       notes: ""
     });
+    setCustomCategory("");
+    setCustomItem("");
   };
 
   const deleteItem = (id: string) => {
@@ -79,7 +86,13 @@ export const PreliminariesSection = () => {
           <Label>Category *</Label>
           <Select
             value={newItem.category}
-            onValueChange={(value) => setNewItem({ ...newItem, category: value, item: "" })}
+            onValueChange={(value) => {
+              setNewItem({ ...newItem, category: value, item: "" });
+              if (value !== "__custom__") {
+                setCustomCategory("");
+                setCustomItem("");
+              }
+            }}
           >
             <SelectTrigger>
               <SelectValue placeholder="Select category" />
@@ -88,27 +101,49 @@ export const PreliminariesSection = () => {
               {Object.keys(PRELIMINARY_CATEGORIES).map(cat => (
                 <SelectItem key={cat} value={cat}>{cat}</SelectItem>
               ))}
+              <SelectItem value="__custom__">+ Custom Category</SelectItem>
             </SelectContent>
           </Select>
         </div>
         
-        <div>
-          <Label>Item *</Label>
-          <Select
-            value={newItem.item}
-            onValueChange={(value) => setNewItem({ ...newItem, item: value })}
-            disabled={!newItem.category}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="Select item" />
-            </SelectTrigger>
-            <SelectContent>
-              {newItem.category && PRELIMINARY_CATEGORIES[newItem.category as keyof typeof PRELIMINARY_CATEGORIES]?.map(item => (
-                <SelectItem key={item} value={item}>{item}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+        {newItem.category === "__custom__" ? (
+          <>
+            <div>
+              <Label>Custom Category Name *</Label>
+              <Input
+                value={customCategory}
+                onChange={(e) => setCustomCategory(e.target.value)}
+                placeholder="Enter category name"
+              />
+            </div>
+            <div>
+              <Label>Custom Item Name *</Label>
+              <Input
+                value={customItem}
+                onChange={(e) => setCustomItem(e.target.value)}
+                placeholder="Enter item name"
+              />
+            </div>
+          </>
+        ) : (
+          <div>
+            <Label>Item *</Label>
+            <Select
+              value={newItem.item}
+              onValueChange={(value) => setNewItem({ ...newItem, item: value })}
+              disabled={!newItem.category}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select item" />
+              </SelectTrigger>
+              <SelectContent>
+                {newItem.category && PRELIMINARY_CATEGORIES[newItem.category as keyof typeof PRELIMINARY_CATEGORIES]?.map(item => (
+                  <SelectItem key={item} value={item}>{item}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
 
         <div>
           <Label>Qty</Label>
