@@ -124,6 +124,7 @@ export const PlanAnalysisWizard = ({ projectId, planUrl }: PlanAnalysisWizardPro
             </p>
             <div className="border border-border rounded-lg overflow-hidden">
               <PlanViewer 
+                key="preview-step"
                 planUrl={planUrl} 
                 projectId={projectId}
                 wizardMode={true}
@@ -146,6 +147,7 @@ export const PlanAnalysisWizard = ({ projectId, planUrl }: PlanAnalysisWizardPro
             </p>
             <div className="border border-border rounded-lg overflow-hidden">
               <PlanViewer 
+                key="scale-step"
                 planUrl={planUrl} 
                 projectId={projectId}
                 wizardMode={true}
@@ -168,6 +170,7 @@ export const PlanAnalysisWizard = ({ projectId, planUrl }: PlanAnalysisWizardPro
             </p>
             <div className="border border-border rounded-lg overflow-hidden">
               <PlanViewer 
+                key="measure-step"
                 planUrl={planUrl} 
                 projectId={projectId}
                 wizardMode={true}
@@ -190,6 +193,7 @@ export const PlanAnalysisWizard = ({ projectId, planUrl }: PlanAnalysisWizardPro
             </p>
             <div className="border border-border rounded-lg overflow-hidden">
               <PlanViewer 
+                key="detect-step"
                 planUrl={planUrl} 
                 projectId={projectId}
                 wizardMode={true}
@@ -212,6 +216,7 @@ export const PlanAnalysisWizard = ({ projectId, planUrl }: PlanAnalysisWizardPro
             </p>
             <div className="border border-border rounded-lg overflow-hidden">
               <PlanViewer 
+                key="extract-step"
                 planUrl={planUrl} 
                 projectId={projectId}
                 wizardMode={true}
