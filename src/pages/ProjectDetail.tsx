@@ -5,9 +5,12 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { ArrowLeft, FileText, DollarSign, CheckCircle, Loader2, Sparkles, Settings, Calculator, TrendingUp, ShieldCheck } from "lucide-react";
+import { ArrowLeft, FileText, DollarSign, CheckCircle, Loader2, Sparkles, Settings, Calculator, TrendingUp, ShieldCheck, MapPin, User, Calendar as CalendarIcon, Clock, Bell } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Lightbulb } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { format } from "date-fns";
 import { OverheadManager } from "@/components/OverheadManager";
 import { EstimateTemplate } from "@/components/EstimateTemplate";
 import { PlanViewer } from "@/components/PlanViewer";
@@ -23,10 +26,34 @@ const ProjectDetail = () => {
   const [project, setProject] = useState<any>(null);
   const [analyses, setAnalyses] = useState<any[]>([]);
   const [estimate, setEstimate] = useState<any>(null);
+  const [dueDate, setDueDate] = useState<Date | undefined>();
 
   useEffect(() => {
     loadProject();
   }, [projectId]);
+
+  const handleDueDateChange = async (date: Date | undefined) => {
+    if (!projectId) return;
+    setDueDate(date);
+    const { error } = await supabase
+      .from('projects')
+      .update({ due_date: date?.toISOString() })
+      .eq('id', projectId);
+    
+    if (error) {
+      toast.error("Failed to update due date");
+    } else {
+      toast.success("Due date updated");
+    }
+  };
+
+  const sendReminder = () => {
+    if (!dueDate) {
+      toast.error("Please set a due date first");
+      return;
+    }
+    toast.success(`Reminder set for ${format(dueDate, "PPP")}`);
+  };
 
   const loadProject = async () => {
     try {
@@ -120,23 +147,67 @@ const ProjectDetail = () => {
       </nav>
 
       <div className="container mx-auto px-6 py-8">
-        <div className="mb-8">
-          <div className="flex items-center gap-3 mb-2">
-            <h1 className="font-display text-4xl font-bold">{project.name}</h1>
-            <div className={`px-3 py-1 rounded-full text-xs font-medium ${
-              project.status === "complete"
-                ? "bg-accent/20 text-accent-foreground"
-                : "bg-secondary/10 text-secondary"
-            }`}>
-              {project.status}
+        <Card className="p-6 mb-8">
+          <div className="flex flex-col md:flex-row md:items-start justify-between gap-6">
+            <div className="space-y-2">
+              <div className="flex items-center gap-3">
+                <h1 className="font-display text-4xl font-bold">{project.name}</h1>
+                <div className={`px-3 py-1 rounded-full text-xs font-medium ${
+                  project.status === "complete"
+                    ? "bg-accent/20 text-accent-foreground"
+                    : "bg-secondary/10 text-secondary"
+                }`}>
+                  {project.status}
+                </div>
+              </div>
+              <div className="text-muted-foreground space-y-1">
+                {project.site_address && (
+                  <div className="flex items-center gap-2">
+                    <MapPin className="h-4 w-4" />
+                    <span>Address: {project.site_address}</span>
+                  </div>
+                )}
+                {project.client_name && (
+                  <div className="flex items-center gap-2">
+                    <User className="h-4 w-4" />
+                    <span>Client: {project.client_name}</span>
+                  </div>
+                )}
+                <div className="flex items-center gap-2">
+                  <CalendarIcon className="h-4 w-4" />
+                  <span>Created: {new Date(project.created_at).toLocaleDateString()}</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-3 p-4 bg-muted/50 rounded-lg">
+              <div className="flex items-center gap-2">
+                <Clock className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm font-medium">Complete estimate by:</span>
+              </div>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" className="justify-start text-left w-[240px]">
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {dueDate ? format(dueDate, "PPP") : "Pick a date"}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={dueDate}
+                    onSelect={handleDueDateChange}
+                    initialFocus
+                  />
+                </PopoverContent>
+              </Popover>
+              <Button variant="outline" onClick={sendReminder} size="sm">
+                <Bell className="h-4 w-4 mr-2" />
+                Set Reminder
+              </Button>
             </div>
           </div>
-          <div className="text-muted-foreground space-y-1">
-            {project.client_name && <p>Client: {project.client_name}</p>}
-            {project.site_address && <p>Site: {project.site_address}</p>}
-            <p>Created: {new Date(project.created_at).toLocaleDateString()}</p>
-          </div>
-        </div>
+        </Card>
 
         <Tabs defaultValue="estimate" className="space-y-6">
           <TabsList className="grid w-full grid-cols-8 lg:grid-cols-8">

@@ -96,6 +96,7 @@ interface RelatedMaterial {
   unit_price: number;
   comment: string;
   url: string;
+  confirmed: boolean;
 }
 
 interface EstimateItem {
@@ -385,7 +386,8 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
           unit: "ea",
           unit_price: 0,
           comment: "",
-          url: ""
+          url: "",
+          confirmed: false
         };
         return {
           ...item,
@@ -416,6 +418,20 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
         return {
           ...item,
           relatedMaterials: item.relatedMaterials.filter(rm => rm.id !== materialId)
+        };
+      }
+      return item;
+    }));
+  };
+
+  const toggleRelatedMaterialConfirmed = (itemId: string, materialId: string) => {
+    setItems(items.map(item => {
+      if (item.id === itemId) {
+        return {
+          ...item,
+          relatedMaterials: item.relatedMaterials?.map(rm =>
+            rm.id === materialId ? { ...rm, confirmed: !rm.confirmed } : rm
+          )
         };
       }
       return item;
@@ -1143,64 +1159,84 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
                                   <div className="col-span-1 text-right">Total</div>
                                 </div>
                                 {item.relatedMaterials.map(rm => (
-                                  <div key={rm.id} className="bg-background rounded border border-border p-3 grid grid-cols-12 gap-2 items-center">
-                                    <div className="col-span-3 text-sm font-medium">{rm.name}</div>
-                                    <Input
-                                      type="number"
-                                      step="0.01"
-                                      value={rm.quantity}
-                                      onChange={(e) => updateRelatedMaterial(item.id, rm.id, 'quantity', parseFloat(e.target.value) || 0)}
-                                      placeholder="Qty"
-                                      className="col-span-1 h-8"
-                                    />
-                                    <Select
-                                      value={rm.unit}
-                                      onValueChange={(value) => updateRelatedMaterial(item.id, rm.id, 'unit', value)}
-                                    >
-                                      <SelectTrigger className="col-span-1 h-8">
-                                        <SelectValue />
-                                      </SelectTrigger>
-                                      <SelectContent>
-                                        <SelectItem value="ea">ea</SelectItem>
-                                        <SelectItem value="m">m</SelectItem>
-                                        <SelectItem value="m²">m²</SelectItem>
-                                        <SelectItem value="kg">kg</SelectItem>
-                                        <SelectItem value="L">L</SelectItem>
-                                      </SelectContent>
-                                    </Select>
-                                    <Input
-                                      type="number"
-                                      step="0.01"
-                                      value={rm.unit_price}
-                                      onChange={(e) => updateRelatedMaterial(item.id, rm.id, 'unit_price', parseFloat(e.target.value) || 0)}
-                                      placeholder="$/Unit"
-                                      className="col-span-1 h-8"
-                                    />
-                                    <Button
-                                      variant="ghost"
-                                      size="icon"
-                                      className="h-6 w-6"
-                                      onClick={() => openUrlDialog('related', item.id, rm.id)}
-                                    >
-                                      <Link className="h-3 w-3" />
-                                    </Button>
-                                    <Input
-                                      value={rm.comment}
-                                      onChange={(e) => updateRelatedMaterial(item.id, rm.id, 'comment', e.target.value)}
-                                      placeholder="Comment"
-                                      className="col-span-4 h-8"
-                                    />
-                                    <div className="col-span-1 text-right font-mono text-sm">
-                                      ${(rm.quantity * rm.unit_price).toFixed(2)}
+                                  <div key={rm.id} className="space-y-2">
+                                    <div className="bg-background rounded border border-border p-3 grid grid-cols-12 gap-2 items-center">
+                                      <div className="col-span-3 text-sm font-medium">{rm.name}</div>
+                                      <Input
+                                        type="number"
+                                        step="0.01"
+                                        value={rm.quantity}
+                                        onChange={(e) => updateRelatedMaterial(item.id, rm.id, 'quantity', parseFloat(e.target.value) || 0)}
+                                        placeholder="Qty"
+                                        className="col-span-1 h-8"
+                                      />
+                                      <Select
+                                        value={rm.unit}
+                                        onValueChange={(value) => updateRelatedMaterial(item.id, rm.id, 'unit', value)}
+                                      >
+                                        <SelectTrigger className="col-span-1 h-8">
+                                          <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          <SelectItem value="ea">ea</SelectItem>
+                                          <SelectItem value="m">m</SelectItem>
+                                          <SelectItem value="m²">m²</SelectItem>
+                                          <SelectItem value="kg">kg</SelectItem>
+                                          <SelectItem value="L">L</SelectItem>
+                                        </SelectContent>
+                                      </Select>
+                                      <Input
+                                        type="number"
+                                        step="0.01"
+                                        value={rm.unit_price}
+                                        onChange={(e) => updateRelatedMaterial(item.id, rm.id, 'unit_price', parseFloat(e.target.value) || 0)}
+                                        placeholder="$/Unit"
+                                        className="col-span-1 h-8"
+                                      />
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-6 w-6"
+                                        onClick={() => openUrlDialog('related', item.id, rm.id)}
+                                      >
+                                        <Link className="h-3 w-3" />
+                                      </Button>
+                                      <Input
+                                        value={rm.comment}
+                                        onChange={(e) => updateRelatedMaterial(item.id, rm.id, 'comment', e.target.value)}
+                                        placeholder="Comment"
+                                        className="col-span-4 h-8"
+                                      />
+                                      <div className="col-span-1 text-right font-mono text-sm">
+                                        ${(rm.quantity * rm.unit_price).toFixed(2)}
+                                      </div>
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        onClick={() => deleteRelatedMaterial(item.id, rm.id)}
+                                        className="h-6 w-6 text-destructive"
+                                      >
+                                        <Trash2 className="h-3 w-3" />
+                                      </Button>
                                     </div>
-                                    <Button
-                                      variant="ghost"
-                                      size="icon"
-                                      onClick={() => deleteRelatedMaterial(item.id, rm.id)}
-                                      className="h-6 w-6 text-destructive"
-                                    >
-                                      <Trash2 className="h-3 w-3" />
-                                    </Button>
+                                    <div className="flex justify-end px-3">
+                                      {rm.confirmed ? (
+                                        <div className="flex items-center gap-2 text-sm text-accent-foreground">
+                                          <CheckCircle className="h-4 w-4" />
+                                          <span>Added to Total</span>
+                                        </div>
+                                      ) : (
+                                        <Button
+                                          variant="outline"
+                                          size="sm"
+                                          onClick={() => toggleRelatedMaterialConfirmed(item.id, rm.id)}
+                                          className="h-8"
+                                        >
+                                          <CheckCircle className="h-4 w-4 mr-2" />
+                                          Confirm & Add to Total
+                                        </Button>
+                                      )}
+                                    </div>
                                   </div>
                                 ))}
                               </div>

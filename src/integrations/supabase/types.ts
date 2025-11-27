@@ -987,6 +987,7 @@ export type Database = {
         Row: {
           client_name: string | null
           created_at: string | null
+          due_date: string | null
           id: string
           name: string
           plan_file_name: string | null
@@ -1000,6 +1001,7 @@ export type Database = {
         Insert: {
           client_name?: string | null
           created_at?: string | null
+          due_date?: string | null
           id?: string
           name: string
           plan_file_name?: string | null
@@ -1013,6 +1015,7 @@ export type Database = {
         Update: {
           client_name?: string | null
           created_at?: string | null
+          due_date?: string | null
           id?: string
           name?: string
           plan_file_name?: string | null
