@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { MeasurementsTable } from "./MeasurementsTable";
-import { Ruler, ZoomIn, ZoomOut, Trash2, Square, Minus, Scan, Loader2, PenTool, FileText, Box, Hash } from "lucide-react";
+import { Ruler, ZoomIn, ZoomOut, Trash2, Square, Minus, Scan, Loader2, PenTool, FileText, Box, Hash, Undo2, Redo2, Edit2, Magnet } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import * as pdfjsLib from "pdfjs-dist";
@@ -62,6 +62,38 @@ export const PlanViewer = ({ planUrl, projectId, planPageId: propPlanPageId, wiz
   const [measurementCategory, setMeasurementCategory] = useState("");
   const [measurements, setMeasurements] = useState<any[]>([]);
   const [showSidebar, setShowSidebar] = useState(true);
+  
+  // Undo/Redo state
+  const [history, setHistory] = useState<any[]>([]);
+  const [historyIndex, setHistoryIndex] = useState(-1);
+  
+  // Edit measurement state
+  const [editingMeasurement, setEditingMeasurement] = useState<any | null>(null);
+  const [showEditDialog, setShowEditDialog] = useState(false);
+  
+  // Grid snapping state
+  const [snapEnabled, setSnapEnabled] = useState(true);
+  const [snapGridSize] = useState(10);
+  
+  // Refs for performance optimization (prevent stale closures)
+  const toolRef = useRef(tool);
+  const measureStartRef = useRef(measureStart);
+  const isDraggingRef = useRef(isDragging);
+  const lastPosXRef = useRef(lastPosX);
+  const lastPosYRef = useRef(lastPosY);
+  const calibratePointsRef = useRef(calibratePoints);
+  const polygonPointsRef = useRef(polygonPoints);
+  const scaleFactorRef = useRef(scaleFactor);
+  
+  // Update refs when state changes
+  useEffect(() => { toolRef.current = tool; }, [tool]);
+  useEffect(() => { measureStartRef.current = measureStart; }, [measureStart]);
+  useEffect(() => { isDraggingRef.current = isDragging; }, [isDragging]);
+  useEffect(() => { lastPosXRef.current = lastPosX; }, [lastPosX]);
+  useEffect(() => { lastPosYRef.current = lastPosY; }, [lastPosY]);
+  useEffect(() => { calibratePointsRef.current = calibratePoints; }, [calibratePoints]);
+  useEffect(() => { polygonPointsRef.current = polygonPoints; }, [polygonPoints]);
+  useEffect(() => { scaleFactorRef.current = scaleFactor; }, [scaleFactor]);
 
   // Update tool when initialTool changes (wizard mode)
   useEffect(() => {
@@ -215,6 +247,15 @@ export const PlanViewer = ({ planUrl, projectId, planPageId: propPlanPageId, wiz
     }
   };
 
+  // Snap to grid function
+  const snapToGrid = (point: { x: number; y: number }) => {
+    if (!snapEnabled) return point;
+    return {
+      x: Math.round(point.x / snapGridSize) * snapGridSize,
+      y: Math.round(point.y / snapGridSize) * snapGridSize
+    };
+  };
+  
   const getCursorStyle = () => {
     switch (tool) {
       case "calibrate":
@@ -230,40 +271,50 @@ export const PlanViewer = ({ planUrl, projectId, planPageId: propPlanPageId, wiz
     }
   };
 
-  // Handle mouse interactions based on tool
+  // Handle mouse interactions based on tool (OPTIMIZED with refs)
   useEffect(() => {
     if (!fabricCanvas) return;
 
     const handleMouseDown = (e: any) => {
-      if (!e.pointer) return;
+      // Get accurate canvas coordinates accounting for zoom/pan
+      const pointer = fabricCanvas.getPointer(e.e, true);
+      if (!pointer) return;
+      
+      // Apply grid snapping
+      const snappedPointer = snapToGrid(pointer);
+      const currentTool = toolRef.current;
 
-      if (tool === "plan") {
+      if (currentTool === "plan") {
         setIsDragging(true);
-        setLastPosX(e.pointer.x);
-        setLastPosY(e.pointer.y);
-      } else if (tool === "calibrate") {
-        handleCalibrateClick(e.pointer);
-      } else if (tool === "measure-lm") {
-        handleLineClick(e.pointer);
-      } else if (tool === "measure-m2") {
-        handlePolygonClick(e.pointer, "area");
-      } else if (tool === "measure-m3") {
-        handlePolygonClick(e.pointer, "volume");
-      } else if (tool === "measure-ea") {
-        handleEAClick(e.pointer);
+        setLastPosX(snappedPointer.x);
+        setLastPosY(snappedPointer.y);
+      } else if (currentTool === "calibrate") {
+        handleCalibrateClick(snappedPointer);
+      } else if (currentTool === "measure-lm") {
+        handleLineClick(snappedPointer);
+      } else if (currentTool === "measure-m2") {
+        handlePolygonClick(snappedPointer, "area");
+      } else if (currentTool === "measure-m3") {
+        handlePolygonClick(snappedPointer, "volume");
+      } else if (currentTool === "measure-ea") {
+        handleEAClick(snappedPointer);
       }
     };
 
     const handleMouseMove = (e: any) => {
-      if (!fabricCanvas) return;
+      const pointer = fabricCanvas.getPointer(e.e, true);
+      if (!pointer) return;
       
-      if (tool === "plan" && isDragging && e.pointer) {
+      const currentTool = toolRef.current;
+      const currentIsDragging = isDraggingRef.current;
+      
+      if (currentTool === "plan" && currentIsDragging) {
         const vpt = fabricCanvas.viewportTransform!;
-        vpt[4] += e.pointer.x - lastPosX;
-        vpt[5] += e.pointer.y - lastPosY;
+        vpt[4] += pointer.x - lastPosXRef.current;
+        vpt[5] += pointer.y - lastPosYRef.current;
         fabricCanvas.requestRenderAll();
-        setLastPosX(e.pointer.x);
-        setLastPosY(e.pointer.y);
+        setLastPosX(pointer.x);
+        setLastPosY(pointer.y);
       }
     };
 
@@ -280,7 +331,7 @@ export const PlanViewer = ({ planUrl, projectId, planPageId: propPlanPageId, wiz
       fabricCanvas.off("mouse:move", handleMouseMove);
       fabricCanvas.off("mouse:up", handleMouseUp);
     };
-  }, [tool, fabricCanvas, calibratePoints, polygonPoints, scaleFactor, measureStart, isDragging, lastPosX, lastPosY]);
+  }, [fabricCanvas, snapEnabled, snapGridSize]);
 
   // Handle calibration clicks
   const handleCalibrateClick = (pointer: { x: number; y: number }) => {
@@ -755,7 +806,7 @@ export const PlanViewer = ({ planUrl, projectId, planPageId: propPlanPageId, wiz
         realUnit = "ea";
       }
 
-      const { error } = await supabase.from("plan_measurements").insert({
+      const { data, error } = await supabase.from("plan_measurements").insert({
         plan_page_id: planPageId,
         user_id: user.id,
         measurement_type: pendingMeasurement.type,
@@ -768,9 +819,17 @@ export const PlanViewer = ({ planUrl, projectId, planPageId: propPlanPageId, wiz
         thickness_mm: thicknessMm,
         label: label,
         trade: measurementCategory || null,
-      });
+      }).select().single();
 
       if (error) throw error;
+
+      // Add to history for undo
+      if (data) {
+        addToHistory({
+          type: 'add_measurement',
+          data: data
+        });
+      }
 
       toast.success(`Measurement saved: ${label}`);
       setShowLabelDialog(false);
@@ -784,15 +843,92 @@ export const PlanViewer = ({ planUrl, projectId, planPageId: propPlanPageId, wiz
     }
   };
 
+  // Undo/Redo functions
+  const canUndo = historyIndex >= 0;
+  const canRedo = historyIndex < history.length - 1;
+  
+  const addToHistory = (action: any) => {
+    const newHistory = history.slice(0, historyIndex + 1);
+    newHistory.push(action);
+    setHistory(newHistory);
+    setHistoryIndex(newHistory.length - 1);
+  };
+
+  const undo = async () => {
+    if (!canUndo || historyIndex < 0) return;
+    const action = history[historyIndex];
+    
+    if (action.type === 'add_measurement') {
+      await supabase.from('plan_measurements').delete().eq('id', action.data.id);
+      toast.success("Undone");
+    }
+    
+    setHistoryIndex(prev => prev - 1);
+    await loadMeasurements();
+  };
+
+  const redo = async () => {
+    if (!canRedo) return;
+    const action = history[historyIndex + 1];
+    
+    if (action.type === 'add_measurement') {
+      await supabase.from('plan_measurements').insert(action.data);
+      toast.success("Redone");
+    }
+    
+    setHistoryIndex(prev => prev + 1);
+    await loadMeasurements();
+  };
+  
+  // Edit measurement
+  const handleEditMeasurement = (measurement: any) => {
+    setEditingMeasurement(measurement);
+    setShowEditDialog(true);
+  };
+  
+  const updateMeasurement = async () => {
+    if (!editingMeasurement) return;
+    
+    try {
+      const { error } = await supabase
+        .from('plan_measurements')
+        .update({
+          label: editingMeasurement.label,
+          trade: editingMeasurement.trade
+        })
+        .eq('id', editingMeasurement.id);
+
+      if (error) throw error;
+      
+      toast.success("Measurement updated");
+      setShowEditDialog(false);
+      setEditingMeasurement(null);
+      await loadMeasurements();
+    } catch (error) {
+      console.error('Error updating measurement:', error);
+      toast.error("Failed to update measurement");
+    }
+  };
+
   // Delete measurement
   const deleteMeasurement = async (id: string) => {
     try {
+      const measurementToDelete = measurements.find(m => m.id === id);
+      
       const { error } = await supabase
         .from('plan_measurements')
         .delete()
         .eq('id', id);
 
       if (error) throw error;
+
+      // Add to history for undo
+      if (measurementToDelete) {
+        addToHistory({
+          type: 'delete_measurement',
+          data: measurementToDelete
+        });
+      }
 
       toast.success("Measurement deleted");
       loadMeasurements();
@@ -885,6 +1021,27 @@ export const PlanViewer = ({ planUrl, projectId, planPageId: propPlanPageId, wiz
               </DropdownMenuContent>
             </DropdownMenu>
 
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={undo} 
+              disabled={!canUndo}
+              title="Undo last action"
+            >
+              <Undo2 className="h-4 w-4 mr-2" />
+              Undo
+            </Button>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={redo} 
+              disabled={!canRedo}
+              title="Redo last action"
+            >
+              <Redo2 className="h-4 w-4 mr-2" />
+              Redo
+            </Button>
+            
             <Button variant="outline" size="sm" onClick={handleZoomIn}>
               <ZoomIn className="h-4 w-4 mr-2" />
               Zoom In
@@ -892,6 +1049,16 @@ export const PlanViewer = ({ planUrl, projectId, planPageId: propPlanPageId, wiz
             <Button variant="outline" size="sm" onClick={handleZoomOut}>
               <ZoomOut className="h-4 w-4 mr-2" />
               Zoom Out
+            </Button>
+            
+            <Button
+              variant={snapEnabled ? "default" : "outline"}
+              size="sm"
+              onClick={() => setSnapEnabled(!snapEnabled)}
+              title={`Grid snapping: ${snapEnabled ? 'ON' : 'OFF'}`}
+            >
+              <Magnet className="h-4 w-4 mr-2" />
+              Snap {snapEnabled ? "On" : "Off"}
             </Button>
 
             <Button
@@ -1068,6 +1235,7 @@ export const PlanViewer = ({ planUrl, projectId, planPageId: propPlanPageId, wiz
           <MeasurementsTable 
             measurements={measurements}
             onDelete={deleteMeasurement}
+            onEdit={handleEditMeasurement}
           />
         </Card>
       )}
@@ -1077,6 +1245,7 @@ export const PlanViewer = ({ planUrl, projectId, planPageId: propPlanPageId, wiz
         <MeasurementsSidebar
           measurements={measurements}
           onDelete={deleteMeasurement}
+          onEdit={handleEditMeasurement}
           planPageId={planPageId || ""}
         />
       )}
