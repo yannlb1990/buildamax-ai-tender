@@ -2,7 +2,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
-import { Trash2, Download, Ruler, Square } from "lucide-react";
+import { Trash2, Download, Ruler, Square, Box, Hash } from "lucide-react";
 import { exportMeasurementsToCSV, exportMeasurementsToJSON } from "@/utils/measurementExport";
 import { toast } from "sonner";
 import {
@@ -87,19 +87,35 @@ export const MeasurementsSidebar = ({ measurements, onDelete, planPageId }: Meas
               <Card key={measurement.id} className="p-3 hover:bg-accent/50 transition-colors">
                 <div className="flex items-start gap-2">
                   <div className="flex-shrink-0 mt-1">
-                    {measurement.measurement_type === 'linear' ? (
+                    {measurement.measurement_type === 'linear' && (
                       <Ruler className="h-4 w-4 text-red-500" />
-                    ) : (
+                    )}
+                    {measurement.measurement_type === 'area' && (
                       <Square className="h-4 w-4 text-green-500" />
+                    )}
+                    {measurement.measurement_type === 'volume' && (
+                      <Box className="h-4 w-4 text-blue-500" />
+                    )}
+                    {measurement.measurement_type === 'ea' && (
+                      <Hash className="h-4 w-4 text-orange-500" />
                     )}
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="font-medium text-sm truncate">
                       {measurement.label || `Measurement ${measurement.id.slice(0, 8)}`}
                     </div>
-                    <div className="text-lg font-bold text-primary mt-1">
-                      {measurement.real_value?.toFixed(2)} {measurement.real_unit}
-                    </div>
+                    {measurement.measurement_type === 'volume' ? (
+                      <div className="text-lg font-bold text-primary mt-1">
+                        {measurement.volume_m3?.toFixed(2)} m³
+                        <span className="text-xs text-muted-foreground ml-1">
+                          ({measurement.thickness_mm}mm)
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="text-lg font-bold text-primary mt-1">
+                        {measurement.real_value?.toFixed(2)} {measurement.real_unit}
+                      </div>
+                    )}
                     {measurement.trade && (
                       <Badge variant="secondary" className="mt-1 text-xs">
                         {measurement.trade}
@@ -124,18 +140,32 @@ export const MeasurementsSidebar = ({ measurements, onDelete, planPageId }: Meas
       {measurements.length > 0 && (
         <div className="p-4 border-t bg-muted/50">
           <div className="text-sm font-medium mb-2">Summary</div>
-          <div className="grid grid-cols-3 gap-2 text-xs">
+          <div className="grid grid-cols-4 gap-2 text-xs">
             <div>
-              <div className="text-muted-foreground">Lines</div>
-              <div className="font-semibold">{linesMeasurements.length}</div>
+              <div className="text-muted-foreground">LM</div>
+              <div className="font-semibold text-red-600">{linesMeasurements.length}</div>
             </div>
             <div>
-              <div className="text-muted-foreground">Areas</div>
-              <div className="font-semibold">{areaMeasurements.length}</div>
+              <div className="text-muted-foreground">M²</div>
+              <div className="font-semibold text-green-600">{areaMeasurements.length}</div>
             </div>
+            <div>
+              <div className="text-muted-foreground">M³</div>
+              <div className="font-semibold text-blue-600">{volumeMeasurements.length}</div>
+            </div>
+            <div>
+              <div className="text-muted-foreground">EA</div>
+              <div className="font-semibold text-orange-600">{eaMeasurements.length}</div>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-2 text-xs mt-2">
             <div>
               <div className="text-muted-foreground">Total m²</div>
               <div className="font-semibold">{totalArea.toFixed(2)}</div>
+            </div>
+            <div>
+              <div className="text-muted-foreground">Total m³</div>
+              <div className="font-semibold">{totalVolume.toFixed(2)}</div>
             </div>
           </div>
         </div>
