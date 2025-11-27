@@ -43,6 +43,7 @@ export const PlanViewer = ({ planUrl, projectId, planPageId: propPlanPageId, wiz
   const [polygonPoints, setPolygonPoints] = useState<{ x: number; y: number }[]>([]);
   const [measureStart, setMeasureStart] = useState<{ x: number; y: number } | null>(null);
   const [planPageId, setPlanPageId] = useState<string | null>(propPlanPageId || null);
+  const [isPlanReady, setIsPlanReady] = useState(false);
   const [isDetecting, setIsDetecting] = useState(false);
   const [symbols, setSymbols] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -62,6 +63,7 @@ export const PlanViewer = ({ planUrl, projectId, planPageId: propPlanPageId, wiz
   const [measurementCategory, setMeasurementCategory] = useState("");
   const [measurements, setMeasurements] = useState<any[]>([]);
   const [showSidebar, setShowSidebar] = useState(true);
+  const [showDiagnostics, setShowDiagnostics] = useState(false);
   
   // Undo/Redo state
   const [history, setHistory] = useState<any[]>([]);
@@ -87,6 +89,7 @@ export const PlanViewer = ({ planUrl, projectId, planPageId: propPlanPageId, wiz
   const snapEnabledRef = useRef(snapEnabled);
   const snapGridSizeRef = useRef(snapGridSize);
   const snapIndicatorRef = useRef<Circle | null>(null);
+  const planPageIdRef = useRef<string | null>(planPageId);
   
   // Update refs when state changes
   useEffect(() => { toolRef.current = tool; }, [tool]);
@@ -99,6 +102,7 @@ export const PlanViewer = ({ planUrl, projectId, planPageId: propPlanPageId, wiz
   useEffect(() => { scaleFactorRef.current = scaleFactor; }, [scaleFactor]);
   useEffect(() => { snapEnabledRef.current = snapEnabled; }, [snapEnabled]);
   useEffect(() => { snapGridSizeRef.current = snapGridSize; }, [snapGridSize]);
+  useEffect(() => { planPageIdRef.current = planPageId; }, [planPageId]);
 
   // Update tool when initialTool changes (wizard mode)
   useEffect(() => {
@@ -280,16 +284,47 @@ export const PlanViewer = ({ planUrl, projectId, planPageId: propPlanPageId, wiz
 
   // Create plan page in database (prevent duplicates)
   const createPlanPage = async (width: number, height: number) => {
-    if (!projectId) return;
+    if (!projectId) {
+      console.log('[SCALE DEBUG] No projectId, skipping plan page creation');
+      return;
+    }
     
     // Skip if we already have a planPageId from props
     if (propPlanPageId) {
+      console.log('[SCALE DEBUG] Using prop planPageId:', propPlanPageId);
+      setPlanPageId(propPlanPageId);
+      setIsPlanReady(true);
       return;
     }
 
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
+    if (!user) {
+      console.log('[SCALE DEBUG] No user found');
+      return;
+    }
 
+    console.log('[SCALE DEBUG] Checking for existing plan_pages for URL:', planUrl);
+    
+    // Check for existing plan page first
+    const { data: existing } = await supabase
+      .from('plan_pages')
+      .select('*')
+      .eq('project_id', projectId)
+      .eq('file_url', planUrl)
+      .maybeSingle();
+    
+    if (existing) {
+      console.log('[SCALE DEBUG] Found existing plan_page:', existing.id, 'scale_factor:', existing.scale_factor);
+      setPlanPageId(existing.id);
+      if (existing.scale_factor) {
+        setScaleFactor(existing.scale_factor);
+        console.log('[SCALE DEBUG] Loaded existing scale factor:', existing.scale_factor);
+      }
+      setIsPlanReady(true);
+      return;
+    }
+
+    console.log('[SCALE DEBUG] Creating new plan_page');
     const { data, error } = await supabase
       .from('plan_pages')
       .insert({
@@ -304,9 +339,11 @@ export const PlanViewer = ({ planUrl, projectId, planPageId: propPlanPageId, wiz
       .single();
 
     if (error) {
-      console.error('Error creating plan page:', error);
+      console.error('[SCALE DEBUG] Error creating plan page:', error);
     } else {
+      console.log('[SCALE DEBUG] Created new plan_page:', data.id);
       setPlanPageId(data.id);
+      setIsPlanReady(true);
     }
   };
 
@@ -320,25 +357,17 @@ export const PlanViewer = ({ planUrl, projectId, planPageId: propPlanPageId, wiz
     };
   };
 
-  // Clear calibration objects from canvas
+  // Clear calibration objects from canvas using custom properties
   const clearCalibrationObjects = () => {
     if (!fabricCanvas) return;
     const objects = fabricCanvas.getObjects();
     objects.forEach((obj) => {
-      // Remove calibration circles (red, radius 4-6)
-      if (obj instanceof Circle && obj.fill === "#FF6B6B" && obj.radius && obj.radius <= 6) {
-        fabricCanvas.remove(obj);
-      }
-      // Remove calibration labels (A, B text)
-      if (obj instanceof Textbox && (obj.text === "A" || obj.text === "B")) {
-        fabricCanvas.remove(obj);
-      }
-      // Remove calibration line (red, not dashed)
-      if (obj instanceof Line && obj.stroke === "#FF6B6B" && !obj.strokeDashArray) {
+      if ((obj as any).__measurementType === 'calibration') {
         fabricCanvas.remove(obj);
       }
     });
     fabricCanvas.renderAll();
+    console.log('[SCALE DEBUG] Cleared calibration objects');
   };
   
   
@@ -496,8 +525,12 @@ export const PlanViewer = ({ planUrl, projectId, planPageId: propPlanPageId, wiz
 
   // Handle calibration clicks
   const handleCalibrateClick = (pointer: { x: number; y: number }) => {
+    const currentPlanPageId = planPageIdRef.current;
+    
+    console.log('[SCALE DEBUG] Calibrate click:', { pointer, planPageId: currentPlanPageId, isPlanReady });
+    
     // Validate planPageId exists before allowing scale setting
-    if (!planPageId) {
+    if (!currentPlanPageId || !isPlanReady) {
       toast.error("Please wait for plan to load before setting scale");
       return;
     }
@@ -518,6 +551,7 @@ export const PlanViewer = ({ planUrl, projectId, planPageId: propPlanPageId, wiz
         originY: "center",
         selectable: false,
       });
+      (circle as any).__measurementType = 'calibration';
       
       const text = new Textbox(pointLabel, {
         left: pointer.x + 8,
@@ -528,16 +562,26 @@ export const PlanViewer = ({ planUrl, projectId, planPageId: propPlanPageId, wiz
         backgroundColor: "white",
         selectable: false,
       });
+      (text as any).__measurementType = 'calibration';
 
       fabricCanvas?.add(circle);
       fabricCanvas?.add(text);
       fabricCanvas?.renderAll();
 
+      console.log('[SCALE DEBUG] Added calibration point', pointLabel, 'at', pointer);
+
       if (newPoints.length === 2) {
+        const canvasDistance = Math.sqrt(
+          Math.pow(newPoints[1].x - newPoints[0].x, 2) +
+          Math.pow(newPoints[1].y - newPoints[0].y, 2)
+        );
+        console.log('[SCALE DEBUG] Canvas distance between A and B:', canvasDistance.toFixed(2), 'canvas units');
+        
         const line = new Line(
           [newPoints[0].x, newPoints[0].y, newPoints[1].x, newPoints[1].y],
           { stroke: '#FF6B6B', strokeWidth: 2, selectable: false }
         );
+        (line as any).__measurementType = 'calibration';
         fabricCanvas?.add(line);
         fabricCanvas?.renderAll();
         setShowCalibrationDialog(true);
@@ -547,15 +591,22 @@ export const PlanViewer = ({ planUrl, projectId, planPageId: propPlanPageId, wiz
 
   // Apply scale calibration
   const applyScale = async () => {
-    console.log('Applying scale, planPageId:', planPageId);
+    const currentPlanPageId = planPageIdRef.current;
     
-    if (!planPageId) {
+    console.log('[SCALE DEBUG] === APPLYING SCALE ===');
+    console.log('[SCALE DEBUG] planPageId:', currentPlanPageId);
+    console.log('[SCALE DEBUG] calibratePoints:', calibratePoints);
+    console.log('[SCALE DEBUG] calibrationDistance input:', calibrationDistance);
+    
+    if (!currentPlanPageId) {
+      console.error('[SCALE DEBUG] FAILED: No planPageId');
       toast.error("Plan not loaded - cannot save scale");
       return;
     }
 
     const realDistanceMm = parseFloat(calibrationDistance);
     if (isNaN(realDistanceMm) || realDistanceMm <= 0) {
+      console.error('[SCALE DEBUG] FAILED: Invalid distance');
       toast.error("Please enter a valid distance in mm");
       return;
     }
@@ -566,8 +617,15 @@ export const PlanViewer = ({ planUrl, projectId, planPageId: propPlanPageId, wiz
     );
 
     const calculatedScaleFactor = realDistanceMm / canvasDistance;
+    
+    console.log('[SCALE DEBUG] Canvas distance:', canvasDistance.toFixed(2), 'canvas units');
+    console.log('[SCALE DEBUG] Real distance:', realDistanceMm, 'mm');
+    console.log('[SCALE DEBUG] Calculated scale factor:', calculatedScaleFactor.toFixed(4), 'mm/canvas unit');
+    console.log('[SCALE DEBUG] This means 10 canvas pixels =', (calculatedScaleFactor * 10).toFixed(2), 'mm');
+    
     setScaleFactor(calculatedScaleFactor);
 
+    console.log('[SCALE DEBUG] Updating database...');
     const { error } = await supabase
       .from('plan_pages')
       .update({
@@ -576,15 +634,16 @@ export const PlanViewer = ({ planUrl, projectId, planPageId: propPlanPageId, wiz
         scale_point_a: calibratePoints[0],
         scale_point_b: calibratePoints[1]
       })
-      .eq('id', planPageId);
+      .eq('id', currentPlanPageId);
 
     if (error) {
-      console.error('Error saving scale:', error);
+      console.error('[SCALE DEBUG] Database save FAILED:', error);
       toast.error("Failed to save scale");
       return;
     }
 
-    toast.success(`Scale set: 1:${Math.round(1000 / calculatedScaleFactor)}`);
+    console.log('[SCALE DEBUG] Scale saved successfully to database');
+    toast.success(`Scale set: ${calculatedScaleFactor.toFixed(2)} mm/unit`);
     
     // Clear calibration objects from canvas after successful application
     clearCalibrationObjects();
@@ -1324,6 +1383,8 @@ export const PlanViewer = ({ planUrl, projectId, planPageId: propPlanPageId, wiz
               variant={tool === "calibrate" ? "default" : "outline"}
               size="sm"
               onClick={() => setTool("calibrate")}
+              disabled={!isPlanReady}
+              title={!isPlanReady ? "Please wait for plan to load" : "Set scale by clicking two reference points"}
             >
               <Ruler className="h-4 w-4 mr-2" />
               Set Scale
@@ -1416,15 +1477,74 @@ export const PlanViewer = ({ planUrl, projectId, planPageId: propPlanPageId, wiz
             </Button>
 
             {scaleFactor && (
-              <Badge variant="secondary" className="ml-auto">
-                Scale: 1:{Math.round(1000 / scaleFactor)}
+              <>
+                <Badge variant="secondary" className="ml-auto">
+                  {scaleFactor.toFixed(2)} mm/unit
+                </Badge>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowDiagnostics(!showDiagnostics)}
+                  title="Show scale diagnostics"
+                >
+                  Debug
+                </Button>
+              </>
+            )}
+            {!isPlanReady && (
+              <Badge variant="outline" className="ml-auto">
+                Loading plan...
               </Badge>
             )}
           </div>
         </Card>
-      )}
+        )}
 
-      <Card className="p-4">
+        {/* Diagnostic Panel */}
+        {showDiagnostics && (
+          <Card className="p-4 bg-muted/50">
+            <div className="space-y-2 text-xs">
+              <h4 className="font-semibold text-sm mb-2">Scale Diagnostics</h4>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <span className="text-muted-foreground">Plan Page ID:</span>
+                  <p className="font-mono text-xs truncate">{planPageId || 'Not set'}</p>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Ready:</span>
+                  <p className={isPlanReady ? "text-green-600" : "text-red-600"}>
+                    {isPlanReady ? "✓ Yes" : "✗ No"}
+                  </p>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Scale Factor (State):</span>
+                  <p className="font-mono">{scaleFactor ? scaleFactor.toFixed(4) : 'Not set'}</p>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">10px =</span>
+                  <p className="font-mono">{scaleFactor ? (scaleFactor * 10).toFixed(2) + ' mm' : '-'}</p>
+                </div>
+                <div className="col-span-2">
+                  <span className="text-muted-foreground">Calibration Points:</span>
+                  <p className="font-mono text-xs">
+                    {calibratePoints.length > 0 
+                      ? calibratePoints.map((p, i) => `${String.fromCharCode(65 + i)}(${p.x.toFixed(1)}, ${p.y.toFixed(1)})`).join(' → ')
+                      : 'None'}
+                  </p>
+                </div>
+              </div>
+              <Button size="sm" variant="outline" className="w-full mt-2" onClick={async () => {
+                if (!planPageId) return;
+                const { data } = await supabase.from('plan_pages').select('scale_factor').eq('id', planPageId).single();
+                toast.info(`DB scale_factor: ${data?.scale_factor ? data.scale_factor.toFixed(4) : 'null'}`);
+              }}>
+                Check DB Value
+              </Button>
+            </div>
+          </Card>
+        )}
+
+        <Card className="p-4">
         <div className="border border-border rounded-lg overflow-hidden bg-background relative" style={{ cursor: getCursorStyle() }}>
           {isLoading && (
             <div className="absolute inset-0 flex items-center justify-center bg-background/80 z-10">
