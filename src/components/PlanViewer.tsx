@@ -86,6 +86,7 @@ export const PlanViewer = ({ planUrl, projectId, planPageId: propPlanPageId, wiz
   const scaleFactorRef = useRef(scaleFactor);
   const snapEnabledRef = useRef(snapEnabled);
   const snapGridSizeRef = useRef(snapGridSize);
+  const snapIndicatorRef = useRef<Circle | null>(null);
   
   // Update refs when state changes
   useEffect(() => { toolRef.current = tool; }, [tool]);
@@ -120,6 +121,34 @@ export const PlanViewer = ({ planUrl, projectId, planPageId: propPlanPageId, wiz
       loadScaleFactor();
     }
   }, [planPageId]);
+
+  // Clean up in-progress operations when tool changes
+  useEffect(() => {
+    if (!fabricCanvas) return;
+    
+    // Clear calibration objects when switching away from calibrate tool
+    if (tool !== "calibrate" && calibratePointsRef.current.length > 0) {
+      clearCalibrationObjects();
+      setCalibratePoints([]);
+    }
+    
+    // Clear line measurement start point when switching away
+    if (tool !== "measure-lm" && measureStartRef.current) {
+      setMeasureStart(null);
+    }
+    
+    // Clear polygon points when switching away from area/volume tools
+    if (tool !== "measure-m2" && tool !== "measure-m3" && polygonPointsRef.current.length > 0) {
+      setPolygonPoints([]);
+    }
+    
+    // Clean up snap indicator
+    if (snapIndicatorRef.current) {
+      fabricCanvas.remove(snapIndicatorRef.current);
+      snapIndicatorRef.current = null;
+      fabricCanvas.renderAll();
+    }
+  }, [tool, fabricCanvas]);
 
   const loadMeasurements = async () => {
     if (!planPageId) return;
@@ -290,6 +319,28 @@ export const PlanViewer = ({ planUrl, projectId, planPageId: propPlanPageId, wiz
       y: Math.round(point.y / gridSize) * gridSize
     };
   };
+
+  // Clear calibration objects from canvas
+  const clearCalibrationObjects = () => {
+    if (!fabricCanvas) return;
+    const objects = fabricCanvas.getObjects();
+    objects.forEach((obj) => {
+      // Remove calibration circles (red, radius 4-6)
+      if (obj instanceof Circle && obj.fill === "#FF6B6B" && obj.radius && obj.radius <= 6) {
+        fabricCanvas.remove(obj);
+      }
+      // Remove calibration labels (A, B text)
+      if (obj instanceof Textbox && (obj.text === "A" || obj.text === "B")) {
+        fabricCanvas.remove(obj);
+      }
+      // Remove calibration line (red, not dashed)
+      if (obj instanceof Line && obj.stroke === "#FF6B6B" && !obj.strokeDashArray) {
+        fabricCanvas.remove(obj);
+      }
+    });
+    fabricCanvas.renderAll();
+  };
+  
   
   const getCursorStyle = () => {
     switch (tool) {
@@ -353,18 +404,20 @@ export const PlanViewer = ({ planUrl, projectId, planPageId: propPlanPageId, wiz
         
         // Show snap indicator
         if (snapEnabledRef.current && (currentTool !== "plan" || !currentIsDragging)) {
-          if (snapIndicator) fabricCanvas.remove(snapIndicator);
-          snapIndicator = new Circle({
-            radius: 3,
+          if (snapIndicatorRef.current) {
+            fabricCanvas.remove(snapIndicatorRef.current);
+          }
+          snapIndicatorRef.current = new Circle({
+            radius: 2,
             fill: "#FF6B6B",
             left: snappedPointer.x,
             top: snappedPointer.y,
             originX: "center",
             originY: "center",
             selectable: false,
-            opacity: 0.5,
+            opacity: 0.6,
           });
-          fabricCanvas.add(snapIndicator);
+          fabricCanvas.add(snapIndicatorRef.current);
         }
         
         // Pan handling with movementX/Y
@@ -417,9 +470,9 @@ export const PlanViewer = ({ planUrl, projectId, planPageId: propPlanPageId, wiz
         fabricCanvas.remove(previewLine);
         previewLine = null;
       }
-      if (snapIndicator) {
-        fabricCanvas.remove(snapIndicator);
-        snapIndicator = null;
+      if (snapIndicatorRef.current) {
+        fabricCanvas.remove(snapIndicatorRef.current);
+        snapIndicatorRef.current = null;
       }
       fabricCanvas.requestRenderAll();
     };
@@ -434,20 +487,31 @@ export const PlanViewer = ({ planUrl, projectId, planPageId: propPlanPageId, wiz
       fabricCanvas.off("mouse:up", handleMouseUp);
       if (rafId) cancelAnimationFrame(rafId);
       if (previewLine) fabricCanvas.remove(previewLine);
-      if (snapIndicator) fabricCanvas.remove(snapIndicator);
+      if (snapIndicatorRef.current) {
+        fabricCanvas.remove(snapIndicatorRef.current);
+        snapIndicatorRef.current = null;
+      }
     };
   }, [fabricCanvas]);
 
   // Handle calibration clicks
   const handleCalibrateClick = (pointer: { x: number; y: number }) => {
+    // Validate planPageId exists before allowing scale setting
+    if (!planPageId) {
+      toast.error("Please wait for plan to load before setting scale");
+      return;
+    }
+
     if (calibratePoints.length < 2) {
       const newPoints = [...calibratePoints, pointer];
       setCalibratePoints(newPoints);
 
       const pointLabel = newPoints.length === 1 ? "A" : "B";
       const circle = new Circle({
-        radius: 4,
+        radius: 6,
         fill: "#FF6B6B",
+        stroke: "#CC0000",
+        strokeWidth: 1,
         left: pointer.x,
         top: pointer.y,
         originX: "center",
@@ -483,6 +547,13 @@ export const PlanViewer = ({ planUrl, projectId, planPageId: propPlanPageId, wiz
 
   // Apply scale calibration
   const applyScale = async () => {
+    console.log('Applying scale, planPageId:', planPageId);
+    
+    if (!planPageId) {
+      toast.error("Plan not loaded - cannot save scale");
+      return;
+    }
+
     const realDistanceMm = parseFloat(calibrationDistance);
     if (isNaN(realDistanceMm) || realDistanceMm <= 0) {
       toast.error("Please enter a valid distance in mm");
@@ -497,25 +568,26 @@ export const PlanViewer = ({ planUrl, projectId, planPageId: propPlanPageId, wiz
     const calculatedScaleFactor = realDistanceMm / canvasDistance;
     setScaleFactor(calculatedScaleFactor);
 
-    if (planPageId) {
-      const { error } = await supabase
-        .from('plan_pages')
-        .update({
-          scale_factor: calculatedScaleFactor,
-          scale_known_distance_mm: realDistanceMm,
-          scale_point_a: calibratePoints[0],
-          scale_point_b: calibratePoints[1]
-        })
-        .eq('id', planPageId);
+    const { error } = await supabase
+      .from('plan_pages')
+      .update({
+        scale_factor: calculatedScaleFactor,
+        scale_known_distance_mm: realDistanceMm,
+        scale_point_a: calibratePoints[0],
+        scale_point_b: calibratePoints[1]
+      })
+      .eq('id', planPageId);
 
-      if (error) {
-        console.error('Error saving scale:', error);
-        toast.error("Failed to save scale");
-      } else {
-        toast.success(`Scale set: 1:${Math.round(1000 / calculatedScaleFactor)}`);
-      }
+    if (error) {
+      console.error('Error saving scale:', error);
+      toast.error("Failed to save scale");
+      return;
     }
 
+    toast.success(`Scale set: 1:${Math.round(1000 / calculatedScaleFactor)}`);
+    
+    // Clear calibration objects from canvas after successful application
+    clearCalibrationObjects();
     setShowCalibrationDialog(false);
     setCalibratePoints([]);
     setCalibrationDistance("");
@@ -685,6 +757,8 @@ export const PlanViewer = ({ planUrl, projectId, planPageId: propPlanPageId, wiz
     setShowLabelDialog(true);
     setShowThicknessDialog(false);
     setSlabThickness("");
+    setPendingVolumeArea(null);
+    setPendingVolumePoints([]);
   };
   
   // Close polygon and calculate area (uses refs for current state)
@@ -1391,6 +1465,8 @@ export const PlanViewer = ({ planUrl, projectId, planPageId: propPlanPageId, wiz
             <Button variant="outline" onClick={() => {
               setShowCalibrationDialog(false);
               setCalibratePoints([]);
+              setCalibrationDistance("");
+              clearCalibrationObjects();
             }}>
               Cancel
             </Button>
@@ -1436,6 +1512,19 @@ export const PlanViewer = ({ planUrl, projectId, planPageId: propPlanPageId, wiz
               setPendingVolumePoints([]);
               setSlabThickness("");
               setPolygonPoints([]);
+              // Remove any temporary polygon points from canvas
+              if (fabricCanvas) {
+                const objects = fabricCanvas.getObjects();
+                objects.forEach((obj) => {
+                  if (obj instanceof Circle && (obj.fill === "#2196F3" || obj.fill === "#4CAF50")) {
+                    fabricCanvas.remove(obj);
+                  }
+                  if (obj instanceof Textbox && obj.fill === "#2196F3") {
+                    fabricCanvas.remove(obj);
+                  }
+                });
+                fabricCanvas.renderAll();
+              }
             }}>
               Cancel
             </Button>
