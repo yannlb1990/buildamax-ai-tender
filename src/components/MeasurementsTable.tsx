@@ -1,7 +1,7 @@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Trash2 } from "lucide-react";
+import { Trash2, Edit2 } from "lucide-react";
 
 interface Measurement {
   id: string;
@@ -19,9 +19,10 @@ interface Measurement {
 interface MeasurementsTableProps {
   measurements: Measurement[];
   onDelete: (id: string) => void;
+  onEdit: (measurement: Measurement) => void;
 }
 
-export const MeasurementsTable = ({ measurements, onDelete }: MeasurementsTableProps) => {
+export const MeasurementsTable = ({ measurements, onDelete, onEdit }: MeasurementsTableProps) => {
   const getTypeLabel = (type: string) => {
     switch(type) {
       case 'linear': return 'Line';
@@ -89,13 +90,24 @@ export const MeasurementsTable = ({ measurements, onDelete }: MeasurementsTableP
                 : (m.notes || '-')}
             </TableCell>
             <TableCell>
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                onClick={() => onDelete(m.id)}
-              >
-                <Trash2 className="h-4 w-4 text-destructive" />
-              </Button>
+              <div className="flex gap-1">
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={() => onEdit(m)}
+                  title="Edit measurement"
+                >
+                  <Edit2 className="h-4 w-4 text-primary" />
+                </Button>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={() => onDelete(m.id)}
+                  title="Delete measurement"
+                >
+                  <Trash2 className="h-4 w-4 text-destructive" />
+                </Button>
+              </div>
             </TableCell>
           </TableRow>
         ))}

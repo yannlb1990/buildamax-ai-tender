@@ -2,7 +2,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
-import { Trash2, Download, Ruler, Square, Box, Hash } from "lucide-react";
+import { Trash2, Download, Ruler, Square, Box, Hash, Edit2 } from "lucide-react";
 import { exportMeasurementsToCSV, exportMeasurementsToJSON } from "@/utils/measurementExport";
 import { toast } from "sonner";
 import {
@@ -28,10 +28,11 @@ interface Measurement {
 interface MeasurementsSidebarProps {
   measurements: Measurement[];
   onDelete: (id: string) => void;
+  onEdit: (measurement: Measurement) => void;
   planPageId: string;
 }
 
-export const MeasurementsSidebar = ({ measurements, onDelete, planPageId }: MeasurementsSidebarProps) => {
+export const MeasurementsSidebar = ({ measurements, onDelete, onEdit, planPageId }: MeasurementsSidebarProps) => {
   const linesMeasurements = measurements.filter(m => m.measurement_type === 'linear');
   const areaMeasurements = measurements.filter(m => m.measurement_type === 'area');
   const volumeMeasurements = measurements.filter(m => m.measurement_type === 'volume');
@@ -122,14 +123,24 @@ export const MeasurementsSidebar = ({ measurements, onDelete, planPageId }: Meas
                       </Badge>
                     )}
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => onDelete(measurement.id)}
-                    className="flex-shrink-0"
-                  >
-                    <Trash2 className="h-4 w-4 text-destructive" />
-                  </Button>
+                  <div className="flex gap-1 flex-shrink-0">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => onEdit(measurement)}
+                      title="Edit measurement"
+                    >
+                      <Edit2 className="h-4 w-4 text-primary" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => onDelete(measurement.id)}
+                      title="Delete measurement"
+                    >
+                      <Trash2 className="h-4 w-4 text-destructive" />
+                    </Button>
+                  </div>
                 </div>
               </Card>
             ))
