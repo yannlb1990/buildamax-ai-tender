@@ -622,8 +622,10 @@ export type Database = {
           canvas_width: number | null
           created_at: string | null
           detected_scale_text: string | null
+          discipline: string | null
           file_url: string
           id: string
+          original_filename: string | null
           page_number: number | null
           project_id: string | null
           scale_factor: number | null
@@ -639,8 +641,10 @@ export type Database = {
           canvas_width?: number | null
           created_at?: string | null
           detected_scale_text?: string | null
+          discipline?: string | null
           file_url: string
           id?: string
+          original_filename?: string | null
           page_number?: number | null
           project_id?: string | null
           scale_factor?: number | null
@@ -656,8 +660,10 @@ export type Database = {
           canvas_width?: number | null
           created_at?: string | null
           detected_scale_text?: string | null
+          discipline?: string | null
           file_url?: string
           id?: string
+          original_filename?: string | null
           page_number?: number | null
           project_id?: string | null
           scale_factor?: number | null

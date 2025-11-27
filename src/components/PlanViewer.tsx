@@ -7,10 +7,12 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Ruler, ZoomIn, ZoomOut, Move, Trash2, Square, Minus, Scan, Loader2, PenTool } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import * as pdfjsLib from "pdfjs-dist";
+import { MeasurementsSidebar } from "./MeasurementsSidebar";
 
 // Configure PDF.js worker
 pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
@@ -37,6 +39,16 @@ export const PlanViewer = ({ planUrl, projectId, wizardMode = false, currentTool
   const [isDetecting, setIsDetecting] = useState(false);
   const [symbols, setSymbols] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [showLabelDialog, setShowLabelDialog] = useState(false);
+  const [pendingMeasurement, setPendingMeasurement] = useState<{
+    type: 'line' | 'area';
+    points: { x: number; y: number }[];
+    value: number;
+  } | null>(null);
+  const [measurementLabel, setMeasurementLabel] = useState("");
+  const [measurementCategory, setMeasurementCategory] = useState("");
+  const [measurements, setMeasurements] = useState<any[]>([]);
+  const [showSidebar, setShowSidebar] = useState(true);
 
   // Update tool when initialTool changes (wizard mode)
   useEffect(() => {
@@ -44,6 +56,30 @@ export const PlanViewer = ({ planUrl, projectId, wizardMode = false, currentTool
       setTool(initialTool as any);
     }
   }, [initialTool]);
+
+  // Load measurements when planPageId changes
+  useEffect(() => {
+    if (planPageId) {
+      loadMeasurements();
+    }
+  }, [planPageId]);
+
+  const loadMeasurements = async () => {
+    if (!planPageId) return;
+    
+    try {
+      const { data, error } = await supabase
+        .from('plan_measurements')
+        .select('*')
+        .eq('plan_page_id', planPageId)
+        .order('created_at', { ascending: true });
+
+      if (error) throw error;
+      setMeasurements(data || []);
+    } catch (error) {
+      console.error('Error loading measurements:', error);
+    }
+  };
 
   // Initialize canvas and load plan (PDF or image)
   useEffect(() => {
@@ -335,22 +371,13 @@ export const PlanViewer = ({ planUrl, projectId, wizardMode = false, currentTool
     fabricCanvas.add(label);
     fabricCanvas.renderAll();
 
-    if (planPageId) {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        await supabase.from('plan_measurements').insert({
-          plan_page_id: planPageId,
-          user_id: user.id,
-          measurement_type: 'polygon',
-          points: polygonPoints,
-          raw_value: area,
-          real_value: areaM2,
-          real_unit: 'm²'
-        });
-      }
-    }
-
-    toast.success(`Area: ${areaM2.toFixed(2)} m²`);
+    // Show label dialog
+    setPendingMeasurement({
+      type: 'area',
+      points: polygonPoints,
+      value: areaM2
+    });
+    setShowLabelDialog(true);
     setPolygonPoints([]);
   };
 
@@ -408,7 +435,13 @@ export const PlanViewer = ({ planUrl, projectId, wizardMode = false, currentTool
       }
     }
 
-    toast.success(`Measured: ${displayText}`);
+    // Show label dialog
+    setPendingMeasurement({
+      type: 'line',
+      points: [start, end],
+      value: realValue
+    });
+    setShowLabelDialog(true);
   };
 
   // Detect symbols using AI
@@ -513,6 +546,58 @@ export const PlanViewer = ({ planUrl, projectId, wizardMode = false, currentTool
     }
   };
 
+  // Save measurement with label and category
+  const saveMeasurement = async () => {
+    if (!pendingMeasurement || !planPageId) return;
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        toast.error("Not authenticated");
+        return;
+      }
+
+      await supabase.from('plan_measurements').insert({
+        plan_page_id: planPageId,
+        user_id: user.id,
+        measurement_type: pendingMeasurement.type === 'line' ? 'linear' : 'area',
+        points: pendingMeasurement.points,
+        real_value: pendingMeasurement.value,
+        real_unit: pendingMeasurement.type === 'line' ? 'm' : 'm²',
+        label: measurementLabel || null,
+        trade: measurementCategory || null
+      });
+
+      toast.success(`Measurement saved: ${measurementLabel || 'Unnamed'}`);
+      setShowLabelDialog(false);
+      setPendingMeasurement(null);
+      setMeasurementLabel("");
+      setMeasurementCategory("");
+      loadMeasurements();
+    } catch (error) {
+      console.error('Error saving measurement:', error);
+      toast.error("Failed to save measurement");
+    }
+  };
+
+  // Delete measurement
+  const deleteMeasurement = async (id: string) => {
+    try {
+      const { error } = await supabase
+        .from('plan_measurements')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+
+      toast.success("Measurement deleted");
+      loadMeasurements();
+    } catch (error) {
+      console.error('Error deleting measurement:', error);
+      toast.error("Failed to delete measurement");
+    }
+  };
+
   const handleZoomIn = () => {
     if (!fabricCanvas) return;
     const newScale = scale * 1.2;
@@ -546,10 +631,11 @@ export const PlanViewer = ({ planUrl, projectId, wizardMode = false, currentTool
   };
 
   return (
-    <div className="space-y-4">
-      {!wizardMode && (
-        <Card className="p-4">
-          <div className="flex flex-wrap gap-2">
+    <div className="flex gap-4">
+      <div className="flex-1 space-y-4">
+        {!wizardMode && (
+          <Card className="p-4">
+            <div className="flex flex-wrap gap-2">
             <Button
               variant={tool === "pan" ? "default" : "outline"}
               size="sm"
@@ -670,6 +756,64 @@ export const PlanViewer = ({ planUrl, projectId, wizardMode = false, currentTool
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <Dialog open={showLabelDialog} onOpenChange={setShowLabelDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Label Measurement</DialogTitle>
+            <DialogDescription>
+              Give this measurement a name and category
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div>
+              <Label>Measurement Name</Label>
+              <Input
+                value={measurementLabel}
+                onChange={(e) => setMeasurementLabel(e.target.value)}
+                placeholder="e.g., Bedroom Wall N, Bathroom Floor"
+                autoFocus
+              />
+            </div>
+            <div>
+              <Label>Category (optional)</Label>
+              <Select value={measurementCategory} onValueChange={setMeasurementCategory}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select category" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Gyprock">Gyprock</SelectItem>
+                  <SelectItem value="Tiling">Tiling</SelectItem>
+                  <SelectItem value="Framing">Framing</SelectItem>
+                  <SelectItem value="Flooring">Flooring</SelectItem>
+                  <SelectItem value="Painting">Painting</SelectItem>
+                  <SelectItem value="Other">Other</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => {
+              setShowLabelDialog(false);
+              setPendingMeasurement(null);
+              setMeasurementLabel("");
+              setMeasurementCategory("");
+            }}>
+              Cancel
+            </Button>
+            <Button onClick={saveMeasurement}>Save Measurement</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      </div>
+
+      {showSidebar && planPageId && (
+        <MeasurementsSidebar
+          measurements={measurements}
+          onDelete={deleteMeasurement}
+          planPageId={planPageId}
+        />
+      )}
     </div>
   );
 };

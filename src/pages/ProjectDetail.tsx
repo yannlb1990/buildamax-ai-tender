@@ -18,6 +18,7 @@ import { TenderDocuments } from "@/components/TenderDocuments";
 import { ProjectInsightsTab } from "@/components/ProjectInsightsTab";
 import { NCCComplianceCard } from "@/components/NCCComplianceCard";
 import { PlanAnalysisWizard } from "@/components/PlanAnalysisWizard";
+import { AIPlanAnalyzerEnhanced } from "@/components/AIPlanAnalyzerEnhanced";
 
 const ProjectDetail = () => {
   const { projectId } = useParams();
@@ -261,41 +262,7 @@ const ProjectDetail = () => {
           </TabsContent>
 
           <TabsContent value="takeoff">
-            <Alert className="mb-6 bg-primary/5 border-primary/20">
-              <Lightbulb className="h-4 w-4" />
-              <AlertTitle>What is AI Takeoff?</AlertTitle>
-              <AlertDescription>
-                Upload your architectural plans (PDF, PNG, JPG) and our AI will automatically detect and quantify:
-                walls, doors, windows, rooms, fixtures, and finishes. This creates a Bill of Quantities for pricing.
-                <br/><br/>
-                <strong>Next step:</strong> After takeoff, go to "AI Pricing" to get cost estimates.
-              </AlertDescription>
-            </Alert>
-            
-            <Card className="p-6">
-              <h2 className="font-display text-2xl font-bold mb-4">Quantity Takeoff</h2>
-              {takeoffAnalysis ? (
-                <div className="space-y-4">
-                  <div className="bg-muted/50 p-4 rounded-lg">
-                    <div className="flex items-center gap-2 mb-2">
-                      <Sparkles className="h-5 w-5 text-accent" />
-                      <h3 className="font-semibold">AI Analysis Result</h3>
-                    </div>
-                    <div className="whitespace-pre-wrap text-sm font-mono bg-background p-4 rounded border border-border max-h-96 overflow-y-auto">
-                      {JSON.stringify(takeoffAnalysis.results, null, 2)}
-                    </div>
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    Confidence: {takeoffAnalysis.confidence_score}% • Generated: {new Date(takeoffAnalysis.created_at).toLocaleString()}
-                  </p>
-                </div>
-              ) : (
-                <div className="text-center py-12">
-                  <Loader2 className="h-12 w-12 animate-spin text-secondary mx-auto mb-4" />
-                  <p className="text-muted-foreground">AI takeoff analysis in progress...</p>
-                </div>
-              )}
-            </Card>
+            <AIPlanAnalyzerEnhanced projectId={projectId!} estimateId={estimate?.id} />
           </TabsContent>
 
           <TabsContent value="pricing">
