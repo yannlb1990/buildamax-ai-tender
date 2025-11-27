@@ -190,6 +190,9 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                   onTransformChange={(transform) => {
                     dispatch({ type: 'SET_TRANSFORM', payload: transform });
                   }}
+                  onViewportReady={(viewport) => {
+                    console.log('Viewport ready:', viewport);
+                  }}
                 />
               </div>
 
