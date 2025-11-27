@@ -5,8 +5,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card } from '@/components/ui/card';
-import { calculatePresetScale, calculateManualScale } from '@/lib/takeoff/calculations';
-import { ScaleData, Point } from '@/lib/takeoff/types';
+import { calculatePresetScaleWorld, calculateManualScaleWorld } from '@/lib/takeoff/calculations';
+import { ScaleData, Point, WorldPoint, DistanceUnit } from '@/lib/takeoff/types';
 import { toast } from 'sonner';
 
 interface ScalingCalibratorProps {
@@ -29,12 +29,13 @@ export const ScalingCalibrator = ({
   const [calibrationMode, setCalibrationMode] = useState<'preset' | 'manual'>('preset');
   const [selectedScale, setSelectedScale] = useState('1:100');
   const [manualDistance, setManualDistance] = useState('');
-  const [unit, setUnit] = useState<'metric' | 'imperial'>('metric');
+  const [unit, setUnit] = useState<DistanceUnit>('m');
 
   const presetScales = ['1:20', '1:50', '1:100', '1:200', '1:500'];
 
   const handlePresetScale = () => {
-    const scale = calculatePresetScale(selectedScale);
+    // Assume typical A3 page width ~420mm = 1191 points
+    const scale = calculatePresetScaleWorld(selectedScale, 1191);
     onScaleSet(scale);
     toast.success(`Scale set to ${selectedScale}`);
   };
@@ -51,9 +52,9 @@ export const ScalingCalibrator = ({
       return;
     }
 
-    const scale = calculateManualScale(
-      manualPoints[0],
-      manualPoints[1],
+    const scale = calculateManualScaleWorld(
+      manualPoints[0] as WorldPoint,
+      manualPoints[1] as WorldPoint,
       distance,
       unit
     );
@@ -80,7 +81,7 @@ export const ScalingCalibrator = ({
             ✓ Scale Active: {currentScale.scaleFactor ? `1:${currentScale.scaleFactor}` : 'Manual'}
           </p>
           <p className="text-xs text-green-700 dark:text-green-300 mt-1">
-            {currentScale.pixelsPerUnit.toFixed(2)} pixels per metre
+            {currentScale.unitsPerMetre.toFixed(2)} units per metre
           </p>
         </div>
       )}
@@ -158,13 +159,16 @@ export const ScalingCalibrator = ({
                     min="0"
                     step="0.1"
                   />
-                  <Select value={unit} onValueChange={(v: 'metric' | 'imperial') => setUnit(v)}>
+                  <Select value={unit} onValueChange={(v: DistanceUnit) => setUnit(v)}>
                     <SelectTrigger className="w-24">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="metric">metres</SelectItem>
-                      <SelectItem value="imperial">feet</SelectItem>
+                      <SelectItem value="m">metres</SelectItem>
+                      <SelectItem value="mm">mm</SelectItem>
+                      <SelectItem value="cm">cm</SelectItem>
+                      <SelectItem value="ft">feet</SelectItem>
+                      <SelectItem value="in">inches</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>

@@ -1,5 +1,5 @@
-import { useReducer, useCallback } from 'react';
-import { TakeoffState, TakeoffAction, Measurement, CostItem } from '@/lib/takeoff/types';
+import { useReducer } from 'react';
+import { TakeoffState, TakeoffAction } from '@/lib/takeoff/types';
 
 const initialState: TakeoffState = {
   pdfFile: null,
@@ -7,10 +7,21 @@ const initialState: TakeoffState = {
   uploadError: null,
   currentPageIndex: 0,
   pageCount: 0,
-  scales: new Map(),
+  
+  // Transform state (view-only)
+  transform: {
+    zoom: 1,
+    panX: 0,
+    panY: 0,
+    rotation: 0,
+  },
+  
+  // Scales as Record (JSON-serializable, not Map)
+  scales: {},
   currentScale: null,
   isCalibrated: false,
   calibrationMode: null,
+  
   activeTool: null,
   measurements: [],
   selectedMeasurementId: null,
@@ -26,7 +37,7 @@ const initialState: TakeoffState = {
   },
   deductionMode: false,
   roofPitch: { rise: 4, run: 12 },
-  depthInput: 0.1, // 100mm default
+  depthInput: 0.1,
   selectedColor: '#FF0000',
   zoomLevel: 1,
   history: [[]],
@@ -53,16 +64,17 @@ function takeoffReducer(state: TakeoffState, action: TakeoffAction): TakeoffStat
       return {
         ...state,
         currentPageIndex: action.payload,
-        currentScale: state.scales.get(action.payload) || null,
-        isCalibrated: state.scales.has(action.payload)
+        currentScale: state.scales[action.payload] || null,
+        isCalibrated: !!state.scales[action.payload]
       };
       
     case 'SET_SCALE':
-      const newScales = new Map(state.scales);
-      newScales.set(action.payload.pageIndex, action.payload.scale);
       return {
         ...state,
-        scales: newScales,
+        scales: {
+          ...state.scales,
+          [action.payload.pageIndex]: action.payload.scale
+        },
         currentScale: action.payload.pageIndex === state.currentPageIndex 
           ? action.payload.scale 
           : state.currentScale,
@@ -71,6 +83,12 @@ function takeoffReducer(state: TakeoffState, action: TakeoffAction): TakeoffStat
       
     case 'SET_CALIBRATION_MODE':
       return { ...state, calibrationMode: action.payload };
+      
+    case 'SET_TRANSFORM':
+      return { 
+        ...state, 
+        transform: { ...state.transform, ...action.payload }
+      };
       
     case 'SET_ACTIVE_TOOL':
       return { ...state, activeTool: action.payload, currentMeasurement: null };

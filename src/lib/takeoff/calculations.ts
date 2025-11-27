@@ -1,140 +1,160 @@
-// Pure calculation functions for PDF Takeoff measurements
+// Pure calculation functions for PDF Takeoff measurements in world coordinates
 
-import { Point, ScaleData, Measurement } from './types';
+import { WorldPoint, ScaleData, DistanceUnit, Measurement } from './types';
 
 /**
- * Calculate scale from preset scale string (e.g., "1:100")
+ * Calculate scale from preset ratio using PDF page dimensions
  */
-export function calculatePresetScale(
+export function calculatePresetScaleWorld(
   presetScale: string,
-  canvasDPI: number = 96
+  pageWidthPoints: number
 ): ScaleData {
-  const ratio = parseInt(presetScale.split(':')[1]);
-  const mmPerInch = 25.4;
-  const pxPerMM = canvasDPI / mmPerInch;
+  const ratio = parseInt(presetScale.split(':')[1], 10);
   
-  // Calculate pixels per real-world metre
-  const pixelsPerMetre = (1000 / ratio) * pxPerMM;
+  // PDF points to mm: 1 point = 1/72 inch = 25.4/72 mm
+  const mmPerPoint = 25.4 / 72;
+  const pageWidthMM = pageWidthPoints * mmPerPoint;
+  const pageWidthMetres = pageWidthMM / 1000;
+  
+  // At scale 1:ratio, real width = page width × ratio
+  const impliedRealWidth = pageWidthMetres * ratio;
+  
+  // World units (points) per real metre
+  const unitsPerMetre = pageWidthPoints / impliedRealWidth;
   
   return {
-    pixelsPerUnit: pixelsPerMetre,
+    unitsPerMetre,
     scaleFactor: ratio,
-    scaleMethod: 'preset'
+    scaleMethod: 'preset',
   };
 }
 
 /**
- * Calculate scale from manual two-point calibration
+ * Calculate scale from manual two-point calibration in WORLD coordinates
  */
-export function calculateManualScale(
-  point1: Point,
-  point2: Point,
+export function calculateManualScaleWorld(
+  p1: WorldPoint,
+  p2: WorldPoint,
   realWorldDistance: number,
-  unit: 'metric' | 'imperial' = 'metric'
+  unit: DistanceUnit = 'm'
 ): ScaleData {
-  // Calculate pixel distance between two points
-  const pixelDistance = Math.sqrt(
-    Math.pow(point2.x - point1.x, 2) + 
-    Math.pow(point2.y - point1.y, 2)
-  );
-  
-  // Convert real-world distance to metres if needed
-  const distanceInMetres = unit === 'imperial' 
-    ? realWorldDistance * 0.3048 // feet to metres
-    : realWorldDistance;
-  
-  // Calculate pixels per metre
-  const pixelsPerMetre = pixelDistance / distanceInMetres;
-  
+  // Distance in world units (PDF points)
+  const worldDistance = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+
+  // Convert input distance to metres
+  let distanceMetres: number;
+  switch (unit) {
+    case 'mm': distanceMetres = realWorldDistance / 1000; break;
+    case 'cm': distanceMetres = realWorldDistance / 100; break;
+    case 'ft': distanceMetres = realWorldDistance * 0.3048; break;
+    case 'in': distanceMetres = realWorldDistance * 0.0254; break;
+    default:   distanceMetres = realWorldDistance; break;
+  }
+
+  // World units (points) per metre
+  const unitsPerMetre = worldDistance / distanceMetres;
+
   return {
-    pixelsPerUnit: pixelsPerMetre,
-    scaleFactor: null, // N/A for manual calibration
+    unitsPerMetre,
+    scaleFactor: null,
     scaleMethod: 'manual',
-    calibrationLine: {
-      point1,
-      point2,
-      pixelDistance
-    }
+    calibrationLine: { 
+      p1, 
+      p2, 
+      worldDistance,
+      realDistance: distanceMetres
+    },
   };
 }
 
 /**
- * Calculate linear measurement (LM - Linear Metres)
+ * Calculate linear measurement in world space
  */
-export function calculateLinear(
-  point1: Point,
-  point2: Point,
-  pixelsPerUnit: number
-): { pixelValue: number; realValue: number; unit: 'LM' } {
-  const pixelDistance = Math.sqrt(
-    Math.pow(point2.x - point1.x, 2) + 
-    Math.pow(point2.y - point1.y, 2)
-  );
+export function calculateLinearWorld(
+  p1: WorldPoint,
+  p2: WorldPoint,
+  unitsPerMetre: number
+): { worldValue: number; realValue: number; unit: 'LM' } {
+  const worldDistance = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+  const realMetres = worldDistance / unitsPerMetre;
   
   return {
-    pixelValue: pixelDistance,
-    realValue: pixelDistance / pixelsPerUnit,
-    unit: 'LM'
+    worldValue: worldDistance,
+    realValue: realMetres,
+    unit: 'LM',
   };
 }
 
 /**
- * Calculate rectangle area (M²)
+ * Calculate rectangle area in world space
  */
-export function calculateRectangleArea(
-  point1: Point,
-  point2: Point,
-  pixelsPerUnit: number
-): { 
-  pixelValue: number; 
-  realValue: number; 
-  unit: 'M2';
-  dimensions: { width: number; height: number };
-} {
-  const width = Math.abs(point2.x - point1.x);
-  const height = Math.abs(point2.y - point1.y);
-  const pixelArea = width * height;
-  
-  // Convert to square metres
-  const realArea = pixelArea / Math.pow(pixelsPerUnit, 2);
+export function calculateRectangleAreaWorld(
+  p1: WorldPoint,
+  p2: WorldPoint,
+  unitsPerMetre: number
+): { worldValue: number; realValue: number; unit: 'M2'; dimensions: { width: number; height: number } } {
+  const width = Math.abs(p2.x - p1.x);
+  const height = Math.abs(p2.y - p1.y);
+  const worldArea = width * height;
+  const realArea = worldArea / (unitsPerMetre * unitsPerMetre);
   
   return {
-    pixelValue: pixelArea,
+    worldValue: worldArea,
     realValue: realArea,
     unit: 'M2',
     dimensions: {
-      width: width / pixelsPerUnit,
-      height: height / pixelsPerUnit
-    }
+      width: width / unitsPerMetre,
+      height: height / unitsPerMetre,
+    },
   };
 }
 
 /**
- * Calculate polygon area using shoelace formula (M²)
+ * Calculate polygon area in world space (shoelace formula)
  */
-export function calculatePolygonArea(
-  points: Point[],
-  pixelsPerUnit: number
-): { pixelValue: number; realValue: number; unit: 'M2' } {
+export function calculatePolygonAreaWorld(
+  points: WorldPoint[],
+  unitsPerMetre: number
+): { worldValue: number; realValue: number; unit: 'M2' } {
   if (points.length < 3) {
-    return { pixelValue: 0, realValue: 0, unit: 'M2' };
+    return { worldValue: 0, realValue: 0, unit: 'M2' };
   }
-  
+
   // Shoelace formula for polygon area
-  let pixelArea = 0;
+  let worldArea = 0;
   for (let i = 0; i < points.length; i++) {
     const j = (i + 1) % points.length;
-    pixelArea += points[i].x * points[j].y;
-    pixelArea -= points[j].x * points[i].y;
+    worldArea += points[i].x * points[j].y;
+    worldArea -= points[j].x * points[i].y;
   }
-  pixelArea = Math.abs(pixelArea / 2);
-  
-  const realArea = pixelArea / Math.pow(pixelsPerUnit, 2);
+  worldArea = Math.abs(worldArea / 2);
+
+  const realArea = worldArea / (unitsPerMetre * unitsPerMetre);
   
   return {
-    pixelValue: pixelArea,
+    worldValue: worldArea,
     realValue: realArea,
-    unit: 'M2'
+    unit: 'M2',
+  };
+}
+
+/**
+ * Calculate circle area in world space
+ */
+export function calculateCircleAreaWorld(
+  center: WorldPoint,
+  edgePoint: WorldPoint,
+  unitsPerMetre: number
+): { worldValue: number; realValue: number; radiusMetres: number; unit: 'M2' } {
+  const radiusWorld = Math.hypot(edgePoint.x - center.x, edgePoint.y - center.y);
+  const radiusMetres = radiusWorld / unitsPerMetre;
+  const realArea = Math.PI * radiusMetres * radiusMetres;
+  
+  return {
+    worldValue: Math.PI * radiusWorld * radiusWorld,
+    realValue: realArea,
+    radiusMetres,
+    unit: 'M2',
   };
 }
 
@@ -145,7 +165,6 @@ export function calculateSlopedArea(
   baseArea: number,
   roofPitch: { rise: number; run: number }
 ): number {
-  // roofPitch = {rise: 4, run: 12} for 4:12 pitch
   const slopeFactor = Math.sqrt(
     Math.pow(roofPitch.run, 2) + 
     Math.pow(roofPitch.rise, 2)
@@ -155,15 +174,35 @@ export function calculateSlopedArea(
 }
 
 /**
- * Calculate volume (M³)
+ * Calculate volume from area and depth
  */
-export function calculateVolume(
-  area: number,
-  depth: number
+export function calculateVolumeWorld(
+  areaM2: number,
+  depthMetres: number
 ): { realValue: number; unit: 'M3' } {
+  if (depthMetres <= 0) {
+    throw new Error('Depth must be positive for volume calculations');
+  }
   return {
-    realValue: area * depth,
-    unit: 'M3'
+    realValue: areaM2 * depthMetres,
+    unit: 'M3',
+  };
+}
+
+/**
+ * Calculate centroid in world coordinates (for label placement)
+ */
+export function calculateCentroidWorld(points: WorldPoint[]): WorldPoint {
+  if (points.length === 0) return { x: 0, y: 0 };
+  
+  const sum = points.reduce(
+    (acc, point) => ({ x: acc.x + point.x, y: acc.y + point.y }),
+    { x: 0, y: 0 }
+  );
+  
+  return {
+    x: sum.x / points.length,
+    y: sum.y / points.length,
   };
 }
 
@@ -177,6 +216,7 @@ export function applyDeduction(
   return {
     ...parentMeasurement,
     realValue: parentMeasurement.realValue - deductionMeasurement.realValue,
+    deductions: [...(parentMeasurement.deductions || []), deductionMeasurement.id],
   };
 }
 
@@ -193,43 +233,23 @@ export function aggregateMeasurements(
 }
 
 /**
- * Calculate polygon centroid (for label placement)
+ * Check if a world point is near another world point (for polygon closure detection)
  */
-export function calculateCentroid(points: Point[]): Point {
-  if (points.length === 0) return { x: 0, y: 0 };
-  
-  const sum = points.reduce(
-    (acc, point) => ({ x: acc.x + point.x, y: acc.y + point.y }),
-    { x: 0, y: 0 }
-  );
-  
-  return {
-    x: sum.x / points.length,
-    y: sum.y / points.length
-  };
-}
-
-/**
- * Check if a point is near another point (for polygon closure detection)
- */
-export function isPointNear(
-  point1: Point,
-  point2: Point,
-  threshold: number = 20
+export function isWorldPointNear(
+  point1: WorldPoint,
+  point2: WorldPoint,
+  thresholdInUnits: number = 20
 ): boolean {
-  const distance = Math.sqrt(
-    Math.pow(point2.x - point1.x, 2) + 
-    Math.pow(point2.y - point1.y, 2)
-  );
-  return distance < threshold;
+  const distance = Math.hypot(point2.x - point1.x, point2.y - point1.y);
+  return distance < thresholdInUnits;
 }
 
 /**
- * Snap point to grid
+ * Snap world point to grid
  */
-export function snapToGrid(point: Point, gridSize: number): Point {
+export function snapWorldToGrid(point: WorldPoint, gridSize: number): WorldPoint {
   return {
     x: Math.round(point.x / gridSize) * gridSize,
-    y: Math.round(point.y / gridSize) * gridSize
+    y: Math.round(point.y / gridSize) * gridSize,
   };
 }
