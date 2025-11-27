@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { ArrowLeft, FileText, DollarSign, CheckCircle, Loader2, Sparkles, Settings, Calculator, TrendingUp, ShieldCheck, MapPin, User, Calendar as CalendarIcon, Clock, Bell } from "lucide-react";
+import { ArrowLeft, FileText, DollarSign, Ruler, Loader2, Sparkles, Settings, Calculator, TrendingUp, ShieldCheck, MapPin, User, Calendar as CalendarIcon, Clock, Bell } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Lightbulb } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -223,8 +223,8 @@ const ProjectDetail = () => {
               </TabsTrigger>
             )}
             <TabsTrigger value="takeoff">
-              <CheckCircle className="h-4 w-4 mr-2" />
-              AI Takeoff
+              <Ruler className="h-4 w-4 mr-2" />
+              PDF Takeoff
             </TabsTrigger>
             <TabsTrigger value="pricing">
               <DollarSign className="h-4 w-4 mr-2" />

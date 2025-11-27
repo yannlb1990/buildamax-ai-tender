@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Card } from "@/components/ui/card";
-import { Sparkles, Info } from "lucide-react";
+import { Ruler, Info } from "lucide-react";
 import { PlanLibrary } from "./PlanLibrary";
 import { PlanViewer } from "./PlanViewer";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -24,14 +24,14 @@ export const AIPlanAnalyzerEnhanced = ({ projectId, estimateId, onAddItems }: AI
     <div className="space-y-6">
       <Card className="p-6 bg-gradient-to-br from-secondary/5 to-accent/5">
         <div className="flex items-center gap-3 mb-4">
-          <Sparkles className="h-6 w-6 text-secondary" />
-          <h3 className="text-xl font-semibold">AI Takeoff - PDF Plan Analysis</h3>
+          <Ruler className="h-6 w-6 text-secondary" />
+          <h3 className="text-xl font-semibold">PDF Takeoff - Manual Measurement</h3>
         </div>
         
         <Alert className="border-secondary/30 bg-secondary/5">
           <Info className="h-4 w-4" />
           <AlertDescription>
-            <strong>What is AI Takeoff?</strong><br />
+            <strong>What is PDF Takeoff?</strong><br />
             Upload your architectural plans (PDF, PNG, JPG), set the scale, and use measurement tools to
             extract quantities for estimation. Measurements are labeled, categorized, and can be exported for
             use in your estimates.
@@ -51,6 +51,7 @@ export const AIPlanAnalyzerEnhanced = ({ projectId, estimateId, onAddItems }: AI
           <PlanViewer 
             planUrl={selectedPlanUrl} 
             projectId={projectId}
+            planPageId={selectedPlanPageId}
             wizardMode={false}
           />
         </Card>

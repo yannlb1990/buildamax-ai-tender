@@ -24,7 +24,6 @@ import { Plus, Trash2, ChevronDown, ChevronRight, DollarSign, Edit2, Save, X, Li
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Textarea } from "@/components/ui/textarea";
-import { AIPlanAnalyzer } from "./AIPlanAnalyzer";
 import { PreliminariesSection } from "./PreliminariesSection";
 import { NCCSearchBar } from "./NCCSearchBar";
 import { LabourRatesSection } from "./LabourRatesSection";
@@ -752,15 +751,8 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
           </Button>
         </div>
       </Card>
-
-      {/* 3. AI Plan Analyser */}
-      <AIPlanAnalyzer 
-        projectId={projectId} 
-        estimateId={estimateId}
-        onAddItems={handleAIItems}
-      />
       
-      {/* 4. Price Summary */}
+      {/* 3. Price Summary */}
       <Card className="p-6 bg-gradient-to-br from-primary/5 to-accent/5 border-accent/20">
         <div className="grid grid-cols-2 md:grid-cols-8 gap-4 text-center">
           <div>

@@ -20,11 +20,12 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dis
 interface PlanViewerProps {
   planUrl: string;
   projectId?: string;
+  planPageId?: string;
   wizardMode?: boolean;
   currentTool?: "pan" | "calibrate" | "measure-line" | "measure-area" | "detect" | "extract";
 }
 
-export const PlanViewer = ({ planUrl, projectId, wizardMode = false, currentTool: initialTool }: PlanViewerProps) => {
+export const PlanViewer = ({ planUrl, projectId, planPageId: propPlanPageId, wizardMode = false, currentTool: initialTool }: PlanViewerProps) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [fabricCanvas, setFabricCanvas] = useState<FabricCanvas | null>(null);
   const [scale, setScale] = useState(1);
@@ -35,7 +36,7 @@ export const PlanViewer = ({ planUrl, projectId, wizardMode = false, currentTool
   const [calibrationDistance, setCalibrationDistance] = useState("");
   const [polygonPoints, setPolygonPoints] = useState<{ x: number; y: number }[]>([]);
   const [measureStart, setMeasureStart] = useState<{ x: number; y: number } | null>(null);
-  const [planPageId, setPlanPageId] = useState<string | null>(null);
+  const [planPageId, setPlanPageId] = useState<string | null>(propPlanPageId || null);
   const [isDetecting, setIsDetecting] = useState(false);
   const [symbols, setSymbols] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -56,6 +57,13 @@ export const PlanViewer = ({ planUrl, projectId, wizardMode = false, currentTool
       setTool(initialTool as any);
     }
   }, [initialTool]);
+
+  // Sync planPageId when prop changes
+  useEffect(() => {
+    if (propPlanPageId) {
+      setPlanPageId(propPlanPageId);
+    }
+  }, [propPlanPageId]);
 
   // Load measurements when planPageId changes
   useEffect(() => {
