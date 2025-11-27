@@ -126,6 +126,40 @@ export const PlanViewer = ({ planUrl, projectId, planPageId: propPlanPageId, wiz
     }
   }, [planPageId]);
 
+  // Validate propPlanPageId immediately and set isPlanReady early
+  useEffect(() => {
+    if (propPlanPageId) {
+      console.log('[SCALE DEBUG] propPlanPageId provided:', propPlanPageId, '- validating...');
+      supabase
+        .from('plan_pages')
+        .select('id, scale_factor')
+        .eq('id', propPlanPageId)
+        .single()
+        .then(({ data, error }) => {
+          if (data && !error) {
+            console.log('[SCALE DEBUG] Plan page validated, setting isPlanReady=true');
+            setPlanPageId(data.id);
+            planPageIdRef.current = data.id;
+            if (data.scale_factor) {
+              console.log('[SCALE DEBUG] Loading existing scale factor:', data.scale_factor);
+              setScaleFactor(data.scale_factor);
+              scaleFactorRef.current = data.scale_factor;
+            }
+            setIsPlanReady(true);  // SET THIS EARLY!
+          } else {
+            console.error('[SCALE DEBUG] Failed to validate plan page:', error);
+          }
+        });
+    }
+  }, [propPlanPageId]);
+
+  // Ensure refs are synced when isPlanReady changes
+  useEffect(() => {
+    if (isPlanReady && planPageId) {
+      planPageIdRef.current = planPageId;
+    }
+  }, [isPlanReady, planPageId]);
+
   // Clean up in-progress operations when tool changes
   useEffect(() => {
     if (!fabricCanvas) return;
@@ -284,23 +318,34 @@ export const PlanViewer = ({ planUrl, projectId, planPageId: propPlanPageId, wiz
 
   // Create plan page in database (prevent duplicates)
   const createPlanPage = async (width: number, height: number) => {
-    if (!projectId) {
-      console.log('[SCALE DEBUG] No projectId, skipping plan page creation');
-      return;
-    }
-    
-    // Skip if we already have a planPageId from props
-    if (propPlanPageId) {
-      console.log('[SCALE DEBUG] Using prop planPageId:', propPlanPageId);
-      setPlanPageId(propPlanPageId);
-      setIsPlanReady(true);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user?.id || !projectId) {
+      console.error('[SCALE DEBUG] Cannot create plan page: missing user or project');
       return;
     }
 
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      console.log('[SCALE DEBUG] No user found');
-      return;
+    // If we have a propPlanPageId, UPDATE its canvas dimensions
+    if (propPlanPageId) {
+      console.log('[SCALE DEBUG] Updating existing plan_page with canvas dimensions:', {
+        planPageId: propPlanPageId,
+        width,
+        height
+      });
+      const { error } = await supabase
+        .from('plan_pages')
+        .update({
+          canvas_width: width,
+          canvas_height: height,
+          status: 'ready'
+        })
+        .eq('id', propPlanPageId);
+
+      if (error) {
+        console.error('[SCALE DEBUG] Error updating plan page:', error);
+      } else {
+        console.log('[SCALE DEBUG] Successfully updated plan page with canvas dimensions');
+      }
+      return;  // Don't create a new record
     }
 
     console.log('[SCALE DEBUG] Checking for existing plan_pages for URL:', planUrl);
@@ -618,9 +663,16 @@ export const PlanViewer = ({ planUrl, projectId, planPageId: propPlanPageId, wiz
 
     const calculatedScaleFactor = realDistanceMm / canvasDistance;
     
+    console.log('[SCALE DEBUG] === SCALE CALCULATION ===');
+    console.log('[SCALE DEBUG] Point A:', calibratePoints[0]);
+    console.log('[SCALE DEBUG] Point B:', calibratePoints[1]);
+    console.log('[SCALE DEBUG] dx:', (calibratePoints[1].x - calibratePoints[0].x).toFixed(2));
+    console.log('[SCALE DEBUG] dy:', (calibratePoints[1].y - calibratePoints[0].y).toFixed(2));
     console.log('[SCALE DEBUG] Canvas distance:', canvasDistance.toFixed(2), 'canvas units');
     console.log('[SCALE DEBUG] Real distance:', realDistanceMm, 'mm');
-    console.log('[SCALE DEBUG] Calculated scale factor:', calculatedScaleFactor.toFixed(4), 'mm/canvas unit');
+    console.log('[SCALE DEBUG] Formula: scale_factor = real_mm / canvas_units');
+    console.log('[SCALE DEBUG] Scale factor =', realDistanceMm, '/', canvasDistance.toFixed(2), '=', calculatedScaleFactor.toFixed(4));
+    console.log('[SCALE DEBUG] planPageId:', currentPlanPageId);
     console.log('[SCALE DEBUG] This means 10 canvas pixels =', (calculatedScaleFactor * 10).toFixed(2), 'mm');
     
     setScaleFactor(calculatedScaleFactor);
@@ -1384,9 +1436,10 @@ export const PlanViewer = ({ planUrl, projectId, planPageId: propPlanPageId, wiz
               size="sm"
               onClick={() => setTool("calibrate")}
               disabled={!isPlanReady}
-              title={!isPlanReady ? "Please wait for plan to load" : "Set scale by clicking two reference points"}
+              title={!isPlanReady ? "Loading plan..." : "Set scale by clicking two reference points"}
             >
-              <Ruler className="h-4 w-4 mr-2" />
+              {!isPlanReady && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              {isPlanReady && <Ruler className="h-4 w-4 mr-2" />}
               Set Scale
             </Button>
 
@@ -1549,6 +1602,14 @@ export const PlanViewer = ({ planUrl, projectId, planPageId: propPlanPageId, wiz
           {isLoading && (
             <div className="absolute inset-0 flex items-center justify-center bg-background/80 z-10">
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            </div>
+          )}
+          {!isPlanReady && !isLoading && (
+            <div className="absolute inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center z-20">
+              <div className="flex flex-col items-center gap-2">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                <span className="text-sm text-muted-foreground">Loading plan...</span>
+              </div>
             </div>
           )}
           <canvas ref={canvasRef} />
