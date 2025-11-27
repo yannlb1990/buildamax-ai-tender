@@ -3,10 +3,11 @@ import { ZoomIn, ZoomOut, RotateCw, Maximize2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { PDFUploadManager } from './PDFUploadManager';
-import { PDFRenderer } from './PDFRenderer';
+import { InteractiveCanvas } from './InteractiveCanvas';
 import { ScalingCalibrator } from './ScalingCalibrator';
 import { MeasurementToolbar } from './MeasurementToolbar';
 import { useTakeoffState } from '@/hooks/useTakeoffState';
+import { Point } from '@/lib/takeoff/types';
 import { toast } from 'sonner';
 
 interface PDFTakeoffProps {
@@ -18,7 +19,7 @@ interface PDFTakeoffProps {
 export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoffProps) => {
   const { state, dispatch } = useTakeoffState();
   const [rotation, setRotation] = useState<0 | 90 | 180 | 270>(0);
-  const [manualCalibrationPoints, setManualCalibrationPoints] = useState<any>(null);
+  const [manualCalibrationPoints, setManualCalibrationPoints] = useState<[Point, Point] | null>(null);
 
   const handleZoomIn = () => {
     dispatch({ type: 'SET_ZOOM_LEVEL', payload: Math.min(state.zoomLevel + 0.25, 4) });
@@ -73,10 +74,14 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                     });
                   }}
                   onManualCalibrationStart={() => {
-                    toast.info('Click two points on a known dimension');
-                    // Enable manual calibration mode
+                    dispatch({ type: 'SET_CALIBRATION_MODE', payload: 'manual' });
+                    toast.info('Click two points on a known dimension on the plan');
                   }}
                   manualPoints={manualCalibrationPoints}
+                  onCalibrationComplete={() => {
+                    setManualCalibrationPoints(null);
+                    dispatch({ type: 'SET_CALIBRATION_MODE', payload: null });
+                  }}
                 />
               </div>
 
@@ -96,17 +101,28 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                   disabled={!state.isCalibrated}
                 />
 
-                <div className="border border-border rounded-lg p-4">
-                  <PDFRenderer
-                    pdfUrl={state.pdfFile.url}
-                    pageIndex={state.currentPageIndex}
-                    zoomLevel={state.zoomLevel}
-                    rotation={rotation}
-                    onRenderComplete={(canvas, viewport) => {
-                      console.log('PDF rendered', viewport);
-                    }}
-                  />
-                </div>
+                <InteractiveCanvas
+                  pdfUrl={state.pdfFile.url}
+                  pageIndex={state.currentPageIndex}
+                  zoomLevel={state.zoomLevel}
+                  rotation={rotation}
+                  activeTool={state.activeTool}
+                  isCalibrated={state.isCalibrated}
+                  pixelsPerUnit={state.currentScale?.pixelsPerUnit || null}
+                  calibrationMode={state.calibrationMode}
+                  deductionMode={state.deductionMode}
+                  onMeasurementComplete={(measurement) => {
+                    dispatch({ type: 'ADD_MEASUREMENT', payload: measurement });
+                    toast.success('Measurement added');
+                  }}
+                  onCalibrationPointsSet={(points) => {
+                    setManualCalibrationPoints(points);
+                    toast.success('Calibration points set - enter distance');
+                  }}
+                  onZoomChange={(zoom) => {
+                    dispatch({ type: 'SET_ZOOM_LEVEL', payload: zoom });
+                  }}
+                />
 
                 {/* Zoom Controls */}
                 <div className="flex items-center gap-2 justify-center">

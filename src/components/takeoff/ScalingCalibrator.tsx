@@ -15,6 +15,7 @@ interface ScalingCalibratorProps {
   onScaleSet: (scale: ScaleData) => void;
   onManualCalibrationStart: () => void;
   manualPoints: [Point, Point] | null;
+  onCalibrationComplete: () => void;
 }
 
 export const ScalingCalibrator = ({
@@ -22,7 +23,8 @@ export const ScalingCalibrator = ({
   isCalibrated,
   onScaleSet,
   onManualCalibrationStart,
-  manualPoints
+  manualPoints,
+  onCalibrationComplete
 }: ScalingCalibratorProps) => {
   const [calibrationMode, setCalibrationMode] = useState<'preset' | 'manual'>('preset');
   const [selectedScale, setSelectedScale] = useState('1:100');
@@ -59,6 +61,7 @@ export const ScalingCalibrator = ({
     onScaleSet(scale);
     toast.success('Manual calibration complete');
     setManualDistance('');
+    onCalibrationComplete();
   };
 
   return (
