@@ -14,6 +14,7 @@ import { PlanViewer } from "@/components/PlanViewer";
 import { TenderDocuments } from "@/components/TenderDocuments";
 import { ProjectInsightsTab } from "@/components/ProjectInsightsTab";
 import { NCCComplianceCard } from "@/components/NCCComplianceCard";
+import { PlanAnalysisWizard } from "@/components/PlanAnalysisWizard";
 
 const ProjectDetail = () => {
   const { projectId } = useParams();
@@ -266,7 +267,7 @@ const ProjectDetail = () => {
 
           {project.plan_file_url && (
             <TabsContent value="plans">
-              <PlanViewer planUrl={project.plan_file_url} />
+              <PlanAnalysisWizard planUrl={project.plan_file_url} projectId={projectId!} />
             </TabsContent>
           )}
 
