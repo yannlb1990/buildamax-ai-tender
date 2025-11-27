@@ -70,13 +70,17 @@ For each symbol return JSON:
       "bounding_box": {"x": number, "y": number, "width": number, "height": number},
       "confidence": 0.0-1.0,
       "suggested_id": "D01|W01|null",
-      "notes": "observations"
+      "label_nearby": "exact text label found near this symbol (e.g., 'D02', 'W01') or null if none visible",
+      "notes": "brief observation about this symbol (material, condition, or unique features)"
     }
   ]
 }
 
-IMPORTANT: Return bounding box coordinates as PERCENTAGES of image dimensions (0-100).
-Only return symbols with confidence >= 0.4. Tag uncertain symbols as "other".`
+IMPORTANT: 
+- Return bounding box coordinates as PERCENTAGES of image dimensions (0-100).
+- Only return symbols with confidence >= 0.4. Tag uncertain symbols as "other".
+- label_nearby must be the EXACT text you see near the symbol
+- notes should be brief (5-15 words) describing material, type, or notable features`
         },
         {
           role: 'user',
@@ -111,7 +115,9 @@ Only return symbols with confidence >= 0.4. Tag uncertain symbols as "other".`
         y: symbol.bounding_box.y + symbol.bounding_box.height / 2
       },
       confidence: symbol.confidence,
-      schedule_id: symbol.suggested_id
+      schedule_id: symbol.suggested_id,
+      label_nearby: symbol.label_nearby || null,
+      notes: symbol.notes || null
     }));
 
     if (symbolsToInsert.length > 0) {
