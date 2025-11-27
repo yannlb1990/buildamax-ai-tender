@@ -20,8 +20,9 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { toast } from "sonner";
-import { Plus, Trash2, ChevronDown, ChevronRight, DollarSign, Edit2, Save, X, Link, Copy } from "lucide-react";
+import { Plus, Trash2, ChevronDown, ChevronRight, DollarSign, Edit2, Save, X, Link, Copy, CheckCircle } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Textarea } from "@/components/ui/textarea";
 import { AIPlanAnalyzer } from "./AIPlanAnalyzer";
 import { PreliminariesSection } from "./PreliminariesSection";
@@ -539,147 +540,137 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
     });
   };
 
-  return (
-    <div className="space-y-6">
-      {/* NCC Search Bar */}
-      <NCCSearchBar />
+  const calculateLineTotal = () => {
+    const qty = parseFloat(newItem.quantity) || 0;
+    const unitPrice = parseFloat(newItem.unit_price) || 0;
+    const labourHrs = parseFloat(newItem.labour_hours) || 0;
+    const matBase = qty * unitPrice;
+    const labBase = labourHrs * config.defaultLabourRate;
+    return matBase + labBase;
+  };
 
-      {/* AI Plan Analyzer */}
+  return (
+    <div className="space-y-6 p-6">
+      {/* 1. NCC Standards Research */}
+      <NCCSearchBar />
+      
+      {/* 2. Estimate Configuration */}
+      <Card className="p-6">
+        <h3 className="text-lg font-semibold mb-4">Estimate Configuration</h3>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div>
+            <Label htmlFor="overhead">Overhead %</Label>
+            <Input
+              id="overhead"
+              type="number"
+              min="0"
+              step="0.1"
+              value={config.overheadPct}
+              onChange={(e) => setConfig({ ...config, overheadPct: parseFloat(e.target.value) || 0 })}
+            />
+          </div>
+          <div>
+            <Label htmlFor="margin">Margin %</Label>
+            <Input
+              id="margin"
+              type="number"
+              min="0"
+              step="0.1"
+              value={config.marginPct}
+              onChange={(e) => setConfig({ ...config, marginPct: parseFloat(e.target.value) || 0 })}
+            />
+          </div>
+          <div>
+            <Label htmlFor="gst">GST %</Label>
+            <Input
+              id="gst"
+              type="number"
+              min="0"
+              step="0.1"
+              value={config.gstPct}
+              onChange={(e) => setConfig({ ...config, gstPct: parseFloat(e.target.value) || 0 })}
+            />
+          </div>
+          <div>
+            <Label htmlFor="supervision">Supervision %</Label>
+            <Input
+              id="supervision"
+              type="number"
+              min="0"
+              step="0.1"
+              value={config.supervisionPct}
+              onChange={(e) => setConfig({ ...config, supervisionPct: parseFloat(e.target.value) || 0 })}
+            />
+          </div>
+        </div>
+      </Card>
+
+      {/* 3. AI Plan Analyser */}
       <AIPlanAnalyzer 
         projectId={projectId} 
         estimateId={estimateId}
         onAddItems={handleAIItems}
       />
+      
+      {/* 4. Price Summary */}
+      <Card className="p-6 bg-gradient-to-br from-primary/5 to-accent/5 border-accent/20">
+        <div className="grid grid-cols-2 md:grid-cols-7 gap-4 text-center">
+          <div>
+            <p className="text-xs text-muted-foreground mb-1">Materials</p>
+            <p className="text-lg font-bold">${totals.totalMaterials.toFixed(2)}</p>
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground mb-1">Labour</p>
+            <p className="text-lg font-bold">${totals.totalLabour.toFixed(2)}</p>
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground mb-1">Supervision</p>
+            <p className="text-lg font-bold">${totals.supervision.toFixed(2)}</p>
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground mb-1">Overheads</p>
+            <p className="text-lg font-bold">${totals.totalOverheads.toFixed(2)}</p>
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground mb-1">Margin</p>
+            <p className="text-lg font-bold">${totals.margin.toFixed(2)}</p>
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground mb-1">GST (10%)</p>
+            <p className="text-lg font-bold">${totals.gst.toFixed(2)}</p>
+          </div>
+          <div className="bg-accent/10 rounded-lg p-2">
+            <p className="text-xs text-muted-foreground mb-1">TOTAL PRICE</p>
+            <p className="text-2xl font-bold text-accent">${totals.totalPrice.toFixed(2)}</p>
+          </div>
+        </div>
+      </Card>
 
-      {/* Preliminaries Section */}
+      {/* 5. Preliminaries */}
       <PreliminariesSection />
+      
+      {/* 6. Labour Hourly Rates by Trade */}
+      <LabourRatesSection 
+        rates={labourRates}
+        onRatesChange={setLabourRates}
+      />
+      
+      {/* 7. Pricing Aid (Collapsible) */}
+      <Collapsible defaultOpen={false}>
+        <Card className="p-4">
+          <CollapsibleTrigger className="flex items-center justify-between w-full">
+            <h3 className="text-lg font-semibold">Pricing Aid</h3>
+            <ChevronDown className="h-4 w-4 transition-transform" />
+          </CollapsibleTrigger>
+          <CollapsibleContent className="pt-4">
+            <PricingHistory projectId={projectId} />
+          </CollapsibleContent>
+        </Card>
+      </Collapsible>
 
-      {/* Labour Rates Section */}
-      <LabourRatesSection rates={labourRates} onRatesChange={setLabourRates} />
-
-      {/* Pricing History */}
-      <PricingHistory projectId={projectId} />
-
-      {/* Summary Card */}
-      <Card className="p-6 bg-gradient-to-br from-primary/20 to-accent/20">
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
-          <div>
-            <p className="text-sm text-muted-foreground">Materials</p>
-            <p className="text-2xl font-mono font-bold">
-              ${totals.totalMaterials.toFixed(2)}
-            </p>
-          </div>
-          <div>
-            <p className="text-sm text-muted-foreground">Labour</p>
-            <p className="text-2xl font-mono font-bold">
-              ${totals.totalLabour.toFixed(2)}
-            </p>
-          </div>
-          <div>
-            <p className="text-sm text-muted-foreground">Supervision</p>
-            <p className="text-2xl font-mono font-bold text-secondary">
-              ${totals.supervision.toFixed(2)}
-            </p>
-          </div>
-          <div>
-            <p className="text-sm text-muted-foreground">Overheads</p>
-            <p className="text-2xl font-mono font-bold text-secondary">
-              ${totals.totalOverheads.toFixed(2)}
-            </p>
-          </div>
-          <div>
-            <p className="text-sm text-muted-foreground">Margin</p>
-            <p className="text-2xl font-mono font-bold text-secondary">
-              ${totals.margin.toFixed(2)}
-            </p>
-          </div>
-        </div>
-        <div className="border-t border-border pt-4 flex items-center justify-between">
-          <div>
-            <p className="text-sm text-muted-foreground">GST ({config.gstPct}%)</p>
-            <p className="text-xl font-mono font-bold">${totals.gst.toFixed(2)}</p>
-          </div>
-          <div className="text-right">
-            <p className="text-sm text-muted-foreground">TOTAL PRICE (inc GST)</p>
-            <p className="text-4xl font-mono font-bold text-accent">
-              ${totals.totalPrice.toFixed(2)}
-            </p>
-          </div>
-        </div>
-      </Card>
-
-      {/* Configuration Card */}
+      {/* 8. Add Line Item */}
       <Card className="p-6">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="font-display text-xl font-bold">Estimate Configuration</h3>
-          <Button variant="outline" size="sm" onClick={() => setShowConfig(!showConfig)}>
-            <DollarSign className="h-4 w-4 mr-2" />
-            {showConfig ? "Hide" : "Show"} Settings
-          </Button>
-        </div>
-        {showConfig && (
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-            <div>
-              <Label>Labour Rate ($/hr)</Label>
-              <Input
-                type="number"
-                step="1"
-                value={config.defaultLabourRate}
-                onChange={(e) => setConfig({ ...config, defaultLabourRate: parseFloat(e.target.value) || 0 })}
-              />
-            </div>
-            <div>
-              <Label>Material Waste (%)</Label>
-              <Input
-                type="number"
-                step="0.5"
-                value={config.materialWastage}
-                onChange={(e) => setConfig({ ...config, materialWastage: parseFloat(e.target.value) || 0 })}
-              />
-            </div>
-            <div>
-              <Label>Labour Waste (%)</Label>
-              <Input
-                type="number"
-                step="0.5"
-                value={config.labourWastage}
-                onChange={(e) => setConfig({ ...config, labourWastage: parseFloat(e.target.value) || 0 })}
-              />
-            </div>
-            <div>
-              <Label>Supervision (%)</Label>
-              <Input
-                type="number"
-                step="0.5"
-                value={config.supervisionPct}
-                onChange={(e) => setConfig({ ...config, supervisionPct: parseFloat(e.target.value) || 0 })}
-              />
-            </div>
-            <div>
-              <Label>Overheads (%)</Label>
-              <Input
-                type="number"
-                step="0.5"
-                value={config.overheadPct}
-                onChange={(e) => setConfig({ ...config, overheadPct: parseFloat(e.target.value) || 0 })}
-              />
-            </div>
-            <div>
-              <Label>Margin (%)</Label>
-              <Input
-                type="number"
-                step="0.5"
-                value={config.marginPct}
-                onChange={(e) => setConfig({ ...config, marginPct: parseFloat(e.target.value) || 0 })}
-              />
-            </div>
-          </div>
-        )}
-      </Card>
-
-      {/* Add Item Form */}
-      <Card className="p-6">
-        <h3 className="font-display text-xl font-bold mb-4">Add Line Item</h3>
+        <h3 className="text-lg font-semibold mb-4">Add Line Item</h3>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div>
             <Label>Area *</Label>
@@ -777,15 +768,23 @@ export const EstimateTemplate = ({ projectId, estimateId }: EstimateTemplateProp
             />
           </div>
         </div>
-        <Button onClick={addItem} className="mt-4 bg-accent text-accent-foreground hover:bg-accent/90">
-          <Plus className="h-4 w-4 mr-2" />
-          Add Item
-        </Button>
+
+        <div className="flex items-center justify-between gap-4 mt-6 p-4 bg-accent/10 rounded-lg">
+          <div className="text-sm">
+            Line Total: <span className="font-mono font-bold text-2xl text-accent ml-2">
+              ${calculateLineTotal().toFixed(2)}
+            </span>
+          </div>
+          <Button onClick={addItem} className="bg-accent text-accent-foreground hover:bg-accent/90">
+            <CheckCircle className="h-4 w-4 mr-2" />
+            Confirm & Add to Estimate
+          </Button>
+        </div>
       </Card>
 
-      {/* Items Table */}
+      {/* 9. Project Price Per Item */}
       <Card className="p-6">
-        <h3 className="font-display text-xl font-bold mb-4">Estimate Lines</h3>
+        <h3 className="text-lg font-semibold mb-4">Project Price Per Item</h3>
         <div className="overflow-x-auto">
           <Table>
             <TableHeader>
