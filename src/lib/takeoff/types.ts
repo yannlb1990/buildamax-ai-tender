@@ -1,44 +1,88 @@
-// Core TypeScript interfaces for PDF Takeoff system
+// Core TypeScript interfaces for PDF Takeoff system with unified coordinate system
 
-export type MeasurementType = 'line' | 'rectangle' | 'polygon' | 'circle';
-export type MeasurementUnit = 'LM' | 'M2' | 'M3' | 'count';
-export type ToolType = 'line' | 'rectangle' | 'polygon' | 'circle' | 'count' | 'pan' | null;
-export type CalibrationMode = 'preset' | 'manual' | null;
+// === COORDINATE TYPES ===
+// World coordinates = PDF page coordinates (stable, zoom-independent, stored)
+export interface WorldPoint {
+  x: number;  // PDF points (1 point = 1/72 inch)
+  y: number;
+}
 
+// View coordinates = Canvas pixel coordinates (transient, for rendering only)
+export interface ViewPoint {
+  x: number;
+  y: number;
+}
+
+// Legacy Point type for backward compatibility
 export interface Point {
   x: number;
   y: number;
 }
 
+// === TRANSFORM STATE ===
+export interface Transform {
+  zoom: number;
+  panX: number;
+  panY: number;
+  rotation: 0 | 90 | 180 | 270;
+}
+
+// === PDF METADATA ===
+export interface PDFPageMeta {
+  pageNumber: number;
+  width: number;      // PDF points
+  height: number;     // PDF points
+  rotation: 0 | 90 | 180 | 270;
+}
+
+export interface PDFViewportData {
+  width: number;   // PDF points
+  height: number;  // PDF points
+  scale: number;
+}
+
+// === MEASUREMENT TYPES ===
+export type MeasurementType = 'line' | 'rectangle' | 'polygon' | 'circle';
+export type MeasurementUnit = 'LM' | 'M2' | 'M3' | 'count';
+export type ToolType = 'line' | 'rectangle' | 'polygon' | 'circle' | 'count' | 'pan' | null;
+export type CalibrationMode = 'preset' | 'manual' | null;
+export type DistanceUnit = 'm' | 'mm' | 'cm' | 'ft' | 'in';
+
+// === SCALE DATA (World Units) ===
 export interface ScaleData {
-  pixelsPerUnit: number; // pixels per metre
-  scaleFactor: number | null; // e.g., 100 for 1:100
+  unitsPerMetre: number;    // World units (PDF points) per real metre
+  scaleFactor: number | null;
   scaleMethod: 'preset' | 'manual';
   calibrationLine?: {
-    point1: Point;
-    point2: Point;
-    pixelDistance: number;
+    p1: WorldPoint;
+    p2: WorldPoint;
+    worldDistance: number;  // Distance in PDF points
+    realDistance: number;   // Distance in metres
   };
 }
 
+// === MEASUREMENT (World Coordinates) ===
 export interface Measurement {
   id: string;
   type: MeasurementType;
-  points: Point[];
-  pixelValue: number;
-  realValue: number;
+  worldPoints: WorldPoint[];   // Stored in world space (stable, zoom-independent)
+  worldValue: number;          // Value in PDF points or points²
+  realValue: number;           // Value in metres or m²
   unit: MeasurementUnit;
   color: string;
   label: string;
   isDeduction: boolean;
+  parentMeasurementId?: string;  // For deductions
+  deductions?: string[];         // IDs of child deductions
   dimensions?: { width: number; height: number };
   roofPitch?: { rise: number; run: number };
-  depth?: number; // For volume calculations (metres)
+  depth?: number;
   linkedCostItem?: string;
   pageIndex: number;
   timestamp: Date;
 }
 
+// === COST ITEM ===
 export interface CostItem {
   id: string;
   category: string;
@@ -55,6 +99,7 @@ export interface CostItem {
   subtotal: number;
 }
 
+// === PDF FILE ===
 export interface PDFFile {
   file: File;
   url: string;
@@ -62,8 +107,20 @@ export interface PDFFile {
   pageCount: number;
 }
 
+// === PDF STATE ===
+export interface PDFState {
+  uploadedFile: File | null;
+  fileUrl: string | null;
+  fileName: string;
+  pages: PDFPageMeta[];
+  currentPageIndex: number;
+  loadingStatus: 'idle' | 'loading' | 'success' | 'error';
+  errorMessage?: string;
+}
+
+// === TAKEOFF STATE ===
 export interface TakeoffState {
-  // Upload state
+  // PDF state
   pdfFile: PDFFile | null;
   uploadStatus: 'idle' | 'loading' | 'success' | 'error';
   uploadError: string | null;
@@ -72,18 +129,21 @@ export interface TakeoffState {
   currentPageIndex: number;
   pageCount: number;
   
-  // Scaling state
-  scales: Map<number, ScaleData>;
+  // Transform state (view-only, doesn't affect measurements)
+  transform: Transform;
+  
+  // Scaling state (Record for JSON serialization, not Map)
+  scales: Record<number, ScaleData>;
   currentScale: ScaleData | null;
   isCalibrated: boolean;
   calibrationMode: CalibrationMode;
   
-  // Measurement state
+  // Measurement state (stored in world coordinates)
   activeTool: ToolType;
   measurements: Measurement[];
   selectedMeasurementId: string | null;
   currentMeasurement: {
-    points: Point[];
+    worldPoints: WorldPoint[];
     isComplete: boolean;
   } | null;
   
@@ -112,6 +172,7 @@ export interface TakeoffState {
   historyIndex: number;
 }
 
+// === ACTIONS ===
 export type TakeoffAction =
   | { type: 'SET_PDF_FILE'; payload: PDFFile }
   | { type: 'SET_UPLOAD_STATUS'; payload: TakeoffState['uploadStatus'] }
@@ -119,6 +180,7 @@ export type TakeoffAction =
   | { type: 'SET_CURRENT_PAGE'; payload: number }
   | { type: 'SET_SCALE'; payload: { pageIndex: number; scale: ScaleData } }
   | { type: 'SET_CALIBRATION_MODE'; payload: CalibrationMode }
+  | { type: 'SET_TRANSFORM'; payload: Partial<Transform> }
   | { type: 'SET_ACTIVE_TOOL'; payload: ToolType }
   | { type: 'ADD_MEASUREMENT'; payload: Measurement }
   | { type: 'UPDATE_MEASUREMENT'; payload: { id: string; updates: Partial<Measurement> } }

@@ -172,13 +172,13 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                 <InteractiveCanvas
                   pdfUrl={state.pdfFile.url}
                   pageIndex={state.currentPageIndex}
-                  zoomLevel={state.zoomLevel}
-                  rotation={rotation}
+                  transform={state.transform}
                   activeTool={state.activeTool}
                   isCalibrated={state.isCalibrated}
-                  pixelsPerUnit={state.currentScale?.pixelsPerUnit || null}
+                  unitsPerMetre={state.currentScale?.unitsPerMetre || null}
                   calibrationMode={state.calibrationMode}
                   deductionMode={state.deductionMode}
+                  selectedColor={state.selectedColor}
                   onMeasurementComplete={(measurement) => {
                     dispatch({ type: 'ADD_MEASUREMENT', payload: measurement });
                     toast.success('Measurement added');
@@ -187,8 +187,8 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                     setManualCalibrationPoints(points);
                     toast.info('Enter real-world distance below');
                   }}
-                  onZoomChange={(zoom) => {
-                    dispatch({ type: 'SET_ZOOM_LEVEL', payload: zoom });
+                  onTransformChange={(transform) => {
+                    dispatch({ type: 'SET_TRANSFORM', payload: transform });
                   }}
                 />
               </div>
