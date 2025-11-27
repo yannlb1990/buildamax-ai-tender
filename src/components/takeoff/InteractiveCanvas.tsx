@@ -1,14 +1,15 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
-import { Canvas as FabricCanvas, Line, Rect, Polygon, Circle, FabricImage } from 'fabric';
+import { useEffect, useRef, useState } from 'react';
+import { Canvas as FabricCanvas, FabricImage, Circle, Line, Rect, Polygon, Text, Point as FabricPoint } from 'fabric';
 import * as pdfjsLib from 'pdfjs-dist';
 import { Loader2 } from 'lucide-react';
-import { Point, Measurement, ToolType, MeasurementType, MeasurementUnit } from '@/lib/takeoff/types';
-import { calculateLinear, calculateRectangleArea, calculatePolygonArea } from '@/lib/takeoff/calculations';
+import { Point, Measurement, ToolType } from '@/lib/takeoff/types';
+import { calculateLinear, calculateRectangleArea, calculatePolygonArea, calculateCentroid } from '@/lib/takeoff/calculations';
 
+// Set up PDF.js worker
 pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
 
 interface InteractiveCanvasProps {
-  pdfUrl: string;
+  pdfUrl: string | null;
   pageIndex: number;
   zoomLevel: number;
   rotation: number;
@@ -19,7 +20,7 @@ interface InteractiveCanvasProps {
   deductionMode: boolean;
   onMeasurementComplete: (measurement: Measurement) => void;
   onCalibrationPointsSet: (points: [Point, Point]) => void;
-  onZoomChange: (zoom: number) => void;
+  onZoomChange?: (zoom: number) => void;
 }
 
 export const InteractiveCanvas = ({
@@ -34,26 +35,28 @@ export const InteractiveCanvas = ({
   deductionMode,
   onMeasurementComplete,
   onCalibrationPointsSet,
-  onZoomChange
+  onZoomChange,
 }: InteractiveCanvasProps) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fabricCanvasRef = useRef<FabricCanvas | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  
+
   // Drawing state
   const [isDrawing, setIsDrawing] = useState(false);
   const [startPoint, setStartPoint] = useState<Point | null>(null);
-  const [currentShape, setCurrentShape] = useState<any>(null);
+  const [previewShape, setPreviewShape] = useState<any>(null);
   const [polygonPoints, setPolygonPoints] = useState<Point[]>([]);
-  
+  const [polygonMarkers, setPolygonMarkers] = useState<Circle[]>([]);
+  const [polygonLines, setPolygonLines] = useState<Line[]>([]);
+
   // Calibration state
   const [calibrationPoints, setCalibrationPoints] = useState<Point[]>([]);
-  const [calibrationLine, setCalibrationLine] = useState<Line | null>(null);
-  
+  const [calibrationObjects, setCalibrationObjects] = useState<any[]>([]);
+
   // Pan state
   const [isPanning, setIsPanning] = useState(false);
-  const [lastPanPoint, setLastPanPoint] = useState<Point | null>(null);
+  const [lastClientPos, setLastClientPos] = useState<{ x: number; y: number } | null>(null);
 
   // Initialize Fabric canvas
   useEffect(() => {
@@ -63,7 +66,7 @@ export const InteractiveCanvas = ({
       width: 1200,
       height: 800,
       backgroundColor: '#f5f5f5',
-      selection: false
+      selection: false,
     });
 
     fabricCanvasRef.current = canvas;
@@ -73,193 +76,229 @@ export const InteractiveCanvas = ({
     };
   }, []);
 
-  // Load and render PDF
+  // Load PDF page
   useEffect(() => {
-    const loadPDF = async () => {
-      if (!fabricCanvasRef.current) return;
+    if (!pdfUrl || !fabricCanvasRef.current) return;
 
-      setLoading(true);
+    const loadPDF = async () => {
+      setIsLoading(true);
       setError(null);
 
       try {
-        const isPDF = pdfUrl.toLowerCase().endsWith('.pdf') || pdfUrl.includes('application/pdf');
+        const loadingTask = pdfjsLib.getDocument(pdfUrl);
+        const pdf = await loadingTask.promise;
+        const page = await pdf.getPage(pageIndex + 1);
 
-        if (isPDF) {
-          const pdf = await pdfjsLib.getDocument(pdfUrl).promise;
-          const page = await pdf.getPage(pageIndex + 1);
-          
-          const viewport = page.getViewport({ scale: 2 });
-          const tempCanvas = document.createElement('canvas');
-          const context = tempCanvas.getContext('2d')!;
-          
-          tempCanvas.width = viewport.width;
-          tempCanvas.height = viewport.height;
-          
-          await page.render({ 
-            canvasContext: context, 
-            viewport,
-            canvas: tempCanvas 
-          }).promise;
-          
-          const imageUrl = tempCanvas.toDataURL();
-          const img = await FabricImage.fromURL(imageUrl);
-          
-          fabricCanvasRef.current.clear();
+        const viewport = page.getViewport({ scale: 2.0, rotation });
+        const tempCanvas = document.createElement('canvas');
+        const context = tempCanvas.getContext('2d');
+
+        if (!context) throw new Error('Could not get canvas context');
+
+        tempCanvas.width = viewport.width;
+        tempCanvas.height = viewport.height;
+
+        const renderContext = {
+          canvasContext: context,
+          viewport: viewport,
+          canvas: tempCanvas,
+        };
+        await page.render(renderContext).promise;
+
+        const dataUrl = tempCanvas.toDataURL();
+        const img = await FabricImage.fromURL(dataUrl);
+
+        if (fabricCanvasRef.current) {
           fabricCanvasRef.current.setWidth(viewport.width);
           fabricCanvasRef.current.setHeight(viewport.height);
           fabricCanvasRef.current.backgroundImage = img;
-          fabricCanvasRef.current.renderAll();
-        } else {
-          const img = await FabricImage.fromURL(pdfUrl);
-          fabricCanvasRef.current.clear();
-          fabricCanvasRef.current.setWidth(img.width!);
-          fabricCanvasRef.current.setHeight(img.height!);
-          fabricCanvasRef.current.backgroundImage = img;
-          fabricCanvasRef.current.renderAll();
+          fabricCanvasRef.current.requestRenderAll();
         }
 
-        setLoading(false);
+        setIsLoading(false);
       } catch (err) {
         console.error('Error loading PDF:', err);
         setError('Failed to load PDF');
-        setLoading(false);
+        setIsLoading(false);
       }
     };
 
     loadPDF();
-  }, [pdfUrl, pageIndex]);
+  }, [pdfUrl, pageIndex, rotation]);
 
   // Apply zoom
   useEffect(() => {
     if (!fabricCanvasRef.current) return;
-    fabricCanvasRef.current.setZoom(zoomLevel);
-    fabricCanvasRef.current.renderAll();
+    const canvas = fabricCanvasRef.current;
+    canvas.setZoom(zoomLevel);
+    canvas.requestRenderAll();
   }, [zoomLevel]);
 
   // Update cursor based on active tool
   useEffect(() => {
     if (!fabricCanvasRef.current) return;
-    
-    let cursor = 'default';
+    const canvas = fabricCanvasRef.current;
+
     if (calibrationMode === 'manual') {
-      cursor = 'crosshair';
-    } else if (activeTool && activeTool !== 'count') {
-      cursor = 'crosshair';
-    } else if (activeTool === 'count') {
-      cursor = 'pointer';
-    } else if (!activeTool) {
-      cursor = 'grab';
+      canvas.defaultCursor = 'crosshair';
+      canvas.hoverCursor = 'crosshair';
+    } else if (activeTool === 'pan' || !activeTool) {
+      canvas.defaultCursor = 'grab';
+      canvas.hoverCursor = 'grab';
+    } else {
+      canvas.defaultCursor = 'crosshair';
+      canvas.hoverCursor = 'crosshair';
     }
-    
-    fabricCanvasRef.current.defaultCursor = cursor;
-    fabricCanvasRef.current.hoverCursor = cursor;
   }, [activeTool, calibrationMode]);
 
-  // Handle mouse wheel zoom
-  const handleWheel = useCallback((e: WheelEvent) => {
-    e.preventDefault();
-    const delta = e.deltaY > 0 ? -0.1 : 0.1;
-    const newZoom = Math.max(0.25, Math.min(4, zoomLevel + delta));
-    onZoomChange(newZoom);
-  }, [zoomLevel, onZoomChange]);
+  // Clear calibration markers when calibration is complete
+  useEffect(() => {
+    if (isCalibrated && calibrationObjects.length > 0) {
+      const canvas = fabricCanvasRef.current;
+      if (canvas) {
+        calibrationObjects.forEach(obj => canvas.remove(obj));
+        setCalibrationObjects([]);
+        setCalibrationPoints([]);
+        canvas.requestRenderAll();
+      }
+    }
+  }, [isCalibrated, calibrationObjects]);
 
+  // Handle mouse wheel zoom
   useEffect(() => {
     const canvas = fabricCanvasRef.current;
     if (!canvas) return;
 
-    const canvasEl = canvas.getElement();
-    canvasEl.addEventListener('wheel', handleWheel, { passive: false });
+    const handleWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const delta = e.deltaY;
+      let newZoom = canvas.getZoom();
+      newZoom = newZoom - delta / 1000;
+      newZoom = Math.max(0.1, Math.min(5, newZoom));
+
+      const point = new FabricPoint(e.offsetX, e.offsetY);
+      canvas.zoomToPoint(point, newZoom);
+      
+      if (onZoomChange) {
+        onZoomChange(newZoom);
+      }
+    };
+
+    const canvasElement = canvas.getElement();
+    canvasElement.addEventListener('wheel', handleWheel, { passive: false });
 
     return () => {
-      canvasEl.removeEventListener('wheel', handleWheel);
+      canvasElement.removeEventListener('wheel', handleWheel);
     };
-  }, [handleWheel]);
+  }, [onZoomChange]);
 
-  // Handle calibration clicks
-  const handleCalibrationClick = useCallback((e: any) => {
-    if (calibrationMode !== 'manual') return;
+  // Handle calibration click
+  const handleCalibrationClick = (point: Point) => {
+    const canvas = fabricCanvasRef.current;
+    if (!canvas) return;
 
-    const pointer = fabricCanvasRef.current!.getPointer(e.e);
-    const point: Point = { x: pointer.x, y: pointer.y };
+    const newPoints = [...calibrationPoints, point];
+    const newObjects = [...calibrationObjects];
+    
+    // Add marker
+    const marker = new Circle({
+      left: point.x - 5,
+      top: point.y - 5,
+      radius: 5,
+      fill: 'red',
+      stroke: 'white',
+      strokeWidth: 2,
+      selectable: false,
+      evented: false,
+    });
+    canvas.add(marker);
+    newObjects.push(marker);
 
-    if (calibrationPoints.length === 0) {
-      // First point
-      setCalibrationPoints([point]);
-      
-      const circle = new Circle({
-        left: point.x - 5,
-        top: point.y - 5,
-        radius: 5,
-        fill: 'red',
-        selectable: false,
-        evented: false
-      });
-      fabricCanvasRef.current!.add(circle);
-    } else if (calibrationPoints.length === 1) {
-      // Second point
-      const newPoints: [Point, Point] = [calibrationPoints[0], point];
-      setCalibrationPoints(newPoints);
-      
-      const circle = new Circle({
-        left: point.x - 5,
-        top: point.y - 5,
-        radius: 5,
-        fill: 'red',
-        selectable: false,
-        evented: false
-      });
-      
-      const line = new Line([
-        calibrationPoints[0].x,
-        calibrationPoints[0].y,
-        point.x,
-        point.y
-      ], {
+    // Add label
+    const label = new Text(newPoints.length === 1 ? 'A' : 'B', {
+      left: point.x + 10,
+      top: point.y - 10,
+      fontSize: 16,
+      fill: 'red',
+      fontWeight: 'bold',
+      selectable: false,
+      evented: false,
+    });
+    canvas.add(label);
+    newObjects.push(label);
+
+    if (newPoints.length === 2) {
+      // Draw line between points
+      const line = new Line([newPoints[0].x, newPoints[0].y, newPoints[1].x, newPoints[1].y], {
         stroke: 'red',
         strokeWidth: 2,
+        strokeDashArray: [5, 5],
         selectable: false,
-        evented: false
+        evented: false,
       });
-      
-      fabricCanvasRef.current!.add(circle, line);
-      setCalibrationLine(line);
-      
-      onCalibrationPointsSet(newPoints);
-    }
-  }, [calibrationMode, calibrationPoints, onCalibrationPointsSet]);
+      canvas.add(line);
+      newObjects.push(line);
 
-  // Handle measurement drawing
-  const handleMouseDown = useCallback((e: any) => {
-    if (!fabricCanvasRef.current) return;
-    const pointer = fabricCanvasRef.current.getPointer(e.e);
+      // Calculate pixel distance
+      const dx = newPoints[1].x - newPoints[0].x;
+      const dy = newPoints[1].y - newPoints[0].y;
+      const pixelDistance = Math.sqrt(dx * dx + dy * dy);
+      
+      console.log('Calibration pixel distance:', pixelDistance);
+      
+      setCalibrationObjects(newObjects);
+      onCalibrationPointsSet([newPoints[0], newPoints[1]]);
+      setCalibrationPoints([]);
+    } else {
+      setCalibrationPoints(newPoints);
+      setCalibrationObjects(newObjects);
+    }
+
+    canvas.requestRenderAll();
+  };
+
+  // Handle mouse down
+  const handleMouseDown = (e: any) => {
+    const canvas = fabricCanvasRef.current;
+    if (!canvas) return;
+
+    const pointer = canvas.getPointer(e.e, true);
     const point: Point = { x: pointer.x, y: pointer.y };
 
     // Handle calibration
-    if (calibrationMode === 'manual') {
-      handleCalibrationClick(e);
+    if (calibrationMode === 'manual' && !isCalibrated) {
+      handleCalibrationClick(point);
       return;
     }
 
-    // Handle panning
-    if (!activeTool) {
+    // Handle pan
+    if (activeTool === 'pan' || !activeTool) {
       setIsPanning(true);
-      setLastPanPoint(point);
-      fabricCanvasRef.current.defaultCursor = 'grabbing';
+      setLastClientPos({ x: e.e.clientX, y: e.e.clientY });
+      canvas.defaultCursor = 'grabbing';
       return;
     }
 
-    // Handle count tool
+    // Prevent drawing if not calibrated
+    if (!isCalibrated) {
+      return;
+    }
+
+    setIsDrawing(true);
+    setStartPoint(point);
+
+    // Handle count tool (single click)
     if (activeTool === 'count') {
       const marker = new Circle({
         left: point.x - 4,
         top: point.y - 4,
         radius: 4,
-        fill: '#FF9800',
-        stroke: '#F57C00',
-        strokeWidth: 1,
-        selectable: false
+        fill: 'orange',
+        stroke: 'white',
+        strokeWidth: 2,
+        selectable: false,
       });
-      fabricCanvasRef.current.add(marker);
+      canvas.add(marker);
 
       const measurement: Measurement = {
         id: crypto.randomUUID(),
@@ -272,138 +311,337 @@ export const InteractiveCanvas = ({
         label: 'Count',
         isDeduction: false,
         pageIndex,
-        timestamp: new Date()
+        timestamp: new Date(),
       };
+
       onMeasurementComplete(measurement);
+      setIsDrawing(false);
+      canvas.requestRenderAll();
       return;
     }
 
-    // Start drawing
-    setIsDrawing(true);
-    setStartPoint(point);
-
+    // Handle polygon tool
     if (activeTool === 'polygon') {
-      setPolygonPoints(prev => [...prev, point]);
+      const newPoints = [...polygonPoints, point];
+      
+      // Add point marker
+      const marker = new Circle({
+        left: point.x - 3,
+        top: point.y - 3,
+        radius: 3,
+        fill: 'green',
+        stroke: 'white',
+        strokeWidth: 1,
+        selectable: false,
+        evented: false,
+      });
+      canvas.add(marker);
+      setPolygonMarkers([...polygonMarkers, marker]);
+
+      // Add line from previous point
+      if (newPoints.length > 1) {
+        const prevPoint = newPoints[newPoints.length - 2];
+        const line = new Line([prevPoint.x, prevPoint.y, point.x, point.y], {
+          stroke: 'green',
+          strokeWidth: 2,
+          strokeDashArray: [5, 5],
+          selectable: false,
+          evented: false,
+        });
+        canvas.add(line);
+        setPolygonLines([...polygonLines, line]);
+      }
+
+      setPolygonPoints(newPoints);
+      canvas.requestRenderAll();
+      return;
     }
-  }, [activeTool, calibrationMode, pageIndex, handleCalibrationClick, onMeasurementComplete]);
+  };
 
-  const handleMouseMove = useCallback((e: any) => {
-    if (!fabricCanvasRef.current) return;
-    const pointer = fabricCanvasRef.current.getPointer(e.e);
-    const point: Point = { x: pointer.x, y: pointer.y };
+  // Handle mouse move
+  const handleMouseMove = (e: any) => {
+    const canvas = fabricCanvasRef.current;
+    if (!canvas) return;
 
-    // Handle panning
-    if (isPanning && lastPanPoint) {
-      const vpt = fabricCanvasRef.current.viewportTransform!;
-      vpt[4] += point.x - lastPanPoint.x;
-      vpt[5] += point.y - lastPanPoint.y;
-      fabricCanvasRef.current.requestRenderAll();
-      setLastPanPoint(point);
+    // Handle panning (use client coordinates, not canvas pointer)
+    if (isPanning && lastClientPos) {
+      const deltaX = e.e.clientX - lastClientPos.x;
+      const deltaY = e.e.clientY - lastClientPos.y;
+      
+      const vpt = canvas.viewportTransform;
+      if (vpt) {
+        vpt[4] += deltaX;
+        vpt[5] += deltaY;
+        canvas.requestRenderAll();
+      }
+      
+      setLastClientPos({ x: e.e.clientX, y: e.e.clientY });
       return;
     }
 
-    if (!isDrawing || !startPoint) return;
+    if (!isDrawing || !startPoint || !isCalibrated) return;
 
-    // Preview shape while drawing
-    if (currentShape) {
-      fabricCanvasRef.current.remove(currentShape);
+    const pointer = canvas.getPointer(e.e, true);
+
+    // Remove previous preview
+    if (previewShape) {
+      canvas.remove(previewShape);
     }
 
     let shape: any = null;
 
+    // Update preview shape
     if (activeTool === 'line') {
-      shape = new Line([startPoint.x, startPoint.y, point.x, point.y], {
-        stroke: '#FF6B6B',
+      shape = new Line([startPoint.x, startPoint.y, pointer.x, pointer.y], {
+        stroke: 'red',
         strokeWidth: 2,
+        strokeDashArray: [5, 5],
         selectable: false,
-        strokeDashArray: [5, 5]
+        evented: false,
       });
     } else if (activeTool === 'rectangle') {
-      const width = point.x - startPoint.x;
-      const height = point.y - startPoint.y;
       shape = new Rect({
-        left: Math.min(startPoint.x, point.x),
-        top: Math.min(startPoint.y, point.y),
-        width: Math.abs(width),
-        height: Math.abs(height),
+        left: Math.min(startPoint.x, pointer.x),
+        top: Math.min(startPoint.y, pointer.y),
+        width: Math.abs(pointer.x - startPoint.x),
+        height: Math.abs(pointer.y - startPoint.y),
         fill: 'rgba(76, 175, 80, 0.2)',
-        stroke: '#4CAF50',
+        stroke: 'green',
         strokeWidth: 2,
-        selectable: false
+        strokeDashArray: [5, 5],
+        selectable: false,
+        evented: false,
+      });
+    } else if (activeTool === 'circle') {
+      const dx = pointer.x - startPoint.x;
+      const dy = pointer.y - startPoint.y;
+      const radius = Math.sqrt(dx * dx + dy * dy);
+      
+      shape = new Circle({
+        left: startPoint.x - radius,
+        top: startPoint.y - radius,
+        radius: radius,
+        fill: 'rgba(156, 39, 176, 0.2)',
+        stroke: 'purple',
+        strokeWidth: 2,
+        strokeDashArray: [5, 5],
+        selectable: false,
+        evented: false,
       });
     }
 
     if (shape) {
-      fabricCanvasRef.current.add(shape);
-      setCurrentShape(shape);
+      canvas.add(shape);
+      setPreviewShape(shape);
     }
-  }, [isDrawing, startPoint, isPanning, lastPanPoint, activeTool, currentShape]);
 
-  const handleMouseUp = useCallback((e: any) => {
-    if (!fabricCanvasRef.current || !isCalibrated || !pixelsPerUnit) return;
+    canvas.requestRenderAll();
+  };
 
-    const pointer = fabricCanvasRef.current.getPointer(e.e);
-    const point: Point = { x: pointer.x, y: pointer.y };
+  // Handle mouse up
+  const handleMouseUp = (e: any) => {
+    const canvas = fabricCanvasRef.current;
+    if (!canvas) return;
 
-    // Stop panning
+    // Handle pan end
     if (isPanning) {
       setIsPanning(false);
-      setLastPanPoint(null);
-      fabricCanvasRef.current.defaultCursor = 'grab';
+      setLastClientPos(null);
+      canvas.defaultCursor = 'grab';
       return;
     }
 
-    if (!isDrawing || !startPoint) return;
+    if (!isDrawing || !startPoint || !isCalibrated || !pixelsPerUnit) return;
 
-    // Complete measurement
+    const pointer = canvas.getPointer(e.e, true);
+    const endPoint: Point = { x: pointer.x, y: pointer.y };
+
+    // Remove preview shape
+    if (previewShape) {
+      canvas.remove(previewShape);
+      setPreviewShape(null);
+    }
+
+    // Complete measurement based on tool
     if (activeTool === 'line') {
-      const result = calculateLinear(startPoint, point, pixelsPerUnit);
+      const result = calculateLinear(startPoint, endPoint, pixelsPerUnit);
+      
+      // Create permanent line
+      const line = new Line([startPoint.x, startPoint.y, endPoint.x, endPoint.y], {
+        stroke: 'red',
+        strokeWidth: 2,
+        selectable: false,
+        evented: false,
+      });
+      canvas.add(line);
+
+      // Add label
+      const midX = (startPoint.x + endPoint.x) / 2;
+      const midY = (startPoint.y + endPoint.y) / 2;
+      const label = new Text(`${result.realValue.toFixed(2)} m`, {
+        left: midX,
+        top: midY - 10,
+        fontSize: 14,
+        fill: 'red',
+        backgroundColor: 'white',
+        selectable: false,
+        evented: false,
+      });
+      canvas.add(label);
+
       const measurement: Measurement = {
         id: crypto.randomUUID(),
         type: 'line',
-        points: [startPoint, point],
+        points: [startPoint, endPoint],
         pixelValue: result.pixelValue,
         realValue: result.realValue,
         unit: result.unit,
         color: '#FF6B6B',
-        label: `Line ${result.realValue.toFixed(2)}m`,
+        label: `${result.realValue.toFixed(2)} m`,
         isDeduction: deductionMode,
         pageIndex,
-        timestamp: new Date()
+        timestamp: new Date(),
       };
+
       onMeasurementComplete(measurement);
     } else if (activeTool === 'rectangle') {
-      const result = calculateRectangleArea(startPoint, point, pixelsPerUnit);
+      const result = calculateRectangleArea(startPoint, endPoint, pixelsPerUnit);
+      
+      // Create permanent rectangle
+      const rect = new Rect({
+        left: Math.min(startPoint.x, endPoint.x),
+        top: Math.min(startPoint.y, endPoint.y),
+        width: Math.abs(endPoint.x - startPoint.x),
+        height: Math.abs(endPoint.y - startPoint.y),
+        fill: 'rgba(76, 175, 80, 0.3)',
+        stroke: 'green',
+        strokeWidth: 2,
+        selectable: false,
+        evented: false,
+      });
+      canvas.add(rect);
+
+      // Add label
+      const centerX = (startPoint.x + endPoint.x) / 2;
+      const centerY = (startPoint.y + endPoint.y) / 2;
+      const label = new Text(`${result.realValue.toFixed(2)} m²`, {
+        left: centerX - 30,
+        top: centerY - 10,
+        fontSize: 14,
+        fill: 'green',
+        backgroundColor: 'white',
+        selectable: false,
+        evented: false,
+      });
+      canvas.add(label);
+
       const measurement: Measurement = {
         id: crypto.randomUUID(),
         type: 'rectangle',
-        points: [startPoint, point],
+        points: [startPoint, endPoint],
         pixelValue: result.pixelValue,
         realValue: result.realValue,
         unit: result.unit,
+        dimensions: result.dimensions,
         color: '#4CAF50',
-        label: `Rectangle ${result.realValue.toFixed(2)}m²`,
+        label: `${result.realValue.toFixed(2)} m²`,
         isDeduction: deductionMode,
         pageIndex,
-        timestamp: new Date()
+        timestamp: new Date(),
       };
+
+      onMeasurementComplete(measurement);
+    } else if (activeTool === 'circle') {
+      const dx = endPoint.x - startPoint.x;
+      const dy = endPoint.y - startPoint.y;
+      const radiusPixels = Math.sqrt(dx * dx + dy * dy);
+      const radiusMeters = radiusPixels / pixelsPerUnit;
+      const areaM2 = Math.PI * radiusMeters * radiusMeters;
+      
+      // Create permanent circle
+      const circle = new Circle({
+        left: startPoint.x - radiusPixels,
+        top: startPoint.y - radiusPixels,
+        radius: radiusPixels,
+        fill: 'rgba(156, 39, 176, 0.3)',
+        stroke: 'purple',
+        strokeWidth: 2,
+        selectable: false,
+        evented: false,
+      });
+      canvas.add(circle);
+
+      // Add label
+      const label = new Text(`${areaM2.toFixed(2)} m²`, {
+        left: startPoint.x - 30,
+        top: startPoint.y - 10,
+        fontSize: 14,
+        fill: 'purple',
+        backgroundColor: 'white',
+        selectable: false,
+        evented: false,
+      });
+      canvas.add(label);
+
+      const measurement: Measurement = {
+        id: crypto.randomUUID(),
+        type: 'circle',
+        points: [startPoint, endPoint],
+        pixelValue: Math.PI * radiusPixels * radiusPixels,
+        realValue: areaM2,
+        unit: 'M2',
+        color: '#9C27B0',
+        label: `${areaM2.toFixed(2)} m²`,
+        isDeduction: deductionMode,
+        pageIndex,
+        timestamp: new Date(),
+      };
+
       onMeasurementComplete(measurement);
     }
 
-    // Reset drawing state
     setIsDrawing(false);
     setStartPoint(null);
-    if (currentShape) {
-      fabricCanvasRef.current.remove(currentShape);
-      setCurrentShape(null);
-    }
-  }, [isDrawing, startPoint, isCalibrated, pixelsPerUnit, activeTool, deductionMode, pageIndex, isPanning, currentShape, onMeasurementComplete]);
+    canvas.requestRenderAll();
+  };
 
-  // Handle polygon double-click to complete
-  const handleDoubleClick = useCallback(() => {
-    if (activeTool !== 'polygon' || polygonPoints.length < 3 || !isCalibrated || !pixelsPerUnit) return;
+  // Handle double click to close polygon
+  const handleDoubleClick = () => {
+    const canvas = fabricCanvasRef.current;
+    if (!canvas || activeTool !== 'polygon' || polygonPoints.length < 3 || !pixelsPerUnit) return;
 
     const result = calculatePolygonArea(polygonPoints, pixelsPerUnit);
+    
+    // Create permanent polygon
+    const fabricPoints = polygonPoints.map(p => new FabricPoint(p.x, p.y));
+    const polygon = new Polygon(fabricPoints, {
+      fill: 'rgba(76, 175, 80, 0.3)',
+      stroke: 'green',
+      strokeWidth: 2,
+      selectable: false,
+      evented: false,
+    });
+    canvas.add(polygon);
+
+    // Add label at centroid
+    const centroid = calculateCentroid(polygonPoints);
+    const label = new Text(`${result.realValue.toFixed(2)} m²`, {
+      left: centroid.x - 30,
+      top: centroid.y - 10,
+      fontSize: 14,
+      fill: 'green',
+      backgroundColor: 'white',
+      selectable: false,
+      evented: false,
+    });
+    canvas.add(label);
+
+    // Clean up markers and lines
+    polygonMarkers.forEach(marker => canvas.remove(marker));
+    polygonLines.forEach(line => canvas.remove(line));
+    setPolygonMarkers([]);
+    setPolygonLines([]);
+
     const measurement: Measurement = {
       id: crypto.randomUUID(),
       type: 'polygon',
@@ -411,19 +649,19 @@ export const InteractiveCanvas = ({
       pixelValue: result.pixelValue,
       realValue: result.realValue,
       unit: result.unit,
-      color: '#2196F3',
-      label: `Polygon ${result.realValue.toFixed(2)}m²`,
+      color: '#4CAF50',
+      label: `${result.realValue.toFixed(2)} m²`,
       isDeduction: deductionMode,
       pageIndex,
-      timestamp: new Date()
+      timestamp: new Date(),
     };
 
     onMeasurementComplete(measurement);
     setPolygonPoints([]);
-    setIsDrawing(false);
-  }, [activeTool, polygonPoints, isCalibrated, pixelsPerUnit, deductionMode, pageIndex, onMeasurementComplete]);
+    canvas.requestRenderAll();
+  };
 
-  // Attach event listeners
+  // Attach event handlers
   useEffect(() => {
     const canvas = fabricCanvasRef.current;
     if (!canvas) return;
@@ -439,17 +677,32 @@ export const InteractiveCanvas = ({
       canvas.off('mouse:up', handleMouseUp);
       canvas.off('mouse:dblclick', handleDoubleClick);
     };
-  }, [handleMouseDown, handleMouseMove, handleMouseUp, handleDoubleClick]);
+  }, [
+    activeTool,
+    isCalibrated,
+    pixelsPerUnit,
+    calibrationMode,
+    startPoint,
+    isDrawing,
+    previewShape,
+    polygonPoints,
+    polygonMarkers,
+    polygonLines,
+    isPanning,
+    lastClientPos,
+    calibrationPoints,
+    calibrationObjects,
+  ]);
 
   return (
-    <div className="relative border border-border rounded-lg overflow-hidden">
-      {loading && (
-        <div className="absolute inset-0 flex items-center justify-center bg-background/80">
+    <div className="relative w-full h-full flex items-center justify-center bg-muted rounded-lg">
+      {isLoading && (
+        <div className="absolute inset-0 flex items-center justify-center bg-background/80 z-10">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
         </div>
       )}
       {error && (
-        <div className="absolute inset-0 flex items-center justify-center bg-background/80">
+        <div className="absolute inset-0 flex items-center justify-center bg-background/80 z-10">
           <p className="text-destructive">{error}</p>
         </div>
       )}
