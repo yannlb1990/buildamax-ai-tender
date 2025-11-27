@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { ZoomIn, ZoomOut, RotateCw, Maximize2 } from 'lucide-react';
+import React, { useState } from 'react';
+import { ZoomIn, ZoomOut, RotateCw, Maximize2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { PDFUploadManager } from './PDFUploadManager';
@@ -18,8 +18,17 @@ interface PDFTakeoffProps {
 
 export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoffProps) => {
   const { state, dispatch } = useTakeoffState();
+  const [activeTab, setActiveTab] = React.useState('upload');
   const [rotation, setRotation] = useState<0 | 90 | 180 | 270>(0);
   const [manualCalibrationPoints, setManualCalibrationPoints] = useState<[Point, Point] | null>(null);
+
+  // Auto-switch to measure tab after upload
+  React.useEffect(() => {
+    if (state.pdfFile && activeTab === 'upload') {
+      setActiveTab('measure');
+      toast.success('PDF uploaded! Set scale to start measuring');
+    }
+  }, [state.pdfFile, activeTab]);
 
   const handleZoomIn = () => {
     dispatch({ type: 'SET_ZOOM_LEVEL', payload: Math.min(state.zoomLevel + 0.25, 4) });
@@ -37,9 +46,21 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
     dispatch({ type: 'SET_ZOOM_LEVEL', payload: 1 });
   };
 
+  const handlePagePrevious = () => {
+    if (state.currentPageIndex > 0) {
+      dispatch({ type: 'SET_CURRENT_PAGE', payload: state.currentPageIndex - 1 });
+    }
+  };
+
+  const handlePageNext = () => {
+    if (state.pdfFile && state.currentPageIndex < state.pdfFile.pageCount - 1) {
+      dispatch({ type: 'SET_CURRENT_PAGE', payload: state.currentPageIndex + 1 });
+    }
+  };
+
   return (
     <div className="space-y-6">
-      <Tabs defaultValue="upload" className="w-full">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList>
           <TabsTrigger value="upload">Upload</TabsTrigger>
           <TabsTrigger value="measure" disabled={!state.pdfFile}>Measure</TabsTrigger>
@@ -51,10 +72,10 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
             projectId={projectId}
             onUploadComplete={(pdfFile) => {
               dispatch({ type: 'SET_PDF_FILE', payload: pdfFile });
-              toast.success('PDF uploaded successfully');
             }}
             onError={(error) => {
               dispatch({ type: 'SET_UPLOAD_ERROR', payload: error });
+              toast.error(error);
             }}
           />
         </TabsContent>
@@ -72,10 +93,11 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                       type: 'SET_SCALE',
                       payload: { pageIndex: state.currentPageIndex, scale }
                     });
+                    toast.success('Scale set successfully');
                   }}
                   onManualCalibrationStart={() => {
                     dispatch({ type: 'SET_CALIBRATION_MODE', payload: 'manual' });
-                    toast.info('Click two points on a known dimension on the plan');
+                    toast.info('Click two points on a known dimension');
                   }}
                   manualPoints={manualCalibrationPoints}
                   onCalibrationComplete={() => {
@@ -98,8 +120,54 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                   onRedo={() => dispatch({ type: 'REDO' })}
                   canUndo={state.historyIndex > 0}
                   canRedo={state.historyIndex < state.history.length - 1}
-                  disabled={!state.isCalibrated}
+                  disabled={!state.isCalibrated && state.activeTool !== 'pan'}
                 />
+
+                {/* Canvas Controls */}
+                <div className="flex items-center gap-2 justify-between p-2 bg-card border rounded-lg">
+                  <div className="flex items-center gap-2">
+                    <Button variant="outline" size="sm" onClick={handleZoomOut}>
+                      <ZoomOut className="h-4 w-4" />
+                    </Button>
+                    <span className="text-sm font-medium min-w-16 text-center">
+                      {Math.round(state.zoomLevel * 100)}%
+                    </span>
+                    <Button variant="outline" size="sm" onClick={handleZoomIn}>
+                      <ZoomIn className="h-4 w-4" />
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={handleRotate}>
+                      <RotateCw className="h-4 w-4" />
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={handleFitToScreen}>
+                      <Maximize2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+
+                  {/* Page Navigation */}
+                  {state.pdfFile && state.pdfFile.pageCount > 1 && (
+                    <div className="flex items-center gap-2">
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={handlePagePrevious}
+                        disabled={state.currentPageIndex === 0}
+                      >
+                        <ChevronLeft className="h-4 w-4" />
+                      </Button>
+                      <span className="text-sm font-medium">
+                        Page {state.currentPageIndex + 1} / {state.pdfFile.pageCount}
+                      </span>
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={handlePageNext}
+                        disabled={state.currentPageIndex === state.pdfFile.pageCount - 1}
+                      >
+                        <ChevronRight className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  )}
+                </div>
 
                 <InteractiveCanvas
                   pdfUrl={state.pdfFile.url}
@@ -117,51 +185,54 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                   }}
                   onCalibrationPointsSet={(points) => {
                     setManualCalibrationPoints(points);
-                    toast.success('Calibration points set - enter distance');
+                    toast.info('Enter real-world distance below');
                   }}
                   onZoomChange={(zoom) => {
                     dispatch({ type: 'SET_ZOOM_LEVEL', payload: zoom });
                   }}
                 />
-
-                {/* Zoom Controls */}
-                <div className="flex items-center gap-2 justify-center">
-                  <Button variant="outline" size="sm" onClick={handleZoomOut}>
-                    <ZoomOut className="h-4 w-4" />
-                  </Button>
-                  <span className="text-sm font-medium min-w-16 text-center">
-                    {Math.round(state.zoomLevel * 100)}%
-                  </span>
-                  <Button variant="outline" size="sm" onClick={handleZoomIn}>
-                    <ZoomIn className="h-4 w-4" />
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={handleRotate}>
-                    <RotateCw className="h-4 w-4" />
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={handleFitToScreen}>
-                    <Maximize2 className="h-4 w-4" />
-                  </Button>
-                </div>
               </div>
 
               {/* Right Sidebar - Measurements */}
               <div className="lg:col-span-1">
                 <div className="bg-card border border-border rounded-lg p-4">
                   <h3 className="font-semibold mb-4">Measurements</h3>
-                  <div className="space-y-2">
+                  <div className="space-y-2 max-h-[600px] overflow-y-auto">
                     {state.measurements.length === 0 ? (
                       <p className="text-sm text-muted-foreground">No measurements yet</p>
                     ) : (
                       state.measurements.map((m) => (
                         <div key={m.id} className="text-sm p-2 bg-muted rounded">
-                          <p className="font-medium">{m.label || 'Unnamed'}</p>
-                          <p className="text-muted-foreground">
-                            {m.realValue.toFixed(2)} {m.unit}
-                          </p>
+                          <div className="flex justify-between items-start gap-2">
+                            <div className="flex-1">
+                              <p className="font-medium capitalize">{m.type}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {new Date(m.timestamp).toLocaleTimeString()}
+                              </p>
+                            </div>
+                            <span className="font-semibold">
+                              {m.realValue.toFixed(2)} {m.unit}
+                            </span>
+                          </div>
                         </div>
                       ))
                     )}
                   </div>
+                  
+                  {state.measurements.length > 0 && (
+                    <div className="mt-4 pt-4 border-t space-y-1">
+                      <div className="text-sm flex justify-between">
+                        <span>Total Measurements:</span>
+                        <span className="font-semibold">{state.measurements.length}</span>
+                      </div>
+                      <div className="text-sm flex justify-between">
+                        <span>Total Value:</span>
+                        <span className="font-semibold">
+                          {state.measurements.reduce((sum, m) => sum + m.realValue, 0).toFixed(2)}
+                        </span>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

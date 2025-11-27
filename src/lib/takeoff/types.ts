@@ -2,7 +2,7 @@
 
 export type MeasurementType = 'line' | 'rectangle' | 'polygon' | 'circle';
 export type MeasurementUnit = 'LM' | 'M2' | 'M3' | 'count';
-export type ToolType = 'line' | 'rectangle' | 'polygon' | 'circle' | 'count' | null;
+export type ToolType = 'line' | 'rectangle' | 'polygon' | 'circle' | 'count' | 'pan' | null;
 export type CalibrationMode = 'preset' | 'manual' | null;
 
 export interface Point {
@@ -31,6 +31,7 @@ export interface Measurement {
   color: string;
   label: string;
   isDeduction: boolean;
+  dimensions?: { width: number; height: number };
   roofPitch?: { rise: number; run: number };
   depth?: number; // For volume calculations (metres)
   linkedCostItem?: string;
