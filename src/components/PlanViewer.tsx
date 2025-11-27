@@ -10,18 +10,24 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Ruler, ZoomIn, ZoomOut, Move, Trash2, Square, Minus, Scan, Loader2, PenTool } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import * as pdfjsLib from "pdfjs-dist";
+
+// Configure PDF.js worker
+pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
 
 interface PlanViewerProps {
   planUrl: string;
   projectId?: string;
+  wizardMode?: boolean;
+  currentTool?: "pan" | "calibrate" | "measure-line" | "measure-area" | "detect" | "extract";
 }
 
-export const PlanViewer = ({ planUrl, projectId }: PlanViewerProps) => {
+export const PlanViewer = ({ planUrl, projectId, wizardMode = false, currentTool: initialTool }: PlanViewerProps) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [fabricCanvas, setFabricCanvas] = useState<FabricCanvas | null>(null);
   const [scale, setScale] = useState(1);
-  const [tool, setTool] = useState<"pan" | "measure-line" | "measure-area" | "calibrate">("pan");
-  const [scaleFactor, setScaleFactor] = useState<number | null>(null); // mm per canvas pixel
+  const [tool, setTool] = useState<"pan" | "measure-line" | "measure-area" | "calibrate" | "detect" | "extract">(initialTool || "pan");
+  const [scaleFactor, setScaleFactor] = useState<number | null>(null);
   const [calibratePoints, setCalibratePoints] = useState<{ x: number; y: number }[]>([]);
   const [showCalibrationDialog, setShowCalibrationDialog] = useState(false);
   const [calibrationDistance, setCalibrationDistance] = useState("");
@@ -30,8 +36,16 @@ export const PlanViewer = ({ planUrl, projectId }: PlanViewerProps) => {
   const [planPageId, setPlanPageId] = useState<string | null>(null);
   const [isDetecting, setIsDetecting] = useState(false);
   const [symbols, setSymbols] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-  // Initialize canvas and load plan
+  // Update tool when initialTool changes (wizard mode)
+  useEffect(() => {
+    if (initialTool) {
+      setTool(initialTool as any);
+    }
+  }, [initialTool]);
+
+  // Initialize canvas and load plan (PDF or image)
   useEffect(() => {
     if (!canvasRef.current) return;
 
@@ -43,30 +57,75 @@ export const PlanViewer = ({ planUrl, projectId }: PlanViewerProps) => {
 
     setFabricCanvas(canvas);
 
-    // Load plan image
-    FabricImage.fromURL(planUrl, {
-      crossOrigin: 'anonymous'
-    }).then((fabricImg) => {
-      fabricImg.set({
-        left: 0,
-        top: 0,
-        selectable: false,
-      });
+    const loadPlan = async () => {
+      setIsLoading(true);
+      try {
+        const isPDF = planUrl.toLowerCase().endsWith('.pdf');
 
-      const canvasWidth = 1000;
-      const canvasHeight = 700;
-      const imgScale = Math.min(canvasWidth / (fabricImg.width || 1), canvasHeight / (fabricImg.height || 1));
-      fabricImg.scale(imgScale);
+        if (isPDF) {
+          // Load PDF using PDF.js
+          const loadingTask = pdfjsLib.getDocument(planUrl);
+          const pdf = await loadingTask.promise;
+          const page = await pdf.getPage(1);
 
-      canvas.add(fabricImg);
-      canvas.renderAll();
+          const viewport = page.getViewport({ scale: 1.5 });
+          const tempCanvas = document.createElement('canvas');
+          const context = tempCanvas.getContext('2d')!;
+          tempCanvas.height = viewport.height;
+          tempCanvas.width = viewport.width;
 
-      // Create plan_page record
-      createPlanPage(canvasWidth, canvasHeight);
-    }).catch((err) => {
-      console.error("Failed to load plan image:", err);
-      toast.error("Failed to load plan image");
-    });
+          await page.render({ 
+            canvasContext: context, 
+            viewport,
+            intent: 'display'
+          } as any).promise;
+
+          const img = await FabricImage.fromURL(tempCanvas.toDataURL());
+          const canvasWidth = 1000;
+          const canvasHeight = 700;
+          const imgScale = Math.min(canvasWidth / (img.width || 1), canvasHeight / (img.height || 1));
+          
+          img.set({
+            left: 0,
+            top: 0,
+            selectable: false,
+          });
+          img.scale(imgScale);
+
+          canvas.add(img);
+          canvas.renderAll();
+          createPlanPage(canvasWidth, canvasHeight);
+        } else {
+          // Load regular image
+          const fabricImg = await FabricImage.fromURL(planUrl, {
+            crossOrigin: 'anonymous'
+          });
+          
+          fabricImg.set({
+            left: 0,
+            top: 0,
+            selectable: false,
+          });
+
+          const canvasWidth = 1000;
+          const canvasHeight = 700;
+          const imgScale = Math.min(canvasWidth / (fabricImg.width || 1), canvasHeight / (fabricImg.height || 1));
+          fabricImg.scale(imgScale);
+
+          canvas.add(fabricImg);
+          canvas.renderAll();
+          createPlanPage(canvasWidth, canvasHeight);
+        }
+
+        setIsLoading(false);
+      } catch (error) {
+        console.error("Error loading plan:", error);
+        toast.error("Failed to load plan file");
+        setIsLoading(false);
+      }
+    };
+
+    loadPlan();
 
     return () => {
       canvas.dispose();
@@ -138,7 +197,6 @@ export const PlanViewer = ({ planUrl, projectId }: PlanViewerProps) => {
       const newPoints = [...calibratePoints, pointer];
       setCalibratePoints(newPoints);
 
-      // Draw point marker
       const circle = new Rect({
         left: pointer.x - 3,
         top: pointer.y - 3,
@@ -151,7 +209,6 @@ export const PlanViewer = ({ planUrl, projectId }: PlanViewerProps) => {
       fabricCanvas?.renderAll();
 
       if (newPoints.length === 2) {
-        // Draw line between points
         const line = new Line(
           [newPoints[0].x, newPoints[0].y, newPoints[1].x, newPoints[1].y],
           { stroke: '#FF6B6B', strokeWidth: 2, selectable: false }
@@ -179,7 +236,6 @@ export const PlanViewer = ({ planUrl, projectId }: PlanViewerProps) => {
     const calculatedScaleFactor = realDistanceMm / canvasDistance;
     setScaleFactor(calculatedScaleFactor);
 
-    // Save to database
     if (planPageId) {
       const { error } = await supabase
         .from('plan_pages')
@@ -207,7 +263,6 @@ export const PlanViewer = ({ planUrl, projectId }: PlanViewerProps) => {
 
   // Handle polygon area measurement
   const handlePolygonClick = (pointer: { x: number; y: number }) => {
-    // Check if closing polygon (clicked near start)
     if (polygonPoints.length >= 3) {
       const startDist = Math.sqrt(
         Math.pow(pointer.x - polygonPoints[0].x, 2) +
@@ -223,7 +278,6 @@ export const PlanViewer = ({ planUrl, projectId }: PlanViewerProps) => {
     const newPoints = [...polygonPoints, pointer];
     setPolygonPoints(newPoints);
 
-    // Draw point marker
     const circle = new Rect({
       left: pointer.x - 3,
       top: pointer.y - 3,
@@ -243,7 +297,6 @@ export const PlanViewer = ({ planUrl, projectId }: PlanViewerProps) => {
       return;
     }
 
-    // Shoelace formula for area
     let area = 0;
     const n = polygonPoints.length;
 
@@ -254,11 +307,9 @@ export const PlanViewer = ({ planUrl, projectId }: PlanViewerProps) => {
     }
     area = Math.abs(area) / 2;
 
-    // Convert to m²
     const areaRealMm2 = area * Math.pow(scaleFactor, 2);
     const areaM2 = areaRealMm2 / 1000000;
 
-    // Draw filled polygon
     const polygon = new Polygon(polygonPoints, {
       fill: 'rgba(76, 175, 80, 0.3)',
       stroke: '#4CAF50',
@@ -266,13 +317,11 @@ export const PlanViewer = ({ planUrl, projectId }: PlanViewerProps) => {
       selectable: true
     });
 
-    // Calculate centroid
     const centroid = {
       x: polygonPoints.reduce((sum, p) => sum + p.x, 0) / n,
       y: polygonPoints.reduce((sum, p) => sum + p.y, 0) / n
     };
 
-    // Add area label
     const label = new Textbox(`${areaM2.toFixed(2)} m²`, {
       left: centroid.x,
       top: centroid.y,
@@ -286,7 +335,6 @@ export const PlanViewer = ({ planUrl, projectId }: PlanViewerProps) => {
     fabricCanvas.add(label);
     fabricCanvas.renderAll();
 
-    // Save measurement
     if (planPageId) {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
@@ -345,7 +393,6 @@ export const PlanViewer = ({ planUrl, projectId }: PlanViewerProps) => {
     fabricCanvas.add(text);
     fabricCanvas.renderAll();
 
-    // Save measurement
     if (planPageId) {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
@@ -420,7 +467,6 @@ export const PlanViewer = ({ planUrl, projectId }: PlanViewerProps) => {
     detectedSymbols.forEach((symbol) => {
       const { x, y, width, height } = symbol.bounding_box;
 
-      // Convert percentage to canvas pixels
       const canvasX = (x / 100) * canvasWidth;
       const canvasY = (y / 100) * canvasHeight;
       const canvasW = (width / 100) * canvasWidth;
@@ -428,7 +474,6 @@ export const PlanViewer = ({ planUrl, projectId }: PlanViewerProps) => {
 
       const color = getSymbolColor(symbol.type);
 
-      // Draw bounding box
       const rect = new Rect({
         left: canvasX,
         top: canvasY,
@@ -441,7 +486,6 @@ export const PlanViewer = ({ planUrl, projectId }: PlanViewerProps) => {
         selectable: false
       });
 
-      // Add label
       const label = new Textbox(symbol.suggested_id || symbol.type.toUpperCase(), {
         left: canvasX,
         top: canvasY - 20,
@@ -503,89 +547,90 @@ export const PlanViewer = ({ planUrl, projectId }: PlanViewerProps) => {
 
   return (
     <div className="space-y-4">
-      <Card className="p-4">
-        <div className="flex flex-wrap gap-2">
-          {/* Navigation */}
-          <Button
-            variant={tool === "pan" ? "default" : "outline"}
-            size="sm"
-            onClick={() => setTool("pan")}
-          >
-            <Move className="h-4 w-4 mr-2" />
-            Pan
-          </Button>
+      {!wizardMode && (
+        <Card className="p-4">
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant={tool === "pan" ? "default" : "outline"}
+              size="sm"
+              onClick={() => setTool("pan")}
+            >
+              <Move className="h-4 w-4 mr-2" />
+              Pan
+            </Button>
 
-          {/* Scale Calibration */}
-          <Button
-            variant={tool === "calibrate" ? "default" : "outline"}
-            size="sm"
-            onClick={() => setTool("calibrate")}
-          >
-            <Ruler className="h-4 w-4 mr-2" />
-            Set Scale
-          </Button>
+            <Button
+              variant={tool === "calibrate" ? "default" : "outline"}
+              size="sm"
+              onClick={() => setTool("calibrate")}
+            >
+              <Ruler className="h-4 w-4 mr-2" />
+              Set Scale
+            </Button>
 
-          {/* Measurement Dropdown */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm">
-                <PenTool className="h-4 w-4 mr-2" />
-                Measure ▾
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent>
-              <DropdownMenuItem onClick={() => setTool("measure-line")}>
-                <Minus className="h-4 w-4 mr-2" />
-                Line (m)
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setTool("measure-area")}>
-                <Square className="h-4 w-4 mr-2" />
-                Area (m²)
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm">
+                  <PenTool className="h-4 w-4 mr-2" />
+                  Measure ▾
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent>
+                <DropdownMenuItem onClick={() => setTool("measure-line")}>
+                  <Minus className="h-4 w-4 mr-2" />
+                  Line (m)
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setTool("measure-area")}>
+                  <Square className="h-4 w-4 mr-2" />
+                  Area (m²)
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
 
-          {/* Zoom Controls */}
-          <Button variant="outline" size="sm" onClick={handleZoomIn}>
-            <ZoomIn className="h-4 w-4 mr-2" />
-            Zoom In
-          </Button>
-          <Button variant="outline" size="sm" onClick={handleZoomOut}>
-            <ZoomOut className="h-4 w-4 mr-2" />
-            Zoom Out
-          </Button>
+            <Button variant="outline" size="sm" onClick={handleZoomIn}>
+              <ZoomIn className="h-4 w-4 mr-2" />
+              Zoom In
+            </Button>
+            <Button variant="outline" size="sm" onClick={handleZoomOut}>
+              <ZoomOut className="h-4 w-4 mr-2" />
+              Zoom Out
+            </Button>
 
-          {/* AI Detection */}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleDetectSymbols}
-            disabled={isDetecting}
-          >
-            {isDetecting ? (
-              <Loader2 className="h-4 w-4 animate-spin mr-2" />
-            ) : (
-              <Scan className="h-4 w-4 mr-2" />
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleDetectSymbols}
+              disabled={isDetecting}
+            >
+              {isDetecting ? (
+                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+              ) : (
+                <Scan className="h-4 w-4 mr-2" />
+              )}
+              Auto-Detect
+            </Button>
+
+            <Button variant="destructive" size="sm" onClick={handleClearMeasurements}>
+              <Trash2 className="h-4 w-4 mr-2" />
+              Clear
+            </Button>
+
+            {scaleFactor && (
+              <Badge variant="secondary" className="ml-auto">
+                Scale: 1:{Math.round(1000 / scaleFactor)}
+              </Badge>
             )}
-            Auto-Detect
-          </Button>
-
-          <Button variant="destructive" size="sm" onClick={handleClearMeasurements}>
-            <Trash2 className="h-4 w-4 mr-2" />
-            Clear
-          </Button>
-
-          {/* Scale Display */}
-          {scaleFactor && (
-            <Badge variant="secondary" className="ml-auto">
-              Scale: 1:{Math.round(1000 / scaleFactor)}
-            </Badge>
-          )}
-        </div>
-      </Card>
+          </div>
+        </Card>
+      )}
 
       <Card className="p-4">
-        <div className="border border-border rounded-lg overflow-hidden bg-background">
+        <div className="border border-border rounded-lg overflow-hidden bg-background relative">
+          {isLoading && (
+            <div className="absolute inset-0 flex items-center justify-center bg-background/80 z-10">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            </div>
+          )}
           <canvas ref={canvasRef} />
         </div>
         <p className="text-xs text-muted-foreground mt-2">
@@ -596,7 +641,6 @@ export const PlanViewer = ({ planUrl, projectId }: PlanViewerProps) => {
         </p>
       </Card>
 
-      {/* Calibration Dialog */}
       <Dialog open={showCalibrationDialog} onOpenChange={setShowCalibrationDialog}>
         <DialogContent>
           <DialogHeader>

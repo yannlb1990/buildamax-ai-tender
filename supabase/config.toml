@@ -11,3 +11,12 @@ verify_jwt = true
 
 [functions.ai-material-search]
 verify_jwt = true
+
+[functions.plan-detect-symbols]
+verify_jwt = true
+
+[functions.plan-extract-schedules]
+verify_jwt = true
+
+[functions.analyze-plan-pricing]
+verify_jwt = true
