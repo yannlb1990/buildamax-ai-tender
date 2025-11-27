@@ -39,6 +39,7 @@ export const InteractiveCanvas = ({
   onTransformChange,
   onViewportReady,
 }: InteractiveCanvasProps) => {
+  const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fabricCanvasRef = useRef<FabricCanvas | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -63,9 +64,16 @@ export const InteractiveCanvas = ({
 
   // Initialize Fabric canvas
   useEffect(() => {
-    if (!canvasRef.current) return;
+    if (!containerRef.current || fabricCanvasRef.current) return;
 
-    const canvas = new FabricCanvas(canvasRef.current, {
+    // Create canvas element inside the container
+    const canvasElement = document.createElement('canvas');
+    canvasElement.width = 1200;
+    canvasElement.height = 800;
+    containerRef.current.appendChild(canvasElement);
+    canvasRef.current = canvasElement;
+
+    const canvas = new FabricCanvas(canvasElement, {
       width: 1200,
       height: 800,
       backgroundColor: '#f5f5f5',
@@ -76,6 +84,11 @@ export const InteractiveCanvas = ({
 
     return () => {
       canvas.dispose();
+      if (containerRef.current && canvasElement.parentNode === containerRef.current) {
+        containerRef.current.removeChild(canvasElement);
+      }
+      fabricCanvasRef.current = null;
+      canvasRef.current = null;
     };
   }, []);
 
@@ -729,7 +742,7 @@ export const InteractiveCanvas = ({
           <p className="text-destructive">{error}</p>
         </div>
       )}
-      <canvas ref={canvasRef} />
+      <div ref={containerRef} className="w-full h-full" />
     </div>
   );
 };
