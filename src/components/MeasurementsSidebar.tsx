@@ -55,7 +55,7 @@ export const MeasurementsSidebar = ({ measurements, onDelete, onEdit, planPageId
   };
 
   return (
-    <Card className="w-80 h-full flex flex-col">
+    <Card className="w-80 max-h-[calc(100vh-8rem)] sticky top-4 flex flex-col">
       <div className="p-4 border-b flex items-center justify-between">
         <h3 className="font-semibold">Measurements</h3>
         <DropdownMenu>

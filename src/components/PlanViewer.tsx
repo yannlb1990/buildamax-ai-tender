@@ -84,6 +84,8 @@ export const PlanViewer = ({ planUrl, projectId, planPageId: propPlanPageId, wiz
   const calibratePointsRef = useRef(calibratePoints);
   const polygonPointsRef = useRef(polygonPoints);
   const scaleFactorRef = useRef(scaleFactor);
+  const snapEnabledRef = useRef(snapEnabled);
+  const snapGridSizeRef = useRef(snapGridSize);
   
   // Update refs when state changes
   useEffect(() => { toolRef.current = tool; }, [tool]);
@@ -94,6 +96,8 @@ export const PlanViewer = ({ planUrl, projectId, planPageId: propPlanPageId, wiz
   useEffect(() => { calibratePointsRef.current = calibratePoints; }, [calibratePoints]);
   useEffect(() => { polygonPointsRef.current = polygonPoints; }, [polygonPoints]);
   useEffect(() => { scaleFactorRef.current = scaleFactor; }, [scaleFactor]);
+  useEffect(() => { snapEnabledRef.current = snapEnabled; }, [snapEnabled]);
+  useEffect(() => { snapGridSizeRef.current = snapGridSize; }, [snapGridSize]);
 
   // Update tool when initialTool changes (wizard mode)
   useEffect(() => {
@@ -109,10 +113,11 @@ export const PlanViewer = ({ planUrl, projectId, planPageId: propPlanPageId, wiz
     }
   }, [propPlanPageId]);
 
-  // Load measurements when planPageId changes
+  // Load measurements and scale when planPageId changes
   useEffect(() => {
     if (planPageId) {
       loadMeasurements();
+      loadScaleFactor();
     }
   }, [planPageId]);
 
@@ -128,8 +133,32 @@ export const PlanViewer = ({ planUrl, projectId, planPageId: propPlanPageId, wiz
 
       if (error) throw error;
       setMeasurements(data || []);
+      
+      // Redraw measurements on canvas after loading
+      if (fabricCanvas && data) {
+        redrawMeasurementsOnCanvas(data);
+      }
     } catch (error) {
       console.error('Error loading measurements:', error);
+    }
+  };
+
+  const loadScaleFactor = async () => {
+    if (!planPageId) return;
+    
+    try {
+      const { data, error } = await supabase
+        .from('plan_pages')
+        .select('scale_factor')
+        .eq('id', planPageId)
+        .single();
+
+      if (error) throw error;
+      if (data?.scale_factor) {
+        setScaleFactor(data.scale_factor);
+      }
+    } catch (error) {
+      console.error('Error loading scale factor:', error);
     }
   };
 
@@ -220,9 +249,14 @@ export const PlanViewer = ({ planUrl, projectId, planPageId: propPlanPageId, wiz
     };
   }, [planUrl]);
 
-  // Create plan page in database
+  // Create plan page in database (prevent duplicates)
   const createPlanPage = async (width: number, height: number) => {
     if (!projectId) return;
+    
+    // Skip if we already have a planPageId from props
+    if (propPlanPageId) {
+      return;
+    }
 
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
@@ -247,12 +281,13 @@ export const PlanViewer = ({ planUrl, projectId, planPageId: propPlanPageId, wiz
     }
   };
 
-  // Snap to grid function
+  // Snap to grid function (uses refs to prevent stale closures)
   const snapToGrid = (point: { x: number; y: number }) => {
-    if (!snapEnabled) return point;
+    if (!snapEnabledRef.current) return point;
+    const gridSize = snapGridSizeRef.current;
     return {
-      x: Math.round(point.x / snapGridSize) * snapGridSize,
-      y: Math.round(point.y / snapGridSize) * snapGridSize
+      x: Math.round(point.x / gridSize) * gridSize,
+      y: Math.round(point.y / gridSize) * gridSize
     };
   };
   
@@ -275,6 +310,10 @@ export const PlanViewer = ({ planUrl, projectId, planPageId: propPlanPageId, wiz
   useEffect(() => {
     if (!fabricCanvas) return;
 
+    let rafId: number | null = null;
+    let previewLine: Line | null = null;
+    let snapIndicator: Circle | null = null;
+
     const handleMouseDown = (e: any) => {
       // Get accurate canvas coordinates accounting for zoom/pan
       const pointer = fabricCanvas.getPointer(e.e, true);
@@ -286,8 +325,8 @@ export const PlanViewer = ({ planUrl, projectId, planPageId: propPlanPageId, wiz
 
       if (currentTool === "plan") {
         setIsDragging(true);
-        setLastPosX(snappedPointer.x);
-        setLastPosY(snappedPointer.y);
+        setLastPosX(e.e.clientX);
+        setLastPosY(e.e.clientY);
       } else if (currentTool === "calibrate") {
         handleCalibrateClick(snappedPointer);
       } else if (currentTool === "measure-lm") {
@@ -302,24 +341,87 @@ export const PlanViewer = ({ planUrl, projectId, planPageId: propPlanPageId, wiz
     };
 
     const handleMouseMove = (e: any) => {
-      const pointer = fabricCanvas.getPointer(e.e, true);
-      if (!pointer) return;
+      if (rafId) return; // Throttle with RAF
       
-      const currentTool = toolRef.current;
-      const currentIsDragging = isDraggingRef.current;
-      
-      if (currentTool === "plan" && currentIsDragging) {
-        const vpt = fabricCanvas.viewportTransform!;
-        vpt[4] += pointer.x - lastPosXRef.current;
-        vpt[5] += pointer.y - lastPosYRef.current;
+      rafId = requestAnimationFrame(() => {
+        const pointer = fabricCanvas.getPointer(e.e, true);
+        if (!pointer) return;
+        
+        const snappedPointer = snapToGrid(pointer);
+        const currentTool = toolRef.current;
+        const currentIsDragging = isDraggingRef.current;
+        
+        // Show snap indicator
+        if (snapEnabledRef.current && (currentTool !== "plan" || !currentIsDragging)) {
+          if (snapIndicator) fabricCanvas.remove(snapIndicator);
+          snapIndicator = new Circle({
+            radius: 3,
+            fill: "#FF6B6B",
+            left: snappedPointer.x,
+            top: snappedPointer.y,
+            originX: "center",
+            originY: "center",
+            selectable: false,
+            opacity: 0.5,
+          });
+          fabricCanvas.add(snapIndicator);
+        }
+        
+        // Pan handling with movementX/Y
+        if (currentTool === "plan" && currentIsDragging) {
+          const vpt = fabricCanvas.viewportTransform!;
+          vpt[4] += e.e.movementX;
+          vpt[5] += e.e.movementY;
+          fabricCanvas.requestRenderAll();
+        }
+        
+        // Preview line for LM measurement
+        if (currentTool === "measure-lm" && measureStartRef.current) {
+          if (previewLine) fabricCanvas.remove(previewLine);
+          const start = measureStartRef.current;
+          previewLine = new Line([start.x, start.y, snappedPointer.x, snappedPointer.y], {
+            stroke: "#FF6B6B",
+            strokeWidth: 1,
+            strokeDashArray: [5, 5],
+            selectable: false,
+            opacity: 0.6,
+          });
+          fabricCanvas.add(previewLine);
+        }
+        
+        // Preview polygon edge
+        if ((currentTool === "measure-m2" || currentTool === "measure-m3") && polygonPointsRef.current.length > 0) {
+          if (previewLine) fabricCanvas.remove(previewLine);
+          const lastPoint = polygonPointsRef.current[polygonPointsRef.current.length - 1];
+          const edgeColor = currentTool === "measure-m3" ? "#2196F3" : "#4CAF50";
+          previewLine = new Line([lastPoint.x, lastPoint.y, snappedPointer.x, snappedPointer.y], {
+            stroke: edgeColor,
+            strokeWidth: 1,
+            strokeDashArray: [5, 5],
+            selectable: false,
+            opacity: 0.6,
+          });
+          fabricCanvas.add(previewLine);
+        }
+        
         fabricCanvas.requestRenderAll();
-        setLastPosX(pointer.x);
-        setLastPosY(pointer.y);
-      }
+        rafId = null;
+      });
     };
 
     const handleMouseUp = () => {
       setIsDragging(false);
+      
+      // Clean up preview objects
+      if (previewLine) {
+        fabricCanvas.remove(previewLine);
+        previewLine = null;
+      }
+      if (snapIndicator) {
+        fabricCanvas.remove(snapIndicator);
+        snapIndicator = null;
+      }
+      fabricCanvas.requestRenderAll();
     };
 
     fabricCanvas.on("mouse:down", handleMouseDown);
@@ -330,8 +432,11 @@ export const PlanViewer = ({ planUrl, projectId, planPageId: propPlanPageId, wiz
       fabricCanvas.off("mouse:down", handleMouseDown);
       fabricCanvas.off("mouse:move", handleMouseMove);
       fabricCanvas.off("mouse:up", handleMouseUp);
+      if (rafId) cancelAnimationFrame(rafId);
+      if (previewLine) fabricCanvas.remove(previewLine);
+      if (snapIndicator) fabricCanvas.remove(snapIndicator);
     };
-  }, [fabricCanvas, snapEnabled, snapGridSize]);
+  }, [fabricCanvas]);
 
   // Handle calibration clicks
   const handleCalibrateClick = (pointer: { x: number; y: number }) => {
@@ -417,22 +522,25 @@ export const PlanViewer = ({ planUrl, projectId, planPageId: propPlanPageId, wiz
     setTool("plan");
   };
 
-  // Handle line measurement click
+  // Handle line measurement click (uses ref to prevent stale state)
   const handleLineClick = (pointer: { x: number; y: number }) => {
-    if (!measureStart) {
+    const currentMeasureStart = measureStartRef.current;
+    if (!currentMeasureStart) {
       setMeasureStart(pointer);
     } else {
-      drawLineMeasurement(measureStart, pointer);
+      drawLineMeasurement(currentMeasureStart, pointer);
       setMeasureStart(null);
     }
   };
 
-  // Handle polygon area measurement
+  // Handle polygon area measurement (uses ref to prevent stale state)
   const handlePolygonClick = (pointer: { x: number; y: number }, type: "area" | "volume") => {
     if (!fabricCanvas) return;
 
-    if (polygonPoints.length > 2) {
-      const firstPoint = polygonPoints[0];
+    const currentPolygonPoints = polygonPointsRef.current;
+
+    if (currentPolygonPoints.length > 2) {
+      const firstPoint = currentPolygonPoints[0];
       const distance = Math.sqrt(
         Math.pow(pointer.x - firstPoint.x, 2) + Math.pow(pointer.y - firstPoint.y, 2)
       );
@@ -447,7 +555,7 @@ export const PlanViewer = ({ planUrl, projectId, planPageId: propPlanPageId, wiz
       }
     }
 
-    const newPoints = [...polygonPoints, pointer];
+    const newPoints = [...currentPolygonPoints, pointer];
     setPolygonPoints(newPoints);
 
     const pointColor = type === "volume" ? "#2196F3" : "#4CAF50";
@@ -497,26 +605,37 @@ export const PlanViewer = ({ planUrl, projectId, planPageId: propPlanPageId, wiz
     setShowLabelDialog(true);
   };
 
-  // Close polygon and calculate volume
+  // Close polygon and calculate volume (uses refs for current state)
   const closeAndMeasureVolume = async () => {
-    if (!fabricCanvas || !scaleFactor) {
+    if (!fabricCanvas) return;
+    
+    const currentScaleFactor = scaleFactorRef.current;
+    const currentPolygonPoints = polygonPointsRef.current;
+    
+    if (!currentScaleFactor) {
       toast.error("Please set scale first");
+      return;
+    }
+    
+    // Validate minimum 3 points
+    if (currentPolygonPoints.length < 3) {
+      toast.error("Polygon requires at least 3 points");
       return;
     }
 
     let area = 0;
-    const n = polygonPoints.length;
+    const n = currentPolygonPoints.length;
     for (let i = 0; i < n; i++) {
       const j = (i + 1) % n;
-      area += polygonPoints[i].x * polygonPoints[j].y;
-      area -= polygonPoints[j].x * polygonPoints[i].y;
+      area += currentPolygonPoints[i].x * currentPolygonPoints[j].y;
+      area -= currentPolygonPoints[j].x * currentPolygonPoints[i].y;
     }
     area = Math.abs(area) / 2;
-    const areaRealMm2 = area * Math.pow(scaleFactor, 2);
+    const areaRealMm2 = area * Math.pow(currentScaleFactor, 2);
     const areaM2 = areaRealMm2 / 1000000;
 
     setPendingVolumeArea(areaM2);
-    setPendingVolumePoints([...polygonPoints]);
+    setPendingVolumePoints([...currentPolygonPoints]);
     setShowThicknessDialog(true);
   };
 
@@ -568,27 +687,38 @@ export const PlanViewer = ({ planUrl, projectId, planPageId: propPlanPageId, wiz
     setSlabThickness("");
   };
   
-  // Close polygon and calculate area
+  // Close polygon and calculate area (uses refs for current state)
   const closeAndMeasurePolygon = async () => {
-    if (!fabricCanvas || !scaleFactor) {
+    if (!fabricCanvas) return;
+    
+    const currentScaleFactor = scaleFactorRef.current;
+    const currentPolygonPoints = polygonPointsRef.current;
+    
+    if (!currentScaleFactor) {
       toast.error("Please set scale first");
+      return;
+    }
+    
+    // Validate minimum 3 points
+    if (currentPolygonPoints.length < 3) {
+      toast.error("Polygon requires at least 3 points");
       return;
     }
 
     let area = 0;
-    const n = polygonPoints.length;
+    const n = currentPolygonPoints.length;
 
     for (let i = 0; i < n; i++) {
       const j = (i + 1) % n;
-      area += polygonPoints[i].x * polygonPoints[j].y;
-      area -= polygonPoints[j].x * polygonPoints[i].y;
+      area += currentPolygonPoints[i].x * currentPolygonPoints[j].y;
+      area -= currentPolygonPoints[j].x * currentPolygonPoints[i].y;
     }
     area = Math.abs(area) / 2;
 
-    const areaRealMm2 = area * Math.pow(scaleFactor, 2);
+    const areaRealMm2 = area * Math.pow(currentScaleFactor, 2);
     const areaM2 = areaRealMm2 / 1000000;
 
-    const polygon = new Polygon(polygonPoints, {
+    const polygon = new Polygon(currentPolygonPoints, {
       fill: 'rgba(76, 175, 80, 0.3)',
       stroke: '#4CAF50',
       strokeWidth: 2,
@@ -596,8 +726,8 @@ export const PlanViewer = ({ planUrl, projectId, planPageId: propPlanPageId, wiz
     });
 
     const centroid = {
-      x: polygonPoints.reduce((sum, p) => sum + p.x, 0) / n,
-      y: polygonPoints.reduce((sum, p) => sum + p.y, 0) / n
+      x: currentPolygonPoints.reduce((sum, p) => sum + p.x, 0) / n,
+      y: currentPolygonPoints.reduce((sum, p) => sum + p.y, 0) / n
     };
 
     const label = new Textbox(`${areaM2.toFixed(2)} m²`, {
@@ -615,7 +745,7 @@ export const PlanViewer = ({ planUrl, projectId, planPageId: propPlanPageId, wiz
 
     setPendingMeasurement({
       type: 'area',
-      points: polygonPoints,
+      points: currentPolygonPoints,
       value: areaM2
     });
     setShowLabelDialog(true);
@@ -843,6 +973,133 @@ export const PlanViewer = ({ planUrl, projectId, planPageId: propPlanPageId, wiz
     }
   };
 
+  // Clear all measurement objects from canvas
+  const clearMeasurementObjects = () => {
+    if (!fabricCanvas) return;
+    const objects = fabricCanvas.getObjects();
+    objects.forEach((obj) => {
+      // Remove lines, polygons, textboxes, rects (but keep background image)
+      if (obj instanceof Line || obj instanceof Textbox || obj instanceof Polygon || 
+          obj instanceof Rect || obj instanceof Circle) {
+        if (obj.selectable !== false || obj.fill === "rgba(76, 175, 80, 0.3)" || 
+            obj.fill === "rgba(33, 150, 243, 0.3)" || obj.stroke === "#FF6B6B" ||
+            obj.stroke === "#4CAF50" || obj.stroke === "#2196F3" || obj.fill === "#FF9800") {
+          fabricCanvas.remove(obj);
+        }
+      }
+    });
+    fabricCanvas.renderAll();
+  };
+
+  // Redraw all measurements from database onto canvas
+  const redrawMeasurementsFromDatabase = async () => {
+    if (!fabricCanvas || !planPageId) return;
+    
+    try {
+      const { data, error } = await supabase
+        .from('plan_measurements')
+        .select('*')
+        .eq('plan_page_id', planPageId)
+        .order('created_at', { ascending: true });
+
+      if (error) throw error;
+      if (data) {
+        redrawMeasurementsOnCanvas(data);
+      }
+    } catch (error) {
+      console.error('Error redrawing measurements:', error);
+    }
+  };
+
+  // Redraw measurements on canvas from data
+  const redrawMeasurementsOnCanvas = (measurementData: any[]) => {
+    if (!fabricCanvas) return;
+
+    measurementData.forEach((m) => {
+      const points = m.points as { x: number; y: number }[];
+      if (!points || points.length === 0) return;
+
+      if (m.measurement_type === 'linear') {
+        const [start, end] = points;
+        const line = new Line([start.x, start.y, end.x, end.y], {
+          stroke: "#FF6B6B",
+          strokeWidth: 2,
+          selectable: false
+        });
+        const text = new Textbox(`${m.real_value?.toFixed(2)} ${m.real_unit}`, {
+          left: (start.x + end.x) / 2,
+          top: (start.y + end.y) / 2 - 20,
+          fontSize: 14,
+          fill: "#FF6B6B",
+          backgroundColor: "white",
+          selectable: false
+        });
+        fabricCanvas.add(line);
+        fabricCanvas.add(text);
+      } else if (m.measurement_type === 'area') {
+        const polygon = new Polygon(points, {
+          fill: 'rgba(76, 175, 80, 0.3)',
+          stroke: '#4CAF50',
+          strokeWidth: 2,
+          selectable: false
+        });
+        const centroid = {
+          x: points.reduce((sum, p) => sum + p.x, 0) / points.length,
+          y: points.reduce((sum, p) => sum + p.y, 0) / points.length
+        };
+        const text = new Textbox(`${m.real_value?.toFixed(2)} ${m.real_unit}`, {
+          left: centroid.x,
+          top: centroid.y,
+          fontSize: 16,
+          fill: '#4CAF50',
+          backgroundColor: 'white',
+          selectable: false
+        });
+        fabricCanvas.add(polygon);
+        fabricCanvas.add(text);
+      } else if (m.measurement_type === 'volume') {
+        const polygon = new Polygon(points, {
+          fill: "rgba(33, 150, 243, 0.3)",
+          stroke: "#2196F3",
+          strokeWidth: 2,
+          selectable: false
+        });
+        const centroid = {
+          x: points.reduce((sum, p) => sum + p.x, 0) / points.length,
+          y: points.reduce((sum, p) => sum + p.y, 0) / points.length
+        };
+        const text = new Textbox(`${m.volume_m3?.toFixed(2)} m³\n${m.thickness_mm}mm`, {
+          left: centroid.x,
+          top: centroid.y,
+          fontSize: 14,
+          fill: "#2196F3",
+          backgroundColor: "rgba(255, 255, 255, 0.9)",
+          textAlign: "center",
+          originX: "center",
+          originY: "center",
+          selectable: false
+        });
+        fabricCanvas.add(polygon);
+        fabricCanvas.add(text);
+      } else if (m.measurement_type === 'ea') {
+        const [point] = points;
+        const marker = new Rect({
+          left: point.x - 4,
+          top: point.y - 4,
+          width: 8,
+          height: 8,
+          fill: "#FF9800",
+          stroke: "#F57C00",
+          strokeWidth: 1,
+          selectable: false
+        });
+        fabricCanvas.add(marker);
+      }
+    });
+    
+    fabricCanvas.renderAll();
+  };
+
   // Undo/Redo functions
   const canUndo = historyIndex >= 0;
   const canRedo = historyIndex < history.length - 1;
@@ -860,6 +1117,8 @@ export const PlanViewer = ({ planUrl, projectId, planPageId: propPlanPageId, wiz
     
     if (action.type === 'add_measurement') {
       await supabase.from('plan_measurements').delete().eq('id', action.data.id);
+      clearMeasurementObjects();
+      await redrawMeasurementsFromDatabase();
       toast.success("Undone");
     }
     
@@ -873,6 +1132,8 @@ export const PlanViewer = ({ planUrl, projectId, planPageId: propPlanPageId, wiz
     
     if (action.type === 'add_measurement') {
       await supabase.from('plan_measurements').insert(action.data);
+      clearMeasurementObjects();
+      await redrawMeasurementsFromDatabase();
       toast.success("Redone");
     }
     
@@ -1169,7 +1430,13 @@ export const PlanViewer = ({ planUrl, projectId, planPageId: propPlanPageId, wiz
             />
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowThicknessDialog(false)}>
+            <Button variant="outline" onClick={() => {
+              setShowThicknessDialog(false);
+              setPendingVolumeArea(null);
+              setPendingVolumePoints([]);
+              setSlabThickness("");
+              setPolygonPoints([]);
+            }}>
               Cancel
             </Button>
             <Button onClick={applyVolumeCalculation}>Calculate Volume</Button>
@@ -1221,10 +1488,74 @@ export const PlanViewer = ({ planUrl, projectId, planPageId: propPlanPageId, wiz
               setPendingMeasurement(null);
               setMeasurementLabel("");
               setMeasurementCategory("");
+              // Clear any preview objects on canvas
+              clearMeasurementObjects();
+              redrawMeasurementsOnCanvas(measurements);
             }}>
               Cancel
             </Button>
             <Button onClick={saveMeasurement}>Save Measurement</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Measurement</DialogTitle>
+            <DialogDescription>
+              Update the label and category for this measurement
+            </DialogDescription>
+          </DialogHeader>
+          {editingMeasurement && (
+            <div className="space-y-4 py-4">
+              <div>
+                <Label>Measurement Name</Label>
+                <Input
+                  value={editingMeasurement.label || ""}
+                  onChange={(e) => setEditingMeasurement({
+                    ...editingMeasurement,
+                    label: e.target.value
+                  })}
+                  placeholder="e.g., Bedroom Wall N"
+                  autoFocus
+                />
+              </div>
+              <div>
+                <Label>Category</Label>
+                <Select 
+                  value={editingMeasurement.trade || ""} 
+                  onValueChange={(value) => setEditingMeasurement({
+                    ...editingMeasurement,
+                    trade: value
+                  })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select category" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Gyprock">Gyprock</SelectItem>
+                    <SelectItem value="Tiling">Tiling</SelectItem>
+                    <SelectItem value="Framing">Framing</SelectItem>
+                    <SelectItem value="Flooring">Flooring</SelectItem>
+                    <SelectItem value="Painting">Painting</SelectItem>
+                    <SelectItem value="Concrete">Concrete</SelectItem>
+                    <SelectItem value="Doors">Doors</SelectItem>
+                    <SelectItem value="Windows">Windows</SelectItem>
+                    <SelectItem value="Other">Other</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => {
+              setShowEditDialog(false);
+              setEditingMeasurement(null);
+            }}>
+              Cancel
+            </Button>
+            <Button onClick={updateMeasurement}>Update Measurement</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
