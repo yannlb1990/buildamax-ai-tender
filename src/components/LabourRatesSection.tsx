@@ -3,11 +3,10 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { DollarSign, Plus, Trash2, ChevronDown, ChevronRight } from "lucide-react";
+import { DollarSign, Plus, Trash2 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { supabase } from "@/integrations/supabase/client";
-import { toast } from "sonner";
+import { useToast } from "@/hooks/use-toast";
 
 const AU_TRADES = [
   "Carpenter", "Plumber", "Electrician", "Bricklayer", "Plasterer",
@@ -38,64 +37,119 @@ export const LabourRatesSection = ({ rates, onRatesChange }: LabourRatesSectionP
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [newTradeName, setNewTradeName] = useState("");
   const [newTradeRate, setNewTradeRate] = useState("90");
-  const [expandedTrades, setExpandedTrades] = useState<Set<string>>(new Set());
+  const { toast } = useToast();
 
   useEffect(() => {
     loadCustomTrades();
+    loadUserLabourRates();
   }, []);
 
+  const loadUserLabourRates = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data, error } = await supabase
+        .from("user_labour_rates")
+        .select("trade_name, hourly_rate")
+        .eq("user_id", user.id);
+
+      if (error) throw error;
+
+      if (data && data.length > 0) {
+        const loadedRates: Record<string, number> = {};
+        data.forEach(row => {
+          loadedRates[row.trade_name] = row.hourly_rate;
+        });
+        onRatesChange({ ...rates, ...loadedRates });
+      }
+    } catch (error) {
+      console.error("Error loading user labour rates:", error);
+    }
+  };
+
   const loadCustomTrades = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
 
-    const { data, error } = await supabase
-      .from("custom_trades")
-      .select("trade_name, default_rate")
-      .eq("user_id", user.id);
+      const { data, error } = await supabase
+        .from("custom_trades")
+        .select("trade_name, default_rate")
+        .eq("user_id", user.id);
 
-    if (error) {
-      console.error("Failed to load custom trades:", error);
-      return;
+      if (error) throw error;
+
+      if (data && data.length > 0) {
+        const tradeNames = data.map(t => t.trade_name);
+        setCustomTrades(tradeNames);
+        setAllTrades([...AU_TRADES, ...tradeNames]);
+
+        const customRates: Record<string, number> = {};
+        data.forEach(trade => {
+          customRates[trade.trade_name] = trade.default_rate || DEFAULT_RATES[trade.trade_name] || 90;
+        });
+        onRatesChange({ ...rates, ...customRates });
+      }
+    } catch (error) {
+      console.error("Error loading custom trades:", error);
     }
+  };
 
-    if (data && data.length > 0) {
-      const customTradeNames = data.map(t => t.trade_name);
-      setCustomTrades(customTradeNames);
-      setAllTrades([...AU_TRADES, ...customTradeNames]);
-      
-      // Set default rates for custom trades
-      const customRates: Record<string, number> = {};
-      data.forEach(t => {
-        customRates[t.trade_name] = t.default_rate;
+  const handleRateChange = async (trade: string, value: string) => {
+    const numValue = value === '' ? 0 : parseFloat(value);
+    onRatesChange({
+      ...rates,
+      [trade]: numValue
+    });
+
+    // Save to database
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { error } = await supabase
+        .from("user_labour_rates")
+        .upsert({
+          user_id: user.id,
+          trade_name: trade,
+          hourly_rate: numValue,
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'user_id,trade_name' });
+
+      if (error) throw error;
+
+      toast({
+        title: "Rate saved",
+        description: `${trade} rate updated to $${numValue}/hr`,
       });
-      onRatesChange({ ...rates, ...customRates });
+    } catch (error) {
+      console.error("Error saving labour rate:", error);
+      toast({
+        title: "Error",
+        description: "Failed to save labour rate",
+        variant: "destructive",
+      });
     }
-  };
-
-  const handleRateChange = (trade: string, value: string) => {
-    const numValue = parseFloat(value) || 0;
-    onRatesChange({ ...rates, [trade]: numValue });
-  };
-
-  const toggleTrade = (trade: string) => {
-    const newExpanded = new Set(expandedTrades);
-    if (newExpanded.has(trade)) {
-      newExpanded.delete(trade);
-    } else {
-      newExpanded.add(trade);
-    }
-    setExpandedTrades(newExpanded);
   };
 
   const addCustomTrade = async () => {
     if (!newTradeName.trim()) {
-      toast.error("Please enter a trade name");
+      toast({
+        title: "Error",
+        description: "Please enter a trade name",
+        variant: "destructive",
+      });
       return;
     }
 
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
-      toast.error("Please log in to add custom trades");
+      toast({
+        title: "Error",
+        description: "Please log in to add custom trades",
+        variant: "destructive",
+      });
       return;
     }
 
@@ -108,12 +162,19 @@ export const LabourRatesSection = ({ rates, onRatesChange }: LabourRatesSectionP
       });
 
     if (error) {
-      toast.error("Failed to add custom trade");
+      toast({
+        title: "Error",
+        description: "Failed to add custom trade",
+        variant: "destructive",
+      });
       console.error(error);
       return;
     }
 
-    toast.success(`${newTradeName} added successfully`);
+    toast({
+      title: "Success",
+      description: `${newTradeName} added successfully`,
+    });
     setNewTradeName("");
     setNewTradeRate("90");
     setShowAddDialog(false);
@@ -131,11 +192,18 @@ export const LabourRatesSection = ({ rates, onRatesChange }: LabourRatesSectionP
       .eq("trade_name", tradeName);
 
     if (error) {
-      toast.error("Failed to delete trade");
+      toast({
+        title: "Error",
+        description: "Failed to delete trade",
+        variant: "destructive",
+      });
       return;
     }
 
-    toast.success(`${tradeName} removed`);
+    toast({
+      title: "Success",
+      description: `${tradeName} removed`,
+    });
     loadCustomTrades();
   };
 
@@ -152,61 +220,39 @@ export const LabourRatesSection = ({ rates, onRatesChange }: LabourRatesSectionP
             Add Custom Trade
           </Button>
         </div>
-        <p className="text-sm text-muted-foreground mb-4">
-          Click on a trade to view state-based rate variations (coming soon)
-        </p>
         
-        <div className="space-y-2">
-          {allTrades.map(trade => {
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {allTrades.map((trade) => {
             const isCustom = customTrades.includes(trade);
-            const isExpanded = expandedTrades.has(trade);
             
             return (
-              <Collapsible key={trade} open={isExpanded} onOpenChange={() => toggleTrade(trade)}>
-                <div className="flex items-center gap-2 p-3 bg-muted/30 rounded-lg hover:bg-muted/50 transition-colors">
-                  <CollapsibleTrigger className="flex items-center gap-2 flex-1">
-                    {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                    <span className="font-medium">{trade}</span>
-                    {isCustom && (
-                      <span className="text-xs px-2 py-0.5 bg-accent/20 text-accent rounded">Custom</span>
-                    )}
-                  </CollapsibleTrigger>
-                  
-                  <div className="flex items-center gap-2">
-                    <div className="relative w-32">
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">$</span>
-                      <Input
-                        type="number"
-                        step="0.50"
-                        value={rates[trade] || DEFAULT_RATES[trade] || 90}
-                        onChange={(e) => handleRateChange(trade, e.target.value)}
-                        className="pl-7 h-9"
-                        placeholder="0.00"
-                      />
-                    </div>
-                    <span className="text-sm text-muted-foreground min-w-[40px]">/hr</span>
-                    
-                    {isCustom && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => deleteCustomTrade(trade)}
-                        className="h-9 w-9 p-0"
-                      >
-                        <Trash2 className="h-4 w-4 text-destructive" />
-                      </Button>
-                    )}
-                  </div>
+              <div key={trade} className="flex items-center gap-2 p-3 bg-muted/50 rounded-lg">
+                <Label className="text-sm flex-1 truncate font-medium">
+                  {trade}
+                  {isCustom && <span className="text-xs text-accent ml-1">*</span>}
+                </Label>
+                <div className="flex items-center gap-1">
+                  <span className="text-muted-foreground text-xs">$</span>
+                  <Input
+                    type="number"
+                    min="0"
+                    step="1"
+                    value={rates[trade] || DEFAULT_RATES[trade] || 90}
+                    onChange={(e) => handleRateChange(trade, e.target.value)}
+                    className="w-16 h-8 text-right text-sm"
+                  />
+                  {isCustom && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => deleteCustomTrade(trade)}
+                      className="h-6 w-6 p-0"
+                    >
+                      <Trash2 className="h-3 w-3 text-destructive" />
+                    </Button>
+                  )}
                 </div>
-                
-                <CollapsibleContent>
-                  <div className="mt-2 ml-10 p-3 bg-background rounded-lg border border-border">
-                    <p className="text-sm text-muted-foreground">
-                      State-based rate variations will be available soon. This will show different rates for NSW, VIC, QLD, SA, WA, TAS, NT, and ACT.
-                    </p>
-                  </div>
-                </CollapsibleContent>
-              </Collapsible>
+              </div>
             );
           })}
         </div>
