@@ -95,8 +95,8 @@ export const PlanLibrary = ({ projectId, onOpenPlan }: PlanLibraryProps) => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Not authenticated");
 
-      // Upload to storage
-      const fileName = `${Date.now()}_${uploadFile.name}`;
+      // Upload to storage with user ID prefix for RLS
+      const fileName = `${user.id}/${Date.now()}_${uploadFile.name}`;
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from('plans')
         .upload(fileName, uploadFile);
