@@ -847,6 +847,8 @@ export type Database = {
           confidence: number | null
           created_at: string | null
           id: string
+          label_nearby: string | null
+          notes: string | null
           plan_page_id: string | null
           room_name: string | null
           schedule_id: string | null
@@ -861,6 +863,8 @@ export type Database = {
           confidence?: number | null
           created_at?: string | null
           id?: string
+          label_nearby?: string | null
+          notes?: string | null
           plan_page_id?: string | null
           room_name?: string | null
           schedule_id?: string | null
@@ -875,6 +879,8 @@ export type Database = {
           confidence?: number | null
           created_at?: string | null
           id?: string
+          label_nearby?: string | null
+          notes?: string | null
           plan_page_id?: string | null
           room_name?: string | null
           schedule_id?: string | null

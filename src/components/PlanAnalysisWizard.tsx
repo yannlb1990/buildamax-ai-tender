@@ -5,6 +5,7 @@ import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { CheckCircle2, Circle, Upload, Eye, Ruler, Square, Scan, FileText, Calculator } from "lucide-react";
 import { PlanViewer } from "./PlanViewer";
+import { FixturesSummary } from "./FixturesSummary";
 
 interface PlanAnalysisWizardProps {
   projectId: string;
@@ -222,28 +223,18 @@ export const PlanAnalysisWizard = ({ projectId, planUrl }: PlanAnalysisWizardPro
 
         {currentStep === "review" && (
           <div className="space-y-4">
-            <h3 className="font-display text-xl font-bold">Review & Generate Quantities</h3>
-            <p className="text-sm text-muted-foreground">
-              Summary of all extracted data ready for estimation.
-            </p>
-            <div className="grid grid-cols-3 gap-4">
-              <Card className="p-4">
-                <div className="text-sm text-muted-foreground mb-1">Floor Area</div>
-                <div className="text-2xl font-bold">145.7 m²</div>
-              </Card>
-              <Card className="p-4">
-                <div className="text-sm text-muted-foreground mb-1">Doors Detected</div>
-                <div className="text-2xl font-bold">12</div>
-              </Card>
-              <Card className="p-4">
-                <div className="text-sm text-muted-foreground mb-1">Windows Detected</div>
-                <div className="text-2xl font-bold">8</div>
-              </Card>
-            </div>
-            <Button className="w-full" size="lg">
-              <Calculator className="mr-2 h-5 w-5" />
-              Generate Estimate Items
-            </Button>
+            <Card className="p-6">
+              <h3 className="text-lg font-semibold mb-4">Analysis Complete</h3>
+              <p className="text-sm text-muted-foreground mb-4">
+                Review the detected fixtures and openings below. This data can be used to generate estimate items.
+              </p>
+              <Button className="w-full">
+                <Calculator className="mr-2 h-5 w-5" />
+                Generate Estimate Items from Analysis
+              </Button>
+            </Card>
+            
+            <FixturesSummary projectId={projectId} />
           </div>
         )}
       </Card>

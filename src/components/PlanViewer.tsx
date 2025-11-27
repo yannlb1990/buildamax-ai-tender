@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { MeasurementsTable } from "./MeasurementsTable";
-import { Ruler, ZoomIn, ZoomOut, Trash2, Square, Minus, Scan, Loader2, PenTool, FileText, Box, Hash, Undo2, Redo2, Edit2, Magnet } from "lucide-react";
+import { Ruler, ZoomIn, ZoomOut, Trash2, Square, Minus, Scan, Loader2, PenTool, FileText, Box, Hash, Undo2, Redo2, Edit2, Magnet, Link, Search } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import * as pdfjsLib from "pdfjs-dist";
@@ -44,8 +44,8 @@ export const PlanViewer = ({ planUrl, projectId, planPageId: propPlanPageId, wiz
   const [measureStart, setMeasureStart] = useState<{ x: number; y: number } | null>(null);
   const [planPageId, setPlanPageId] = useState<string | null>(propPlanPageId || null);
   const [isPlanReady, setIsPlanReady] = useState(false);
-  const [isDetecting, setIsDetecting] = useState(false);
-  const [symbols, setSymbols] = useState<any[]>([]);
+  const [isDetectingSymbols, setIsDetectingSymbols] = useState(false);
+  const [detectedSymbols, setDetectedSymbols] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [showLabelDialog, setShowLabelDialog] = useState(false);
   const [showThicknessDialog, setShowThicknessDialog] = useState(false);
@@ -125,6 +125,13 @@ export const PlanViewer = ({ planUrl, projectId, planPageId: propPlanPageId, wiz
       loadScaleFactor();
     }
   }, [planPageId]);
+
+  // Render symbol overlays when detectedSymbols changes
+  useEffect(() => {
+    if (fabricCanvas && detectedSymbols.length > 0) {
+      renderSymbolOverlays();
+    }
+  }, [detectedSymbols, fabricCanvas]);
 
   // Validate propPlanPageId immediately and set isPlanReady early
   useEffect(() => {
@@ -987,55 +994,124 @@ export const PlanViewer = ({ planUrl, projectId, planPageId: propPlanPageId, wiz
   // Detect symbols using AI
   const handleDetectSymbols = async () => {
     if (!planPageId) {
-      toast.error("Plan not loaded");
+      toast.error("Plan not loaded - cannot detect symbols");
       return;
     }
 
-    setIsDetecting(true);
+    setIsDetectingSymbols(true);
+    toast.info("Detecting symbols on plan...");
+
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        toast.error("Not authenticated");
-        return;
-      }
-
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/plan-detect-symbols`,
-        {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${session.access_token}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            planPageId,
-            planUrl
-          })
+      const { data, error } = await supabase.functions.invoke('plan-detect-symbols', {
+        body: {
+          planPageId,
+          planUrl
         }
-      );
+      });
 
-      const result = await response.json();
-      if (result.success) {
-        setSymbols(result.symbols);
-        renderSymbolOverlays(result.symbols);
-        toast.success(`Detected ${result.count} symbols`);
-      } else {
-        toast.error(result.error || "Detection failed");
+      if (error) throw error;
+
+      if (data?.success) {
+        toast.success(`Detected ${data.count} symbols`);
+        // Reload symbols to display them
+        const { data: symbolsData } = await supabase
+          .from('plan_symbols')
+          .select('*')
+          .eq('plan_page_id', planPageId);
+        
+        if (symbolsData) {
+          setDetectedSymbols(symbolsData);
+        }
       }
     } catch (error) {
       console.error('Error detecting symbols:', error);
-      toast.error("Failed to detect symbols");
+      toast.error('Failed to detect symbols');
     } finally {
-      setIsDetecting(false);
+      setIsDetectingSymbols(false);
+    }
+  };
+
+  const handleExtractSchedules = async () => {
+    if (!planPageId) {
+      toast.error("Plan not loaded - cannot extract schedules");
+      return;
+    }
+
+    toast.info("Extracting schedules from plan...");
+
+    try {
+      const { data, error } = await supabase.functions.invoke('plan-extract-schedules', {
+        body: {
+          planPageId,
+          planUrl
+        }
+      });
+
+      if (error) throw error;
+
+      if (data?.success) {
+        toast.success(`Extracted ${data.count} schedule items`);
+      }
+    } catch (error) {
+      console.error('Error extracting schedules:', error);
+      toast.error('Failed to extract schedules');
+    }
+  };
+
+  const handleLinkSymbols = async () => {
+    if (!planPageId) {
+      toast.error("Plan not loaded - cannot link symbols");
+      return;
+    }
+
+    toast.info("Linking symbols to schedules...");
+
+    try {
+      const { data, error } = await supabase.functions.invoke('link-symbols-to-schedules', {
+        body: { planPageId }
+      });
+
+      if (error) throw error;
+
+      if (data?.success) {
+        toast.success(`Linked ${data.updated} symbols`);
+        
+        if (data.issues && data.issues.length > 0) {
+          data.issues.forEach((issue: string) => {
+            toast.warning(issue, { duration: 5000 });
+          });
+        }
+
+        // Reload symbols to show updated data
+        const { data: symbolsData } = await supabase
+          .from('plan_symbols')
+          .select('*')
+          .eq('plan_page_id', planPageId);
+        
+        if (symbolsData) {
+          setDetectedSymbols(symbolsData);
+        }
+      }
+    } catch (error) {
+      console.error('Error linking symbols:', error);
+      toast.error('Failed to link symbols');
     }
   };
 
   // Render symbol overlays on canvas
-  const renderSymbolOverlays = (detectedSymbols: any[]) => {
-    if (!fabricCanvas) return;
+  const renderSymbolOverlays = () => {
+    if (!fabricCanvas || detectedSymbols.length === 0) return;
 
-    const canvasWidth = 1000;
-    const canvasHeight = 700;
+    // Clear existing overlays
+    fabricCanvas.getObjects().forEach(obj => {
+      if ((obj as any).__symbolOverlay) {
+        fabricCanvas.remove(obj);
+      }
+    });
+
+    // Use actual canvas dimensions
+    const canvasWidth = fabricCanvas.getWidth();
+    const canvasHeight = fabricCanvas.getHeight();
 
     detectedSymbols.forEach((symbol) => {
       const { x, y, width, height } = symbol.bounding_box;
@@ -1045,7 +1121,7 @@ export const PlanViewer = ({ planUrl, projectId, planPageId: propPlanPageId, wiz
       const canvasW = (width / 100) * canvasWidth;
       const canvasH = (height / 100) * canvasHeight;
 
-      const color = getSymbolColor(symbol.type);
+      const color = getSymbolColor(symbol.symbol_type);
 
       const rect = new Rect({
         left: canvasX,
@@ -1058,8 +1134,9 @@ export const PlanViewer = ({ planUrl, projectId, planPageId: propPlanPageId, wiz
         strokeDashArray: [5, 5],
         selectable: false
       });
+      (rect as any).__symbolOverlay = true;
 
-      const label = new Textbox(symbol.suggested_id || symbol.type.toUpperCase(), {
+      const label = new Textbox(symbol.label_nearby || symbol.schedule_id || symbol.symbol_type.toUpperCase(), {
         left: canvasX,
         top: canvasY - 20,
         fontSize: 12,
@@ -1067,6 +1144,7 @@ export const PlanViewer = ({ planUrl, projectId, planPageId: propPlanPageId, wiz
         backgroundColor: 'white',
         selectable: false
       });
+      (label as any).__symbolOverlay = true;
 
       fabricCanvas.add(rect);
       fabricCanvas.add(label);
@@ -1514,14 +1592,34 @@ export const PlanViewer = ({ planUrl, projectId, planPageId: propPlanPageId, wiz
               variant="outline"
               size="sm"
               onClick={handleDetectSymbols}
-              disabled={isDetecting}
+              disabled={isDetectingSymbols || !isPlanReady}
+              title={!isPlanReady ? "Loading plan..." : "Auto-detect doors, windows, fixtures"}
             >
-              {isDetecting ? (
-                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+              {isDetectingSymbols ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
-                <Scan className="h-4 w-4 mr-2" />
+                <Search className="h-4 w-4" />
               )}
-              Auto-Detect
+            </Button>
+            
+            <Button
+              onClick={handleExtractSchedules}
+              disabled={!isPlanReady}
+              variant="outline"
+              size="sm"
+              title="Extract door/window schedules"
+            >
+              <FileText className="h-4 w-4" />
+            </Button>
+            
+            <Button
+              onClick={handleLinkSymbols}
+              disabled={!isPlanReady}
+              variant="outline"
+              size="sm"
+              title="Link symbols to schedules"
+            >
+              <Link className="h-4 w-4" />
             </Button>
 
             <Button variant="destructive" size="sm" onClick={handleClearMeasurements}>
