@@ -56,13 +56,12 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
 
   const handleFitToScreen = () => {
     if (pdfViewport) {
-      // Calculate fit zoom based on viewport and container size (1200x800)
-      const containerWidth = 1200;
-      const containerHeight = 800;
+      // Calculate fit zoom based on viewport and container size
+      const containerWidth = Math.max(1200, 800);
+      const containerHeight = Math.max(800, 600);
       const fitZoom = Math.min(
         containerWidth / pdfViewport.width,
-        containerHeight / pdfViewport.height,
-        1.0 // Don't zoom in beyond 100%
+        containerHeight / pdfViewport.height
       );
       dispatch({ 
         type: 'SET_TRANSFORM', 
@@ -199,43 +198,44 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                   )}
                 </div>
 
-                <InteractiveCanvas
-                  pdfUrl={state.pdfFile.url}
-                  pageIndex={state.currentPageIndex}
-                  transform={state.transform}
-                  activeTool={state.activeTool}
-                  isCalibrated={state.isCalibrated}
-                  unitsPerMetre={state.currentScale?.unitsPerMetre || null}
-                  calibrationMode={state.calibrationMode}
-                  deductionMode={state.deductionMode}
-                  selectedColor={state.selectedColor}
-                  onMeasurementComplete={(measurement) => {
-                    dispatch({ type: 'ADD_MEASUREMENT', payload: measurement });
-                    toast.success('Measurement added');
-                  }}
-                  onCalibrationPointsSet={(points) => {
-                    setManualCalibrationPoints(points);
-                    toast.info('Enter real-world distance below');
-                  }}
-                  onTransformChange={(transform) => {
-                    dispatch({ type: 'SET_TRANSFORM', payload: transform });
-                  }}
-                  onViewportReady={(viewport) => {
-                    setPdfViewport({ width: viewport.width, height: viewport.height });
-                    // Auto-fit to container on initial load
-                    const containerWidth = 1200;
-                    const containerHeight = 800;
-                    const fitZoom = Math.min(
-                      containerWidth / viewport.width,
-                      containerHeight / viewport.height,
-                      1.0
-                    );
-                    dispatch({ 
-                      type: 'SET_TRANSFORM', 
-                      payload: { zoom: fitZoom, panX: 0, panY: 0 } 
-                    });
-                  }}
-                />
+                <div className="h-[800px]">
+                  <InteractiveCanvas
+                    pdfUrl={state.pdfFile.url}
+                    pageIndex={state.currentPageIndex}
+                    transform={state.transform}
+                    activeTool={state.activeTool}
+                    isCalibrated={state.isCalibrated}
+                    unitsPerMetre={state.currentScale?.unitsPerMetre || null}
+                    calibrationMode={state.calibrationMode}
+                    deductionMode={state.deductionMode}
+                    selectedColor={state.selectedColor}
+                    onMeasurementComplete={(measurement) => {
+                      dispatch({ type: 'ADD_MEASUREMENT', payload: measurement });
+                      toast.success('Measurement added');
+                    }}
+                    onCalibrationPointsSet={(points) => {
+                      setManualCalibrationPoints(points);
+                      toast.info('Enter real-world distance below');
+                    }}
+                    onTransformChange={(transform) => {
+                      dispatch({ type: 'SET_TRANSFORM', payload: transform });
+                    }}
+                    onViewportReady={(viewport) => {
+                      setPdfViewport({ width: viewport.width, height: viewport.height });
+                      // Auto-fit to container on initial load
+                      const containerWidth = Math.max(1200, 800);
+                      const containerHeight = Math.max(800, 600);
+                      const fitZoom = Math.min(
+                        containerWidth / viewport.width,
+                        containerHeight / viewport.height
+                      );
+                      dispatch({ 
+                        type: 'SET_TRANSFORM', 
+                        payload: { zoom: fitZoom, panX: 0, panY: 0 } 
+                      });
+                    }}
+                  />
+                </div>
               </div>
 
               {/* Right Sidebar - Measurements */}
