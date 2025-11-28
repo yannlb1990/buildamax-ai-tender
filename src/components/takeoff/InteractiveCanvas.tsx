@@ -549,11 +549,11 @@ export const InteractiveCanvas = ({
         worldPoints: [startPoint, worldEndPoint],
         worldValue: result.worldValue,
         realValue: isCalibrated ? result.realValue : result.worldValue,
-        unit: isCalibrated ? 'LM' : 'LM',  // Always use LM, but realValue will be uncalibrated
+        unit: 'LM',
         color: isCalibrated ? '#FF6B6B' : '#FF9800',
         label: labelText,
         isDeduction: deductionMode,
-        pageIndex,
+        pageIndex: pageIndex,
         timestamp: new Date(),
       };
 
@@ -599,12 +599,12 @@ export const InteractiveCanvas = ({
         worldPoints: [startPoint, worldEndPoint],
         worldValue: result.worldValue,
         realValue: isCalibrated ? result.realValue : result.worldValue,
-        unit: isCalibrated ? 'M2' : 'M2',  // Always use M2, but realValue will be uncalibrated
+        unit: 'M2',
         dimensions: result.dimensions,
         color: isCalibrated ? '#4CAF50' : '#FF9800',
         label: labelText,
         isDeduction: deductionMode,
-        pageIndex,
+        pageIndex: pageIndex,
         timestamp: new Date(),
       };
 
@@ -653,11 +653,11 @@ export const InteractiveCanvas = ({
         worldPoints: [startPoint, worldEndPoint],
         worldValue: result.worldValue,
         realValue: isCalibrated ? result.realValue : result.worldValue,
-        unit: isCalibrated ? 'M2' : 'M2',
+        unit: 'M2',
         color: isCalibrated ? '#9C27B0' : '#FF9800',
         label: labelText,
         isDeduction: deductionMode,
-        pageIndex,
+        pageIndex: pageIndex,
         timestamp: new Date(),
       };
 
@@ -720,13 +720,13 @@ export const InteractiveCanvas = ({
       worldPoints: polygonPoints,
       worldValue: result.worldValue,
       realValue: isCalibrated ? result.realValue : result.worldValue,
-      unit: isCalibrated ? 'M2' : 'M2',
+      unit: 'M2',
       color: isCalibrated ? '#4CAF50' : '#FF9800',
       label: labelText,
       isDeduction: deductionMode,
-      pageIndex,
+      pageIndex: pageIndex,
       timestamp: new Date(),
-    });
+    };
 
     onMeasurementComplete(measurement);
     setPolygonPoints([]);
