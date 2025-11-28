@@ -66,16 +66,19 @@ export const InteractiveCanvas = ({
   useEffect(() => {
     if (!containerRef.current || fabricCanvasRef.current) return;
 
-    // Create canvas element inside the container
+    // Create canvas element inside the container - use container dimensions
+    const containerWidth = containerRef.current.clientWidth || 1200;
+    const containerHeight = containerRef.current.clientHeight || 800;
+    
     const canvasElement = document.createElement('canvas');
-    canvasElement.width = 1200;
-    canvasElement.height = 800;
+    canvasElement.width = containerWidth;
+    canvasElement.height = containerHeight;
     containerRef.current.appendChild(canvasElement);
     canvasRef.current = canvasElement;
 
     const canvas = new FabricCanvas(canvasElement, {
-      width: 1200,
-      height: 800,
+      width: containerWidth,
+      height: containerHeight,
       backgroundColor: '#f5f5f5',
       selection: false,
     });
@@ -105,16 +108,26 @@ export const InteractiveCanvas = ({
         const pdf = await loadingTask.promise;
         const page = await pdf.getPage(pageIndex + 1);
 
+        // Get base PDF dimensions at scale 1.0
         const baseViewport = page.getViewport({ scale: 1.0, rotation: transform.rotation });
+        
+        // Calculate fit-to-container scale
+        const containerWidth = fabricCanvasRef.current.width || 1200;
+        const containerHeight = fabricCanvasRef.current.height || 800;
+        const scaleX = containerWidth / baseViewport.width;
+        const scaleY = containerHeight / baseViewport.height;
+        const fitScale = Math.min(scaleX, scaleY, 1.0); // Don't zoom in beyond 100%
+
         const pdfViewport: PDFViewportData = {
           width: baseViewport.width,
           height: baseViewport.height,
-          scale: 1.0
+          scale: fitScale
         };
         setViewport(pdfViewport);
         onViewportReady(pdfViewport);
 
-        const renderViewport = page.getViewport({ scale: 2.0, rotation: transform.rotation });
+        // Render at fit scale
+        const renderViewport = page.getViewport({ scale: fitScale, rotation: transform.rotation });
         const tempCanvas = document.createElement('canvas');
         const context = tempCanvas.getContext('2d');
 
@@ -134,8 +147,7 @@ export const InteractiveCanvas = ({
         const img = await FabricImage.fromURL(dataUrl);
 
         if (fabricCanvasRef.current) {
-          fabricCanvasRef.current.setWidth(renderViewport.width);
-          fabricCanvasRef.current.setHeight(renderViewport.height);
+          // Keep canvas size fixed, just update the background image
           fabricCanvasRef.current.backgroundImage = img;
           fabricCanvasRef.current.requestRenderAll();
         }
@@ -151,13 +163,24 @@ export const InteractiveCanvas = ({
     loadPDF();
   }, [pdfUrl, pageIndex, transform.rotation, onViewportReady]);
 
-  // Apply zoom
+  // Apply zoom and pan transforms
   useEffect(() => {
     if (!fabricCanvasRef.current) return;
     const canvas = fabricCanvasRef.current;
+    
+    // Apply zoom
     canvas.setZoom(transform.zoom);
+    
+    // Apply pan by setting viewport transform
+    canvas.viewportTransform = [
+      transform.zoom, 0, 0, 
+      transform.zoom, 
+      transform.panX, 
+      transform.panY
+    ];
+    
     canvas.requestRenderAll();
-  }, [transform.zoom]);
+  }, [transform.zoom, transform.panX, transform.panY]);
 
   // Update cursor based on active tool
   useEffect(() => {

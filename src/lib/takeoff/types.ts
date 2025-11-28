@@ -165,7 +165,6 @@ export interface TakeoffState {
   roofPitch: { rise: number; run: number };
   depthInput: number;
   selectedColor: string;
-  zoomLevel: number;
   
   // History for undo/redo
   history: Measurement[][];
@@ -195,7 +194,6 @@ export type TakeoffAction =
   | { type: 'SET_ROOF_PITCH'; payload: { rise: number; run: number } }
   | { type: 'SET_DEPTH_INPUT'; payload: number }
   | { type: 'SET_SELECTED_COLOR'; payload: string }
-  | { type: 'SET_ZOOM_LEVEL'; payload: number }
   | { type: 'UNDO' }
   | { type: 'REDO' }
   | { type: 'CALCULATE_ESTIMATE' };
