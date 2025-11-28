@@ -104,6 +104,7 @@ export const InteractiveCanvas = ({
       setError(null);
 
       try {
+        console.log('Loading PDF from:', pdfUrl);
         const loadingTask = pdfjsLib.getDocument(pdfUrl);
         const pdf = await loadingTask.promise;
         const page = await pdf.getPage(pageIndex + 1);
@@ -111,12 +112,20 @@ export const InteractiveCanvas = ({
         // Get base PDF dimensions at scale 1.0
         const baseViewport = page.getViewport({ scale: 1.0, rotation: transform.rotation });
         
-        // Calculate fit-to-container scale
-        const containerWidth = fabricCanvasRef.current.width || 1200;
-        const containerHeight = fabricCanvasRef.current.height || 800;
+        // Calculate fit-to-container scale - use larger minimum size
+        const containerWidth = Math.max(fabricCanvasRef.current.width || 1200, 800);
+        const containerHeight = Math.max(fabricCanvasRef.current.height || 800, 600);
         const scaleX = containerWidth / baseViewport.width;
         const scaleY = containerHeight / baseViewport.height;
-        const fitScale = Math.min(scaleX, scaleY, 1.0); // Don't zoom in beyond 100%
+        const fitScale = Math.min(scaleX, scaleY); // Allow zoom up to fit container
+
+        console.log('PDF viewport:', { 
+          baseWidth: baseViewport.width, 
+          baseHeight: baseViewport.height, 
+          fitScale,
+          containerWidth,
+          containerHeight 
+        });
 
         const pdfViewport: PDFViewportData = {
           width: baseViewport.width,
@@ -147,7 +156,11 @@ export const InteractiveCanvas = ({
         const img = await FabricImage.fromURL(dataUrl);
 
         if (fabricCanvasRef.current) {
-          // Keep canvas size fixed, just update the background image
+          // Resize Fabric canvas to match rendered PDF dimensions
+          fabricCanvasRef.current.setWidth(renderViewport.width);
+          fabricCanvasRef.current.setHeight(renderViewport.height);
+          
+          // Update the background image
           fabricCanvasRef.current.backgroundImage = img;
           fabricCanvasRef.current.requestRenderAll();
         }
@@ -326,9 +339,9 @@ export const InteractiveCanvas = ({
       return;
     }
 
-    // Prevent drawing if not calibrated
+    // Allow measurements even without calibration - just warn
     if (!isCalibrated) {
-      return;
+      console.warn('Measurement made without calibration - values will be in pixels');
     }
 
     setIsDrawing(true);
@@ -499,7 +512,7 @@ export const InteractiveCanvas = ({
       return;
     }
 
-    if (!isDrawing || !startPoint || !isCalibrated || !unitsPerMetre || !viewport) return;
+    if (!isDrawing || !startPoint || !viewport) return;
 
     const pointer = canvas.getPointer(e.e, true);
     const viewEndPoint: ViewPoint = { x: pointer.x, y: pointer.y };
@@ -513,13 +526,13 @@ export const InteractiveCanvas = ({
 
     // Complete measurement based on tool
     if (activeTool === 'line') {
-      const result = calculateLinearWorld(startPoint, worldEndPoint, unitsPerMetre);
+      const result = calculateLinearWorld(startPoint, worldEndPoint, unitsPerMetre || 1);
       
       // Create permanent line (using view coordinates)
       const viewStart = worldToView(startPoint, transform, viewport);
       const viewEnd = worldToView(worldEndPoint, transform, viewport);
       const line = new Line([viewStart.x, viewStart.y, viewEnd.x, viewEnd.y], {
-        stroke: 'red',
+        stroke: isCalibrated ? 'red' : 'orange',
         strokeWidth: 2,
         selectable: false,
         evented: false,
@@ -529,11 +542,14 @@ export const InteractiveCanvas = ({
       // Add label (using view coordinates)
       const midX = (viewStart.x + viewEnd.x) / 2;
       const midY = (viewStart.y + viewEnd.y) / 2;
-      const label = new Text(`${result.realValue.toFixed(2)} m`, {
+      const displayValue = isCalibrated ? result.realValue : result.worldValue;
+      const displayUnit = isCalibrated ? 'm' : 'uncal';
+      const labelText = isCalibrated ? `${displayValue.toFixed(2)} m` : `${displayValue.toFixed(0)} px`;
+      const label = new Text(labelText, {
         left: midX,
         top: midY - 10,
         fontSize: 14,
-        fill: 'red',
+        fill: isCalibrated ? 'red' : 'orange',
         backgroundColor: 'white',
         selectable: false,
         evented: false,
@@ -545,10 +561,10 @@ export const InteractiveCanvas = ({
         type: 'line',
         worldPoints: [startPoint, worldEndPoint],
         worldValue: result.worldValue,
-        realValue: result.realValue,
-        unit: result.unit,
-        color: '#FF6B6B',
-        label: `${result.realValue.toFixed(2)} m`,
+        realValue: isCalibrated ? result.realValue : result.worldValue,
+        unit: isCalibrated ? 'LM' : 'LM',  // Always use LM, but realValue will be uncalibrated
+        color: isCalibrated ? '#FF6B6B' : '#FF9800',
+        label: labelText,
         isDeduction: deductionMode,
         pageIndex,
         timestamp: new Date(),
@@ -556,7 +572,7 @@ export const InteractiveCanvas = ({
 
       onMeasurementComplete(measurement);
     } else if (activeTool === 'rectangle') {
-      const result = calculateRectangleAreaWorld(startPoint, worldEndPoint, unitsPerMetre);
+      const result = calculateRectangleAreaWorld(startPoint, worldEndPoint, unitsPerMetre || 1);
       
       // Create permanent rectangle (using view coordinates)
       const viewStart = worldToView(startPoint, transform, viewport);
@@ -566,8 +582,8 @@ export const InteractiveCanvas = ({
         top: Math.min(viewStart.y, viewEnd.y),
         width: Math.abs(viewEnd.x - viewStart.x),
         height: Math.abs(viewEnd.y - viewStart.y),
-        fill: 'rgba(76, 175, 80, 0.3)',
-        stroke: 'green',
+        fill: isCalibrated ? 'rgba(76, 175, 80, 0.3)' : 'rgba(255, 152, 0, 0.3)',
+        stroke: isCalibrated ? 'green' : 'orange',
         strokeWidth: 2,
         selectable: false,
         evented: false,
@@ -577,11 +593,13 @@ export const InteractiveCanvas = ({
       // Add label (using view coordinates)
       const centerX = (viewStart.x + viewEnd.x) / 2;
       const centerY = (viewStart.y + viewEnd.y) / 2;
-      const label = new Text(`${result.realValue.toFixed(2)} m²`, {
+      const displayValue = isCalibrated ? result.realValue : result.worldValue;
+      const labelText = isCalibrated ? `${displayValue.toFixed(2)} m²` : `${displayValue.toFixed(0)} px²`;
+      const label = new Text(labelText, {
         left: centerX - 30,
         top: centerY - 10,
         fontSize: 14,
-        fill: 'green',
+        fill: isCalibrated ? 'green' : 'orange',
         backgroundColor: 'white',
         selectable: false,
         evented: false,
@@ -593,11 +611,11 @@ export const InteractiveCanvas = ({
         type: 'rectangle',
         worldPoints: [startPoint, worldEndPoint],
         worldValue: result.worldValue,
-        realValue: result.realValue,
-        unit: result.unit,
+        realValue: isCalibrated ? result.realValue : result.worldValue,
+        unit: isCalibrated ? 'M2' : 'M2',  // Always use M2, but realValue will be uncalibrated
         dimensions: result.dimensions,
-        color: '#4CAF50',
-        label: `${result.realValue.toFixed(2)} m²`,
+        color: isCalibrated ? '#4CAF50' : '#FF9800',
+        label: labelText,
         isDeduction: deductionMode,
         pageIndex,
         timestamp: new Date(),
@@ -754,7 +772,7 @@ export const InteractiveCanvas = ({
   ]);
 
   return (
-    <div className="relative w-full h-full flex items-center justify-center bg-muted rounded-lg">
+    <div className="relative w-full min-h-[600px] h-full flex items-center justify-center bg-muted rounded-lg">
       {isLoading && (
         <div className="absolute inset-0 flex items-center justify-center bg-background/80 z-10">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -763,6 +781,11 @@ export const InteractiveCanvas = ({
       {error && (
         <div className="absolute inset-0 flex items-center justify-center bg-background/80 z-10">
           <p className="text-destructive">{error}</p>
+        </div>
+      )}
+      {!isCalibrated && activeTool && activeTool !== 'pan' && (
+        <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-yellow-500/90 text-black px-4 py-2 rounded-md text-sm font-medium z-10 shadow-lg">
+          ⚠️ Set scale first for accurate measurements (currently showing pixel values)
         </div>
       )}
       <div ref={containerRef} className="w-full h-full" />
