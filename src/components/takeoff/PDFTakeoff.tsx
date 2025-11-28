@@ -21,6 +21,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
   const [activeTab, setActiveTab] = React.useState('upload');
   const [rotation, setRotation] = useState<0 | 90 | 180 | 270>(0);
   const [manualCalibrationPoints, setManualCalibrationPoints] = useState<[Point, Point] | null>(null);
+  const [pdfViewport, setPdfViewport] = useState<{ width: number; height: number } | null>(null);
 
   // Auto-switch to measure tab after upload
   React.useEffect(() => {
@@ -31,19 +32,48 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
   }, [state.pdfFile, activeTab]);
 
   const handleZoomIn = () => {
-    dispatch({ type: 'SET_ZOOM_LEVEL', payload: Math.min(state.zoomLevel + 0.25, 4) });
+    dispatch({ 
+      type: 'SET_TRANSFORM', 
+      payload: { zoom: Math.min(state.transform.zoom + 0.25, 4) } 
+    });
   };
 
   const handleZoomOut = () => {
-    dispatch({ type: 'SET_ZOOM_LEVEL', payload: Math.max(state.zoomLevel - 0.25, 0.25) });
+    dispatch({ 
+      type: 'SET_TRANSFORM', 
+      payload: { zoom: Math.max(state.transform.zoom - 0.25, 0.1) } 
+    });
   };
 
   const handleRotate = () => {
-    setRotation((prev) => ((prev + 90) % 360) as 0 | 90 | 180 | 270);
+    const newRotation = ((rotation + 90) % 360) as 0 | 90 | 180 | 270;
+    setRotation(newRotation);
+    dispatch({ 
+      type: 'SET_TRANSFORM', 
+      payload: { rotation: newRotation } 
+    });
   };
 
   const handleFitToScreen = () => {
-    dispatch({ type: 'SET_ZOOM_LEVEL', payload: 1 });
+    if (pdfViewport) {
+      // Calculate fit zoom based on viewport and container size (1200x800)
+      const containerWidth = 1200;
+      const containerHeight = 800;
+      const fitZoom = Math.min(
+        containerWidth / pdfViewport.width,
+        containerHeight / pdfViewport.height,
+        1.0 // Don't zoom in beyond 100%
+      );
+      dispatch({ 
+        type: 'SET_TRANSFORM', 
+        payload: { zoom: fitZoom, panX: 0, panY: 0 } 
+      });
+    } else {
+      dispatch({ 
+        type: 'SET_TRANSFORM', 
+        payload: { zoom: 1, panX: 0, panY: 0 } 
+      });
+    }
   };
 
   const handlePagePrevious = () => {
@@ -130,7 +160,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                       <ZoomOut className="h-4 w-4" />
                     </Button>
                     <span className="text-sm font-medium min-w-16 text-center">
-                      {Math.round(state.zoomLevel * 100)}%
+                      {Math.round(state.transform.zoom * 100)}%
                     </span>
                     <Button variant="outline" size="sm" onClick={handleZoomIn}>
                       <ZoomIn className="h-4 w-4" />
@@ -191,7 +221,19 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                     dispatch({ type: 'SET_TRANSFORM', payload: transform });
                   }}
                   onViewportReady={(viewport) => {
-                    console.log('Viewport ready:', viewport);
+                    setPdfViewport({ width: viewport.width, height: viewport.height });
+                    // Auto-fit to container on initial load
+                    const containerWidth = 1200;
+                    const containerHeight = 800;
+                    const fitZoom = Math.min(
+                      containerWidth / viewport.width,
+                      containerHeight / viewport.height,
+                      1.0
+                    );
+                    dispatch({ 
+                      type: 'SET_TRANSFORM', 
+                      payload: { zoom: fitZoom, panX: 0, panY: 0 } 
+                    });
                   }}
                 />
               </div>

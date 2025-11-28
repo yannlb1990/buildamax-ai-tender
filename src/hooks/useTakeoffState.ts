@@ -39,7 +39,6 @@ const initialState: TakeoffState = {
   roofPitch: { rise: 4, run: 12 },
   depthInput: 0.1,
   selectedColor: '#FF0000',
-  zoomLevel: 1,
   history: [[]],
   historyIndex: 0
 };
@@ -184,9 +183,6 @@ function takeoffReducer(state: TakeoffState, action: TakeoffAction): TakeoffStat
       
     case 'SET_SELECTED_COLOR':
       return { ...state, selectedColor: action.payload };
-      
-    case 'SET_ZOOM_LEVEL':
-      return { ...state, zoomLevel: action.payload };
       
     case 'UNDO':
       if (state.historyIndex > 0) {
