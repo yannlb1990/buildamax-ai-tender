@@ -7,6 +7,7 @@ import { WorldPoint, ViewPoint, Transform, PDFViewportData } from './types';
 /**
  * Convert view (canvas) coordinates to world (PDF) coordinates
  * This is CRITICAL for storing measurements correctly - they must be zoom-independent
+ * Note: Assumes PDF is rendered at base scale 1.0
  */
 export function viewToWorld(
   viewPoint: ViewPoint,
@@ -17,7 +18,7 @@ export function viewToWorld(
   let x = viewPoint.x - transform.panX;
   let y = viewPoint.y - transform.panY;
 
-  // 2. Undo zoom
+  // 2. Undo zoom (PDF rendered at base scale 1.0, zoom is applied via transform)
   x /= transform.zoom;
   y /= transform.zoom;
 
@@ -53,6 +54,7 @@ export function viewToWorld(
 /**
  * Convert world (PDF) coordinates to view (canvas) coordinates
  * Used ONLY for rendering - never for storage
+ * Note: Assumes PDF is rendered at base scale 1.0
  */
 export function worldToView(
   worldPoint: WorldPoint,
@@ -85,7 +87,7 @@ export function worldToView(
       y = height - worldPoint.y;
   }
 
-  // Apply zoom and pan
+  // Apply zoom and pan (PDF is at base scale, zoom is in transform)
   x = x * transform.zoom + transform.panX;
   y = y * transform.zoom + transform.panY;
 

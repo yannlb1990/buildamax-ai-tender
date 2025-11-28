@@ -109,45 +109,34 @@ export const InteractiveCanvas = ({
         const pdf = await loadingTask.promise;
         const page = await pdf.getPage(pageIndex + 1);
 
-        // Get base PDF dimensions at scale 1.0
+        // CRITICAL: Render at base scale 1.0 - let zoom handle all scaling
         const baseViewport = page.getViewport({ scale: 1.0, rotation: transform.rotation });
         
-        // Calculate fit-to-container scale - use larger minimum size
-        const containerWidth = Math.max(fabricCanvasRef.current.width || 1200, 800);
-        const containerHeight = Math.max(fabricCanvasRef.current.height || 800, 600);
-        const scaleX = containerWidth / baseViewport.width;
-        const scaleY = containerHeight / baseViewport.height;
-        const fitScale = Math.min(scaleX, scaleY); // Allow zoom up to fit container
-
         console.log('PDF viewport:', { 
           baseWidth: baseViewport.width, 
-          baseHeight: baseViewport.height, 
-          fitScale,
-          containerWidth,
-          containerHeight 
+          baseHeight: baseViewport.height
         });
 
         const pdfViewport: PDFViewportData = {
           width: baseViewport.width,
           height: baseViewport.height,
-          scale: fitScale
+          scale: 1.0  // Always 1.0 - zoom handles display size
         };
         setViewport(pdfViewport);
         onViewportReady(pdfViewport);
 
-        // Render at fit scale
-        const renderViewport = page.getViewport({ scale: fitScale, rotation: transform.rotation });
+        // Render at base scale 1.0
         const tempCanvas = document.createElement('canvas');
         const context = tempCanvas.getContext('2d');
 
         if (!context) throw new Error('Could not get canvas context');
 
-        tempCanvas.width = renderViewport.width;
-        tempCanvas.height = renderViewport.height;
+        tempCanvas.width = baseViewport.width;
+        tempCanvas.height = baseViewport.height;
 
         const renderContext = {
           canvasContext: context,
-          viewport: renderViewport,
+          viewport: baseViewport,
           canvas: tempCanvas,
         };
         await page.render(renderContext).promise;
@@ -156,9 +145,9 @@ export const InteractiveCanvas = ({
         const img = await FabricImage.fromURL(dataUrl);
 
         if (fabricCanvasRef.current) {
-          // Resize Fabric canvas to match rendered PDF dimensions
-          fabricCanvasRef.current.setWidth(renderViewport.width);
-          fabricCanvasRef.current.setHeight(renderViewport.height);
+          // Resize Fabric canvas to base PDF dimensions
+          fabricCanvasRef.current.setWidth(baseViewport.width);
+          fabricCanvasRef.current.setHeight(baseViewport.height);
           
           // Update the background image
           fabricCanvasRef.current.backgroundImage = img;
@@ -176,15 +165,12 @@ export const InteractiveCanvas = ({
     loadPDF();
   }, [pdfUrl, pageIndex, transform.rotation, onViewportReady]);
 
-  // Apply zoom and pan transforms
+  // Apply zoom and pan transforms - SINGLE SOURCE OF TRUTH
   useEffect(() => {
     if (!fabricCanvasRef.current) return;
     const canvas = fabricCanvasRef.current;
     
-    // Apply zoom
-    canvas.setZoom(transform.zoom);
-    
-    // Apply pan by setting viewport transform
+    // ONLY use viewportTransform (never setZoom to avoid double application)
     canvas.viewportTransform = [
       transform.zoom, 0, 0, 
       transform.zoom, 
@@ -225,7 +211,7 @@ export const InteractiveCanvas = ({
     }
   }, [isCalibrated, calibrationObjects]);
 
-  // Handle mouse wheel zoom
+  // Handle mouse wheel zoom - ONLY update state, useEffect applies it
   useEffect(() => {
     const canvas = fabricCanvasRef.current;
     if (!canvas) return;
@@ -233,13 +219,10 @@ export const InteractiveCanvas = ({
     const handleWheel = (e: WheelEvent) => {
       e.preventDefault();
       const delta = e.deltaY;
-      let newZoom = canvas.getZoom();
-      newZoom = newZoom - delta / 1000;
+      let newZoom = transform.zoom - delta / 1000;
       newZoom = Math.max(0.1, Math.min(5, newZoom));
 
-      const point = new FabricPoint(e.offsetX, e.offsetY);
-      canvas.zoomToPoint(point, newZoom);
-      
+      // ONLY update state - the transform useEffect will apply it
       onTransformChange({ zoom: newZoom });
     };
 
@@ -249,7 +232,7 @@ export const InteractiveCanvas = ({
     return () => {
       canvasElement.removeEventListener('wheel', handleWheel);
     };
-  }, [onTransformChange]);
+  }, [onTransformChange, transform.zoom]);
 
   // Handle calibration click
   const handleCalibrationClick = (worldPoint: WorldPoint) => {
@@ -422,27 +405,27 @@ export const InteractiveCanvas = ({
   // Handle mouse move
   const handleMouseMove = (e: any) => {
     const canvas = fabricCanvasRef.current;
-    if (!canvas) return;
+    if (!canvas || !viewport) return;
 
     // Handle panning (use client coordinates, not canvas pointer)
     if (isPanning && lastClientPos) {
       const deltaX = e.e.clientX - lastClientPos.x;
       const deltaY = e.e.clientY - lastClientPos.y;
       
-      const vpt = canvas.viewportTransform;
-      if (vpt) {
-        vpt[4] += deltaX;
-        vpt[5] += deltaY;
-        canvas.requestRenderAll();
-      }
+      onTransformChange({ 
+        panX: transform.panX + deltaX,
+        panY: transform.panY + deltaY
+      });
       
       setLastClientPos({ x: e.e.clientX, y: e.e.clientY });
       return;
     }
 
-    if (!isDrawing || !startPoint || !isCalibrated) return;
+    // Allow preview even without calibration
+    if (!isDrawing || !startPoint) return;
 
     const pointer = canvas.getPointer(e.e, true);
+    const currentViewPoint: ViewPoint = { x: pointer.x, y: pointer.y };
 
     // Remove previous preview
     if (previewShape) {
@@ -451,10 +434,14 @@ export const InteractiveCanvas = ({
 
     let shape: any = null;
 
-    // Update preview shape
+    // Convert startPoint (world) to view for preview
+    const viewStart = worldToView(startPoint, transform, viewport);
+    const color = isCalibrated ? 'red' : 'orange';
+
+    // Update preview shape using view coordinates
     if (activeTool === 'line') {
-      shape = new Line([startPoint.x, startPoint.y, pointer.x, pointer.y], {
-        stroke: 'red',
+      shape = new Line([viewStart.x, viewStart.y, currentViewPoint.x, currentViewPoint.y], {
+        stroke: color,
         strokeWidth: 2,
         strokeDashArray: [5, 5],
         selectable: false,
@@ -462,28 +449,28 @@ export const InteractiveCanvas = ({
       });
     } else if (activeTool === 'rectangle') {
       shape = new Rect({
-        left: Math.min(startPoint.x, pointer.x),
-        top: Math.min(startPoint.y, pointer.y),
-        width: Math.abs(pointer.x - startPoint.x),
-        height: Math.abs(pointer.y - startPoint.y),
-        fill: 'rgba(76, 175, 80, 0.2)',
-        stroke: 'green',
+        left: Math.min(viewStart.x, currentViewPoint.x),
+        top: Math.min(viewStart.y, currentViewPoint.y),
+        width: Math.abs(currentViewPoint.x - viewStart.x),
+        height: Math.abs(currentViewPoint.y - viewStart.y),
+        fill: isCalibrated ? 'rgba(76, 175, 80, 0.2)' : 'rgba(255, 152, 0, 0.2)',
+        stroke: isCalibrated ? 'green' : 'orange',
         strokeWidth: 2,
         strokeDashArray: [5, 5],
         selectable: false,
         evented: false,
       });
     } else if (activeTool === 'circle') {
-      const dx = pointer.x - startPoint.x;
-      const dy = pointer.y - startPoint.y;
+      const dx = currentViewPoint.x - viewStart.x;
+      const dy = currentViewPoint.y - viewStart.y;
       const radius = Math.sqrt(dx * dx + dy * dy);
       
       shape = new Circle({
-        left: startPoint.x - radius,
-        top: startPoint.y - radius,
+        left: viewStart.x - radius,
+        top: viewStart.y - radius,
         radius: radius,
-        fill: 'rgba(156, 39, 176, 0.2)',
-        stroke: 'purple',
+        fill: isCalibrated ? 'rgba(156, 39, 176, 0.2)' : 'rgba(255, 152, 0, 0.2)',
+        stroke: isCalibrated ? 'purple' : 'orange',
         strokeWidth: 2,
         strokeDashArray: [5, 5],
         selectable: false,
@@ -623,7 +610,9 @@ export const InteractiveCanvas = ({
 
       onMeasurementComplete(measurement);
     } else if (activeTool === 'circle') {
-      const result = calculateCircleAreaWorld(startPoint, worldEndPoint, unitsPerMetre);
+      // Handle uncalibrated case
+      const effectiveUnits = unitsPerMetre || 1;
+      const result = calculateCircleAreaWorld(startPoint, worldEndPoint, effectiveUnits);
       
       // Create permanent circle (using view coordinates)
       const viewStart = worldToView(startPoint, transform, viewport);
@@ -636,8 +625,8 @@ export const InteractiveCanvas = ({
         left: viewStart.x - radiusPixels,
         top: viewStart.y - radiusPixels,
         radius: radiusPixels,
-        fill: 'rgba(156, 39, 176, 0.3)',
-        stroke: 'purple',
+        fill: isCalibrated ? 'rgba(156, 39, 176, 0.3)' : 'rgba(255, 152, 0, 0.3)',
+        stroke: isCalibrated ? 'purple' : 'orange',
         strokeWidth: 2,
         selectable: false,
         evented: false,
@@ -645,11 +634,13 @@ export const InteractiveCanvas = ({
       canvas.add(circle);
 
       // Add label (using view coordinates)
-      const label = new Text(`${result.realValue.toFixed(2)} m²`, {
+      const displayValue = isCalibrated ? result.realValue : result.worldValue;
+      const labelText = isCalibrated ? `${displayValue.toFixed(2)} m²` : `${displayValue.toFixed(0)} px²`;
+      const label = new Text(labelText, {
         left: viewStart.x - 30,
         top: viewStart.y - 10,
         fontSize: 14,
-        fill: 'purple',
+        fill: isCalibrated ? 'purple' : 'orange',
         backgroundColor: 'white',
         selectable: false,
         evented: false,
@@ -661,10 +652,10 @@ export const InteractiveCanvas = ({
         type: 'circle',
         worldPoints: [startPoint, worldEndPoint],
         worldValue: result.worldValue,
-        realValue: result.realValue,
-        unit: result.unit,
-        color: '#9C27B0',
-        label: `${result.realValue.toFixed(2)} m²`,
+        realValue: isCalibrated ? result.realValue : result.worldValue,
+        unit: isCalibrated ? 'M2' : 'M2',
+        color: isCalibrated ? '#9C27B0' : '#FF9800',
+        label: labelText,
         isDeduction: deductionMode,
         pageIndex,
         timestamp: new Date(),
@@ -681,9 +672,11 @@ export const InteractiveCanvas = ({
   // Handle double click to close polygon
   const handleDoubleClick = () => {
     const canvas = fabricCanvasRef.current;
-    if (!canvas || activeTool !== 'polygon' || polygonPoints.length < 3 || !unitsPerMetre || !viewport) return;
+    if (!canvas || activeTool !== 'polygon' || polygonPoints.length < 3 || !viewport) return;
 
-    const result = calculatePolygonAreaWorld(polygonPoints, unitsPerMetre);
+    // Handle uncalibrated case
+    const effectiveUnits = unitsPerMetre || 1;
+    const result = calculatePolygonAreaWorld(polygonPoints, effectiveUnits);
     
     // Create permanent polygon (using view coordinates)
     const viewPoints = polygonPoints.map(wp => {
@@ -691,8 +684,8 @@ export const InteractiveCanvas = ({
       return new FabricPoint(vp.x, vp.y);
     });
     const polygon = new Polygon(viewPoints, {
-      fill: 'rgba(76, 175, 80, 0.3)',
-      stroke: 'green',
+      fill: isCalibrated ? 'rgba(76, 175, 80, 0.3)' : 'rgba(255, 152, 0, 0.3)',
+      stroke: isCalibrated ? 'green' : 'orange',
       strokeWidth: 2,
       selectable: false,
       evented: false,
@@ -702,11 +695,13 @@ export const InteractiveCanvas = ({
     // Add label at centroid (using view coordinates)
     const worldCentroid = calculateCentroidWorld(polygonPoints);
     const viewCentroid = worldToView(worldCentroid, transform, viewport);
-    const label = new Text(`${result.realValue.toFixed(2)} m²`, {
+    const displayValue = isCalibrated ? result.realValue : result.worldValue;
+    const labelText = isCalibrated ? `${displayValue.toFixed(2)} m²` : `${displayValue.toFixed(0)} px²`;
+    const label = new Text(labelText, {
       left: viewCentroid.x - 30,
       top: viewCentroid.y - 10,
       fontSize: 14,
-      fill: 'green',
+      fill: isCalibrated ? 'green' : 'orange',
       backgroundColor: 'white',
       selectable: false,
       evented: false,
@@ -724,14 +719,14 @@ export const InteractiveCanvas = ({
       type: 'polygon',
       worldPoints: polygonPoints,
       worldValue: result.worldValue,
-      realValue: result.realValue,
-      unit: result.unit,
-      color: '#4CAF50',
-      label: `${result.realValue.toFixed(2)} m²`,
+      realValue: isCalibrated ? result.realValue : result.worldValue,
+      unit: isCalibrated ? 'M2' : 'M2',
+      color: isCalibrated ? '#4CAF50' : '#FF9800',
+      label: labelText,
       isDeduction: deductionMode,
       pageIndex,
       timestamp: new Date(),
-    };
+    });
 
     onMeasurementComplete(measurement);
     setPolygonPoints([]);
