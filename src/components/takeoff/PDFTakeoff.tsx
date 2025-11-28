@@ -7,7 +7,7 @@ import { InteractiveCanvas } from './InteractiveCanvas';
 import { ScalingCalibrator } from './ScalingCalibrator';
 import { MeasurementToolbar } from './MeasurementToolbar';
 import { useTakeoffState } from '@/hooks/useTakeoffState';
-import { Point } from '@/lib/takeoff/types';
+import { WorldPoint } from '@/lib/takeoff/types';
 import { toast } from 'sonner';
 
 interface PDFTakeoffProps {
@@ -20,7 +20,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
   const { state, dispatch } = useTakeoffState();
   const [activeTab, setActiveTab] = React.useState('upload');
   const [rotation, setRotation] = useState<0 | 90 | 180 | 270>(0);
-  const [manualCalibrationPoints, setManualCalibrationPoints] = useState<[Point, Point] | null>(null);
+  const [manualCalibrationPoints, setManualCalibrationPoints] = useState<[WorldPoint, WorldPoint] | null>(null);
   const [pdfViewport, setPdfViewport] = useState<{ width: number; height: number } | null>(null);
 
   // Auto-switch to measure tab after upload
@@ -56,9 +56,9 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
 
   const handleFitToScreen = () => {
     if (pdfViewport) {
-      // Calculate fit zoom based on viewport and container size
-      const containerWidth = Math.max(1200, 800);
-      const containerHeight = Math.max(800, 600);
+      // Calculate fit zoom - PDF is at base scale 1.0
+      const containerWidth = 1200;
+      const containerHeight = 800;
       const fitZoom = Math.min(
         containerWidth / pdfViewport.width,
         containerHeight / pdfViewport.height
@@ -222,9 +222,9 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                     }}
                     onViewportReady={(viewport) => {
                       setPdfViewport({ width: viewport.width, height: viewport.height });
-                      // Auto-fit to container on initial load
-                      const containerWidth = Math.max(1200, 800);
-                      const containerHeight = Math.max(800, 600);
+                      // Auto-fit to container - PDF is at base scale 1.0
+                      const containerWidth = 1200;
+                      const containerHeight = 800;
                       const fitZoom = Math.min(
                         containerWidth / viewport.width,
                         containerHeight / viewport.height
