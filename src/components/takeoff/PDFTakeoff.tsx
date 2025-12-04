@@ -133,6 +133,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                     setManualCalibrationPoints(null);
                     dispatch({ type: 'SET_CALIBRATION_MODE', payload: null });
                   }}
+                  pdfViewport={pdfViewport}
                 />
               </div>
 

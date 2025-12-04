@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { Canvas as FabricCanvas, FabricImage, Circle, Line, Rect, Polygon, Text, Point as FabricPoint } from 'fabric';
 import * as pdfjsLib from 'pdfjs-dist';
 import { Loader2 } from 'lucide-react';
@@ -62,13 +62,13 @@ export const InteractiveCanvas = ({
   const [isPanning, setIsPanning] = useState(false);
   const [lastClientPos, setLastClientPos] = useState<{ x: number; y: number } | null>(null);
 
-  // Initialize Fabric canvas
+  // Initialize Fabric canvas - SIZE TO CONTAINER
   useEffect(() => {
     if (!containerRef.current || fabricCanvasRef.current) return;
 
-    // Create canvas element inside the container - use container dimensions
-    const containerWidth = containerRef.current.clientWidth || 1200;
-    const containerHeight = containerRef.current.clientHeight || 800;
+    // CRITICAL FIX: Size canvas to CONTAINER, not PDF
+    const containerWidth = Math.max(containerRef.current.clientWidth, 1200);
+    const containerHeight = Math.max(containerRef.current.clientHeight, 800);
     
     const canvasElement = document.createElement('canvas');
     canvasElement.width = containerWidth;
@@ -109,23 +109,23 @@ export const InteractiveCanvas = ({
         const pdf = await loadingTask.promise;
         const page = await pdf.getPage(pageIndex + 1);
 
-        // CRITICAL: Render at base scale 1.0 - let zoom handle all scaling
+        // Render PDF at base scale 1.0 - zoom handled via viewportTransform
         const baseViewport = page.getViewport({ scale: 1.0, rotation: transform.rotation });
         
-        console.log('PDF viewport:', { 
-          baseWidth: baseViewport.width, 
-          baseHeight: baseViewport.height
+        console.log('PDF base viewport:', { 
+          width: baseViewport.width, 
+          height: baseViewport.height
         });
 
         const pdfViewport: PDFViewportData = {
           width: baseViewport.width,
           height: baseViewport.height,
-          scale: 1.0  // Always 1.0 - zoom handles display size
+          scale: 1.0
         };
         setViewport(pdfViewport);
         onViewportReady(pdfViewport);
 
-        // Render at base scale 1.0
+        // Render PDF to temp canvas at base scale
         const tempCanvas = document.createElement('canvas');
         const context = tempCanvas.getContext('2d');
 
@@ -145,11 +145,15 @@ export const InteractiveCanvas = ({
         const img = await FabricImage.fromURL(dataUrl);
 
         if (fabricCanvasRef.current) {
-          // Resize Fabric canvas to base PDF dimensions
-          fabricCanvasRef.current.setWidth(baseViewport.width);
-          fabricCanvasRef.current.setHeight(baseViewport.height);
+          // Set PDF as background image at origin (0,0)
+          // Canvas stays at container size, PDF positioned at origin
+          img.set({
+            left: 0,
+            top: 0,
+            originX: 'left',
+            originY: 'top',
+          });
           
-          // Update the background image
           fabricCanvasRef.current.backgroundImage = img;
           fabricCanvasRef.current.requestRenderAll();
         }
@@ -170,7 +174,8 @@ export const InteractiveCanvas = ({
     if (!fabricCanvasRef.current) return;
     const canvas = fabricCanvasRef.current;
     
-    // ONLY use viewportTransform (never setZoom to avoid double application)
+    // Apply viewportTransform for zoom and pan
+    // [scaleX, skewY, skewX, scaleY, translateX, translateY]
     canvas.viewportTransform = [
       transform.zoom, 0, 0, 
       transform.zoom, 
@@ -211,7 +216,7 @@ export const InteractiveCanvas = ({
     }
   }, [isCalibrated, calibrationObjects]);
 
-  // Handle mouse wheel zoom - ONLY update state, useEffect applies it
+  // Handle mouse wheel zoom
   useEffect(() => {
     const canvas = fabricCanvasRef.current;
     if (!canvas) return;
@@ -222,7 +227,7 @@ export const InteractiveCanvas = ({
       let newZoom = transform.zoom - delta / 1000;
       newZoom = Math.max(0.1, Math.min(5, newZoom));
 
-      // ONLY update state - the transform useEffect will apply it
+      // Update state - the transform useEffect will apply it
       onTransformChange({ zoom: newZoom });
     };
 
@@ -235,7 +240,7 @@ export const InteractiveCanvas = ({
   }, [onTransformChange, transform.zoom]);
 
   // Handle calibration click
-  const handleCalibrationClick = (worldPoint: WorldPoint) => {
+  const handleCalibrationClick = useCallback((worldPoint: WorldPoint) => {
     const canvas = fabricCanvasRef.current;
     if (!canvas || !viewport) return;
     
@@ -245,7 +250,7 @@ export const InteractiveCanvas = ({
     const newPoints = [...calibrationPoints, worldPoint];
     const newObjects = [...calibrationObjects];
     
-    // Add marker (using view coordinates)
+    // Add marker at view position
     const marker = new Circle({
       left: viewPoint.x - 5,
       top: viewPoint.y - 5,
@@ -259,7 +264,7 @@ export const InteractiveCanvas = ({
     canvas.add(marker);
     newObjects.push(marker);
 
-    // Add label (using view coordinates)
+    // Add label
     const label = new Text(newPoints.length === 1 ? 'A' : 'B', {
       left: viewPoint.x + 10,
       top: viewPoint.y - 10,
@@ -273,7 +278,7 @@ export const InteractiveCanvas = ({
     newObjects.push(label);
 
     if (newPoints.length === 2) {
-      // Draw line between points (using view coordinates)
+      // Draw line between points
       const view1 = worldToView(newPoints[0], transform, viewport);
       const view2 = worldToView(newPoints[1], transform, viewport);
       const line = new Line([view1.x, view1.y, view2.x, view2.y], {
@@ -295,18 +300,27 @@ export const InteractiveCanvas = ({
     }
 
     canvas.requestRenderAll();
-  };
+  }, [calibrationPoints, calibrationObjects, transform, viewport, onCalibrationPointsSet]);
 
   // Handle mouse down
-  const handleMouseDown = (e: any) => {
+  const handleMouseDown = useCallback((e: any) => {
     const canvas = fabricCanvasRef.current;
     if (!canvas || !viewport) return;
 
-    const pointer = canvas.getPointer(e.e, true);
+    // CRITICAL FIX: Use getPointer(e.e, false) for scene coordinates
+    // This returns coordinates that account for viewportTransform
+    const pointer = canvas.getPointer(e.e, false);
     const viewPoint: ViewPoint = { x: pointer.x, y: pointer.y };
     
-    // Convert to world coordinates
+    // Convert to world coordinates for storage
     const worldPoint = viewToWorld(viewPoint, transform, viewport);
+
+    console.log('Mouse down:', { 
+      raw: pointer, 
+      world: worldPoint, 
+      zoom: transform.zoom,
+      pan: { x: transform.panX, y: transform.panY }
+    });
 
     // Handle calibration
     if (calibrationMode === 'manual' && !isCalibrated) {
@@ -322,7 +336,7 @@ export const InteractiveCanvas = ({
       return;
     }
 
-    // Allow measurements even without calibration - just warn
+    // Allow measurements even without calibration
     if (!isCalibrated) {
       console.warn('Measurement made without calibration - values will be in pixels');
     }
@@ -332,9 +346,10 @@ export const InteractiveCanvas = ({
 
     // Handle count tool (single click)
     if (activeTool === 'count') {
+      const viewPos = worldToView(worldPoint, transform, viewport);
       const marker = new Circle({
-        left: viewPoint.x - 4,
-        top: viewPoint.y - 4,
+        left: viewPos.x - 4,
+        top: viewPos.y - 4,
         radius: 4,
         fill: 'orange',
         stroke: 'white',
@@ -353,7 +368,7 @@ export const InteractiveCanvas = ({
         color: '#FF9800',
         label: 'Count',
         isDeduction: false,
-        pageIndex,
+        pageIndex: pageIndex,
         timestamp: new Date(),
       };
 
@@ -367,10 +382,11 @@ export const InteractiveCanvas = ({
     if (activeTool === 'polygon') {
       const newPoints = [...polygonPoints, worldPoint];
       
-      // Add point marker (using view coordinates)
+      // Add point marker at view position
+      const viewPos = worldToView(worldPoint, transform, viewport);
       const marker = new Circle({
-        left: viewPoint.x - 3,
-        top: viewPoint.y - 3,
+        left: viewPos.x - 3,
+        top: viewPos.y - 3,
         radius: 3,
         fill: 'green',
         stroke: 'white',
@@ -381,11 +397,11 @@ export const InteractiveCanvas = ({
       canvas.add(marker);
       setPolygonMarkers([...polygonMarkers, marker]);
 
-      // Add line from previous point (using view coordinates)
+      // Add line from previous point
       if (newPoints.length > 1) {
         const prevWorld = newPoints[newPoints.length - 2];
         const prevView = worldToView(prevWorld, transform, viewport);
-        const line = new Line([prevView.x, prevView.y, viewPoint.x, viewPoint.y], {
+        const line = new Line([prevView.x, prevView.y, viewPos.x, viewPos.y], {
           stroke: 'green',
           strokeWidth: 2,
           strokeDashArray: [5, 5],
@@ -400,14 +416,18 @@ export const InteractiveCanvas = ({
       canvas.requestRenderAll();
       return;
     }
-  };
+  }, [
+    viewport, transform, calibrationMode, isCalibrated, activeTool, 
+    polygonPoints, polygonMarkers, polygonLines, pageIndex,
+    handleCalibrationClick, onMeasurementComplete
+  ]);
 
   // Handle mouse move
-  const handleMouseMove = (e: any) => {
+  const handleMouseMove = useCallback((e: any) => {
     const canvas = fabricCanvasRef.current;
     if (!canvas || !viewport) return;
 
-    // Handle panning (use client coordinates, not canvas pointer)
+    // Handle panning (use client coordinates for smooth panning)
     if (isPanning && lastClientPos) {
       const deltaX = e.e.clientX - lastClientPos.x;
       const deltaY = e.e.clientY - lastClientPos.y;
@@ -424,8 +444,13 @@ export const InteractiveCanvas = ({
     // Allow preview even without calibration
     if (!isDrawing || !startPoint) return;
 
-    const pointer = canvas.getPointer(e.e, true);
-    const currentViewPoint: ViewPoint = { x: pointer.x, y: pointer.y };
+    // CRITICAL FIX: Use getPointer(e.e, false) for scene coordinates
+    const pointer = canvas.getPointer(e.e, false);
+    const currentWorldPoint: WorldPoint = viewToWorld(
+      { x: pointer.x, y: pointer.y }, 
+      transform, 
+      viewport
+    );
 
     // Remove previous preview
     if (previewShape) {
@@ -434,13 +459,14 @@ export const InteractiveCanvas = ({
 
     let shape: any = null;
 
-    // Convert startPoint (world) to view for preview
+    // Convert points to view coordinates for preview rendering
     const viewStart = worldToView(startPoint, transform, viewport);
+    const viewEnd = worldToView(currentWorldPoint, transform, viewport);
     const color = isCalibrated ? 'red' : 'orange';
 
-    // Update preview shape using view coordinates
+    // Create preview shape using view coordinates
     if (activeTool === 'line') {
-      shape = new Line([viewStart.x, viewStart.y, currentViewPoint.x, currentViewPoint.y], {
+      shape = new Line([viewStart.x, viewStart.y, viewEnd.x, viewEnd.y], {
         stroke: color,
         strokeWidth: 2,
         strokeDashArray: [5, 5],
@@ -449,10 +475,10 @@ export const InteractiveCanvas = ({
       });
     } else if (activeTool === 'rectangle') {
       shape = new Rect({
-        left: Math.min(viewStart.x, currentViewPoint.x),
-        top: Math.min(viewStart.y, currentViewPoint.y),
-        width: Math.abs(currentViewPoint.x - viewStart.x),
-        height: Math.abs(currentViewPoint.y - viewStart.y),
+        left: Math.min(viewStart.x, viewEnd.x),
+        top: Math.min(viewStart.y, viewEnd.y),
+        width: Math.abs(viewEnd.x - viewStart.x),
+        height: Math.abs(viewEnd.y - viewStart.y),
         fill: isCalibrated ? 'rgba(76, 175, 80, 0.2)' : 'rgba(255, 152, 0, 0.2)',
         stroke: isCalibrated ? 'green' : 'orange',
         strokeWidth: 2,
@@ -461,8 +487,8 @@ export const InteractiveCanvas = ({
         evented: false,
       });
     } else if (activeTool === 'circle') {
-      const dx = currentViewPoint.x - viewStart.x;
-      const dy = currentViewPoint.y - viewStart.y;
+      const dx = viewEnd.x - viewStart.x;
+      const dy = viewEnd.y - viewStart.y;
       const radius = Math.sqrt(dx * dx + dy * dy);
       
       shape = new Circle({
@@ -484,10 +510,13 @@ export const InteractiveCanvas = ({
     }
 
     canvas.requestRenderAll();
-  };
+  }, [
+    viewport, transform, isPanning, lastClientPos, isDrawing, startPoint, 
+    previewShape, activeTool, isCalibrated, onTransformChange
+  ]);
 
   // Handle mouse up
-  const handleMouseUp = (e: any) => {
+  const handleMouseUp = useCallback((e: any) => {
     const canvas = fabricCanvasRef.current;
     if (!canvas) return;
 
@@ -501,9 +530,9 @@ export const InteractiveCanvas = ({
 
     if (!isDrawing || !startPoint || !viewport) return;
 
-    const pointer = canvas.getPointer(e.e, true);
-    const viewEndPoint: ViewPoint = { x: pointer.x, y: pointer.y };
-    const worldEndPoint = viewToWorld(viewEndPoint, transform, viewport);
+    // CRITICAL FIX: Use getPointer(e.e, false) for scene coordinates
+    const pointer = canvas.getPointer(e.e, false);
+    const worldEndPoint = viewToWorld({ x: pointer.x, y: pointer.y }, transform, viewport);
 
     // Remove preview shape
     if (previewShape) {
@@ -513,9 +542,10 @@ export const InteractiveCanvas = ({
 
     // Complete measurement based on tool
     if (activeTool === 'line') {
-      const result = calculateLinearWorld(startPoint, worldEndPoint, unitsPerMetre || 1);
+      const effectiveUnits = unitsPerMetre || 1;
+      const result = calculateLinearWorld(startPoint, worldEndPoint, effectiveUnits);
       
-      // Create permanent line (using view coordinates)
+      // Create permanent line at view positions
       const viewStart = worldToView(startPoint, transform, viewport);
       const viewEnd = worldToView(worldEndPoint, transform, viewport);
       const line = new Line([viewStart.x, viewStart.y, viewEnd.x, viewEnd.y], {
@@ -526,11 +556,10 @@ export const InteractiveCanvas = ({
       });
       canvas.add(line);
 
-      // Add label (using view coordinates)
+      // Add label
       const midX = (viewStart.x + viewEnd.x) / 2;
       const midY = (viewStart.y + viewEnd.y) / 2;
       const displayValue = isCalibrated ? result.realValue : result.worldValue;
-      const displayUnit = isCalibrated ? 'm' : 'uncal';
       const labelText = isCalibrated ? `${displayValue.toFixed(2)} m` : `${displayValue.toFixed(0)} px`;
       const label = new Text(labelText, {
         left: midX,
@@ -559,9 +588,10 @@ export const InteractiveCanvas = ({
 
       onMeasurementComplete(measurement);
     } else if (activeTool === 'rectangle') {
-      const result = calculateRectangleAreaWorld(startPoint, worldEndPoint, unitsPerMetre || 1);
+      const effectiveUnits = unitsPerMetre || 1;
+      const result = calculateRectangleAreaWorld(startPoint, worldEndPoint, effectiveUnits);
       
-      // Create permanent rectangle (using view coordinates)
+      // Create permanent rectangle at view positions
       const viewStart = worldToView(startPoint, transform, viewport);
       const viewEnd = worldToView(worldEndPoint, transform, viewport);
       const rect = new Rect({
@@ -577,7 +607,7 @@ export const InteractiveCanvas = ({
       });
       canvas.add(rect);
 
-      // Add label (using view coordinates)
+      // Add label
       const centerX = (viewStart.x + viewEnd.x) / 2;
       const centerY = (viewStart.y + viewEnd.y) / 2;
       const displayValue = isCalibrated ? result.realValue : result.worldValue;
@@ -610,11 +640,10 @@ export const InteractiveCanvas = ({
 
       onMeasurementComplete(measurement);
     } else if (activeTool === 'circle') {
-      // Handle uncalibrated case
       const effectiveUnits = unitsPerMetre || 1;
       const result = calculateCircleAreaWorld(startPoint, worldEndPoint, effectiveUnits);
       
-      // Create permanent circle (using view coordinates)
+      // Create permanent circle at view positions
       const viewStart = worldToView(startPoint, transform, viewport);
       const viewEnd = worldToView(worldEndPoint, transform, viewport);
       const dx = viewEnd.x - viewStart.x;
@@ -633,7 +662,7 @@ export const InteractiveCanvas = ({
       });
       canvas.add(circle);
 
-      // Add label (using view coordinates)
+      // Add label
       const displayValue = isCalibrated ? result.realValue : result.worldValue;
       const labelText = isCalibrated ? `${displayValue.toFixed(2)} m²` : `${displayValue.toFixed(0)} px²`;
       const label = new Text(labelText, {
@@ -667,18 +696,21 @@ export const InteractiveCanvas = ({
     setIsDrawing(false);
     setStartPoint(null);
     canvas.requestRenderAll();
-  };
+  }, [
+    viewport, transform, isPanning, isDrawing, startPoint, previewShape,
+    activeTool, isCalibrated, unitsPerMetre, deductionMode, pageIndex,
+    onMeasurementComplete
+  ]);
 
   // Handle double click to close polygon
-  const handleDoubleClick = () => {
+  const handleDoubleClick = useCallback(() => {
     const canvas = fabricCanvasRef.current;
     if (!canvas || activeTool !== 'polygon' || polygonPoints.length < 3 || !viewport) return;
 
-    // Handle uncalibrated case
     const effectiveUnits = unitsPerMetre || 1;
     const result = calculatePolygonAreaWorld(polygonPoints, effectiveUnits);
     
-    // Create permanent polygon (using view coordinates)
+    // Create permanent polygon at view positions
     const viewPoints = polygonPoints.map(wp => {
       const vp = worldToView(wp, transform, viewport);
       return new FabricPoint(vp.x, vp.y);
@@ -692,7 +724,7 @@ export const InteractiveCanvas = ({
     });
     canvas.add(polygon);
 
-    // Add label at centroid (using view coordinates)
+    // Add label at centroid
     const worldCentroid = calculateCentroidWorld(polygonPoints);
     const viewCentroid = worldToView(worldCentroid, transform, viewport);
     const displayValue = isCalibrated ? result.realValue : result.worldValue;
@@ -731,9 +763,12 @@ export const InteractiveCanvas = ({
     onMeasurementComplete(measurement);
     setPolygonPoints([]);
     canvas.requestRenderAll();
-  };
+  }, [
+    viewport, transform, activeTool, polygonPoints, polygonMarkers, polygonLines,
+    isCalibrated, unitsPerMetre, deductionMode, pageIndex, onMeasurementComplete
+  ]);
 
-  // Attach event handlers
+  // Attach event handlers with ALL dependencies
   useEffect(() => {
     const canvas = fabricCanvasRef.current;
     if (!canvas) return;
@@ -749,25 +784,10 @@ export const InteractiveCanvas = ({
       canvas.off('mouse:up', handleMouseUp);
       canvas.off('mouse:dblclick', handleDoubleClick);
     };
-  }, [
-    activeTool,
-    isCalibrated,
-    unitsPerMetre,
-    calibrationMode,
-    startPoint,
-    isDrawing,
-    previewShape,
-    polygonPoints,
-    polygonMarkers,
-    polygonLines,
-    isPanning,
-    lastClientPos,
-    calibrationPoints,
-    calibrationObjects,
-  ]);
+  }, [handleMouseDown, handleMouseMove, handleMouseUp, handleDoubleClick]);
 
   return (
-    <div className="relative w-full min-h-[600px] h-full flex items-center justify-center bg-muted rounded-lg">
+    <div className="relative w-full min-h-[600px] h-full flex items-center justify-center bg-muted rounded-lg overflow-hidden">
       {isLoading && (
         <div className="absolute inset-0 flex items-center justify-center bg-background/80 z-10">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
