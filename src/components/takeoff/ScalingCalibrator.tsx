@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card } from '@/components/ui/card';
 import { calculatePresetScaleWorld, calculateManualScaleWorld } from '@/lib/takeoff/calculations';
-import { ScaleData, Point, WorldPoint, DistanceUnit } from '@/lib/takeoff/types';
+import { ScaleData, WorldPoint, DistanceUnit } from '@/lib/takeoff/types';
 import { toast } from 'sonner';
 
 interface ScalingCalibratorProps {
@@ -14,8 +14,9 @@ interface ScalingCalibratorProps {
   isCalibrated: boolean;
   onScaleSet: (scale: ScaleData) => void;
   onManualCalibrationStart: () => void;
-  manualPoints: [Point, Point] | null;
+  manualPoints: [WorldPoint, WorldPoint] | null;
   onCalibrationComplete: () => void;
+  pdfViewport?: { width: number; height: number } | null;
 }
 
 export const ScalingCalibrator = ({
@@ -24,7 +25,8 @@ export const ScalingCalibrator = ({
   onScaleSet,
   onManualCalibrationStart,
   manualPoints,
-  onCalibrationComplete
+  onCalibrationComplete,
+  pdfViewport
 }: ScalingCalibratorProps) => {
   const [calibrationMode, setCalibrationMode] = useState<'preset' | 'manual'>('preset');
   const [selectedScale, setSelectedScale] = useState('1:100');
@@ -34,8 +36,12 @@ export const ScalingCalibrator = ({
   const presetScales = ['1:20', '1:50', '1:100', '1:200', '1:500'];
 
   const handlePresetScale = () => {
-    // Assume typical A3 page width ~420mm = 1191 points
-    const scale = calculatePresetScaleWorld(selectedScale, 1191);
+    // Use actual PDF viewport width if available, otherwise default
+    // Typical A3 landscape = ~1191 points, A4 = ~595 points
+    const pageWidth = pdfViewport?.width || 595;
+    console.log('Preset scale using PDF width:', pageWidth);
+    
+    const scale = calculatePresetScaleWorld(selectedScale, pageWidth);
     onScaleSet(scale);
     toast.success(`Scale set to ${selectedScale}`);
   };
@@ -53,11 +59,18 @@ export const ScalingCalibrator = ({
     }
 
     const scale = calculateManualScaleWorld(
-      manualPoints[0] as WorldPoint,
-      manualPoints[1] as WorldPoint,
+      manualPoints[0],
+      manualPoints[1],
       distance,
       unit
     );
+
+    console.log('Manual calibration:', {
+      points: manualPoints,
+      distance,
+      unit,
+      unitsPerMetre: scale.unitsPerMetre
+    });
 
     onScaleSet(scale);
     toast.success('Manual calibration complete');
@@ -81,7 +94,7 @@ export const ScalingCalibrator = ({
             ✓ Scale Active: {currentScale.scaleFactor ? `1:${currentScale.scaleFactor}` : 'Manual'}
           </p>
           <p className="text-xs text-green-700 dark:text-green-300 mt-1">
-            {currentScale.unitsPerMetre.toFixed(2)} units per metre
+            {currentScale.unitsPerMetre.toFixed(2)} PDF units per metre
           </p>
         </div>
       )}
@@ -122,6 +135,11 @@ export const ScalingCalibrator = ({
               </SelectContent>
             </Select>
           </div>
+          {pdfViewport && (
+            <p className="text-xs text-muted-foreground">
+              PDF size: {pdfViewport.width.toFixed(0)} × {pdfViewport.height.toFixed(0)} pts
+            </p>
+          )}
           <Button onClick={handlePresetScale} className="w-full">
             Apply Scale
           </Button>

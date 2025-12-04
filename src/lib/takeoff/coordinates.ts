@@ -6,90 +6,50 @@ import { WorldPoint, ViewPoint, Transform, PDFViewportData } from './types';
 
 /**
  * Convert view (canvas) coordinates to world (PDF) coordinates
- * This is CRITICAL for storing measurements correctly - they must be zoom-independent
- * Note: Assumes PDF is rendered at base scale 1.0
+ * 
+ * CRITICAL: When using canvas.getPointer(e.e, false), the pointer already accounts
+ * for the viewportTransform (zoom/pan). So we only need to handle the conceptual
+ * mapping between canvas and PDF coordinate systems.
+ * 
+ * Since PDF is rendered at base scale 1.0 and positioned at origin, the conversion
+ * is straightforward when getPointer(false) is used.
  */
 export function viewToWorld(
   viewPoint: ViewPoint,
   transform: Transform,
   viewport: PDFViewportData
 ): WorldPoint {
-  // 1. Undo pan
-  let x = viewPoint.x - transform.panX;
-  let y = viewPoint.y - transform.panY;
-
-  // 2. Undo zoom (PDF rendered at base scale 1.0, zoom is applied via transform)
-  x /= transform.zoom;
-  y /= transform.zoom;
-
-  // 3. Undo rotation (and flip Y for PDF coordinate system)
-  const { width, height } = viewport;
-  let wx: number, wy: number;
-
-  switch (transform.rotation) {
-    case 0:
-      wx = x;
-      wy = height - y;  // Canvas top-left → PDF bottom-left
-      break;
-    case 90:
-      wx = y;
-      wy = x;
-      break;
-    case 180:
-      wx = width - x;
-      wy = y;
-      break;
-    case 270:
-      wx = height - y;
-      wy = width - x;
-      break;
-    default:
-      wx = x;
-      wy = height - y;
-  }
-
-  return { x: wx, y: wy };
+  // getPointer(e.e, false) returns scene coordinates that already account for
+  // viewportTransform (zoom/pan), so we just need to store the point directly
+  // as world coordinates. The Y-axis is the same since Fabric.js and our
+  // coordinate system both use top-left origin.
+  
+  // Note: If rotation is applied, we'd need to handle it here, but for now
+  // rotation is handled separately in the viewport rendering
+  
+  return { 
+    x: viewPoint.x, 
+    y: viewPoint.y 
+  };
 }
 
 /**
  * Convert world (PDF) coordinates to view (canvas) coordinates
- * Used ONLY for rendering - never for storage
- * Note: Assumes PDF is rendered at base scale 1.0
+ * Used for rendering stored measurements at current zoom/pan level
+ * 
+ * Since world coordinates are the actual PDF coordinates and the PDF
+ * is rendered at base scale 1.0, we apply the current transform to
+ * convert to screen position.
  */
 export function worldToView(
   worldPoint: WorldPoint,
   transform: Transform,
   viewport: PDFViewportData
 ): ViewPoint {
-  const { width, height } = viewport;
-  let x: number, y: number;
-
-  // Apply rotation
-  switch (transform.rotation) {
-    case 0:
-      x = worldPoint.x;
-      y = height - worldPoint.y;
-      break;
-    case 90:
-      x = worldPoint.y;
-      y = worldPoint.x;
-      break;
-    case 180:
-      x = width - worldPoint.x;
-      y = worldPoint.y;
-      break;
-    case 270:
-      x = height - worldPoint.y;
-      y = width - worldPoint.x;
-      break;
-    default:
-      x = worldPoint.x;
-      y = height - worldPoint.y;
-  }
-
-  // Apply zoom and pan (PDF is at base scale, zoom is in transform)
-  x = x * transform.zoom + transform.panX;
-  y = y * transform.zoom + transform.panY;
+  // Apply zoom and pan to convert world coords to view coords
+  // PDF is at base scale 1.0, so world coords map directly to PDF pixels
+  const x = worldPoint.x * transform.zoom + transform.panX;
+  const y = worldPoint.y * transform.zoom + transform.panY;
 
   return { x, y };
 }
