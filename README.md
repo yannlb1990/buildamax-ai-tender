@@ -36,6 +36,34 @@ npm i
 npm run dev
 ```
 
+## Duplicating the App
+
+If you want to stand up another instance of this PDF takeoff tool (for example, to test isolated feature work or hand off a copy to a teammate), follow these steps:
+
+1. Clone the repository to your target location. If you need a clean copy without any local changes, remove existing remotes or use a fresh directory:
+   ```bash
+   git clone <repo-url> buildamax-takeoff-clone
+   cd buildamax-takeoff-clone
+   ```
+2. Install dependencies. Use the same package manager across environments (this project currently tracks lockfiles for npm and Bun):
+   ```bash
+   npm install
+   ```
+3. Build or start the development server:
+   ```bash
+   npm run build   # production build
+   npm run dev     # local development
+   ```
+4. Ensure environment variables are mirrored if your deployment uses Supabase or other services (see the `supabase/` directory for the existing configuration). Copy any required `.env` files or secrets into the duplicated project.
+5. For a fully isolated duplicate, create a new Git remote to push changes without affecting the original:
+   ```bash
+   git remote remove origin
+   git remote add origin <new-repo-url>
+   git push -u origin work
+   ```
+
+These steps produce an identical working copy of the application, ready for customization or deployment.
+
 **Edit a file directly in GitHub**
 
 - Navigate to the desired file(s).
