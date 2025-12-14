@@ -4,7 +4,7 @@ import * as pdfjsLib from 'pdfjs-dist';
 import { Loader2 } from 'lucide-react';
 import { WorldPoint, ViewPoint, Transform, PDFViewportData, Measurement, ToolType } from '@/lib/takeoff/types';
 import { calculateLinearWorld, calculateRectangleAreaWorld, calculatePolygonAreaWorld, calculateCentroidWorld, calculateCircleAreaWorld } from '@/lib/takeoff/calculations';
-import { viewToWorld, worldToView } from '@/lib/takeoff/coordinates';
+import { viewToWorld } from '@/lib/takeoff/coordinates';
 
 // Set up PDF.js worker
 pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
@@ -266,17 +266,14 @@ export const InteractiveCanvas = ({
   const handleCalibrationClick = useCallback((worldPoint: WorldPoint) => {
     const canvas = fabricCanvasRef.current;
     if (!canvas || !viewport) return;
-    
-    // Convert to view coordinates for rendering
-    const viewPoint = worldToView(worldPoint, transform, viewport);
 
     const newPoints = [...calibrationPoints, worldPoint];
     const newObjects = [...calibrationObjects];
     
-    // Add marker at view position
+    // Draw at WORLD coordinates - viewportTransform handles zoom/pan
     const marker = new Circle({
-      left: viewPoint.x - 5,
-      top: viewPoint.y - 5,
+      left: worldPoint.x - 5,
+      top: worldPoint.y - 5,
       radius: 5,
       fill: 'red',
       stroke: 'white',
@@ -287,10 +284,10 @@ export const InteractiveCanvas = ({
     canvas.add(marker);
     newObjects.push(marker);
 
-    // Add label
+    // Add label at WORLD position
     const label = new Text(newPoints.length === 1 ? 'A' : 'B', {
-      left: viewPoint.x + 10,
-      top: viewPoint.y - 10,
+      left: worldPoint.x + 10,
+      top: worldPoint.y - 10,
       fontSize: 16,
       fill: 'red',
       fontWeight: 'bold',
@@ -301,10 +298,8 @@ export const InteractiveCanvas = ({
     newObjects.push(label);
 
     if (newPoints.length === 2) {
-      // Draw line between points
-      const view1 = worldToView(newPoints[0], transform, viewport);
-      const view2 = worldToView(newPoints[1], transform, viewport);
-      const line = new Line([view1.x, view1.y, view2.x, view2.y], {
+      // Draw line at WORLD positions
+      const line = new Line([newPoints[0].x, newPoints[0].y, newPoints[1].x, newPoints[1].y], {
         stroke: 'red',
         strokeWidth: 2,
         strokeDashArray: [5, 5],
@@ -323,7 +318,7 @@ export const InteractiveCanvas = ({
     }
 
     canvas.requestRenderAll();
-  }, [calibrationPoints, calibrationObjects, transform, viewport, onCalibrationPointsSet]);
+  }, [calibrationPoints, calibrationObjects, viewport, onCalibrationPointsSet]);
 
   // Handle mouse down
   const handleMouseDown = useCallback((e: any) => {
@@ -369,10 +364,10 @@ export const InteractiveCanvas = ({
 
     // Handle count tool (single click)
     if (activeTool === 'count') {
-      const viewPos = worldToView(worldPoint, transform, viewport);
+      // Draw at WORLD coordinates
       const marker = new Circle({
-        left: viewPos.x - 4,
-        top: viewPos.y - 4,
+        left: worldPoint.x - 4,
+        top: worldPoint.y - 4,
         radius: 4,
         fill: 'orange',
         stroke: 'white',
@@ -405,11 +400,10 @@ export const InteractiveCanvas = ({
     if (activeTool === 'polygon') {
       const newPoints = [...polygonPoints, worldPoint];
       
-      // Add point marker at view position
-      const viewPos = worldToView(worldPoint, transform, viewport);
+      // Draw point marker at WORLD position
       const marker = new Circle({
-        left: viewPos.x - 3,
-        top: viewPos.y - 3,
+        left: worldPoint.x - 3,
+        top: worldPoint.y - 3,
         radius: 3,
         fill: 'green',
         stroke: 'white',
@@ -420,11 +414,10 @@ export const InteractiveCanvas = ({
       canvas.add(marker);
       setPolygonMarkers([...polygonMarkers, marker]);
 
-      // Add line from previous point
+      // Add line from previous point at WORLD positions
       if (newPoints.length > 1) {
         const prevWorld = newPoints[newPoints.length - 2];
-        const prevView = worldToView(prevWorld, transform, viewport);
-        const line = new Line([prevView.x, prevView.y, viewPos.x, viewPos.y], {
+        const line = new Line([prevWorld.x, prevWorld.y, worldPoint.x, worldPoint.y], {
           stroke: 'green',
           strokeWidth: 2,
           strokeDashArray: [5, 5],
@@ -481,15 +474,11 @@ export const InteractiveCanvas = ({
     }
 
     let shape: any = null;
-
-    // Convert points to view coordinates for preview rendering
-    const viewStart = worldToView(startPoint, transform, viewport);
-    const viewEnd = worldToView(currentWorldPoint, transform, viewport);
     const color = isCalibrated ? 'red' : 'orange';
 
-    // Create preview shape using view coordinates
+    // Draw preview shapes at WORLD coordinates - viewportTransform handles zoom/pan
     if (activeTool === 'line') {
-      shape = new Line([viewStart.x, viewStart.y, viewEnd.x, viewEnd.y], {
+      shape = new Line([startPoint.x, startPoint.y, currentWorldPoint.x, currentWorldPoint.y], {
         stroke: color,
         strokeWidth: 2,
         strokeDashArray: [5, 5],
@@ -498,10 +487,10 @@ export const InteractiveCanvas = ({
       });
     } else if (activeTool === 'rectangle') {
       shape = new Rect({
-        left: Math.min(viewStart.x, viewEnd.x),
-        top: Math.min(viewStart.y, viewEnd.y),
-        width: Math.abs(viewEnd.x - viewStart.x),
-        height: Math.abs(viewEnd.y - viewStart.y),
+        left: Math.min(startPoint.x, currentWorldPoint.x),
+        top: Math.min(startPoint.y, currentWorldPoint.y),
+        width: Math.abs(currentWorldPoint.x - startPoint.x),
+        height: Math.abs(currentWorldPoint.y - startPoint.y),
         fill: isCalibrated ? 'rgba(76, 175, 80, 0.2)' : 'rgba(255, 152, 0, 0.2)',
         stroke: isCalibrated ? 'green' : 'orange',
         strokeWidth: 2,
@@ -510,13 +499,13 @@ export const InteractiveCanvas = ({
         evented: false,
       });
     } else if (activeTool === 'circle') {
-      const dx = viewEnd.x - viewStart.x;
-      const dy = viewEnd.y - viewStart.y;
+      const dx = currentWorldPoint.x - startPoint.x;
+      const dy = currentWorldPoint.y - startPoint.y;
       const radius = Math.sqrt(dx * dx + dy * dy);
       
       shape = new Circle({
-        left: viewStart.x - radius,
-        top: viewStart.y - radius,
+        left: startPoint.x - radius,
+        top: startPoint.y - radius,
         radius: radius,
         fill: isCalibrated ? 'rgba(156, 39, 176, 0.2)' : 'rgba(255, 152, 0, 0.2)',
         stroke: isCalibrated ? 'purple' : 'orange',
@@ -568,10 +557,8 @@ export const InteractiveCanvas = ({
       const effectiveUnits = unitsPerMetre || 1;
       const result = calculateLinearWorld(startPoint, worldEndPoint, effectiveUnits);
       
-      // Create permanent line at view positions
-      const viewStart = worldToView(startPoint, transform, viewport);
-      const viewEnd = worldToView(worldEndPoint, transform, viewport);
-      const line = new Line([viewStart.x, viewStart.y, viewEnd.x, viewEnd.y], {
+      // Draw at WORLD coordinates - viewportTransform handles zoom/pan
+      const line = new Line([startPoint.x, startPoint.y, worldEndPoint.x, worldEndPoint.y], {
         stroke: isCalibrated ? 'red' : 'orange',
         strokeWidth: 2,
         selectable: false,
@@ -579,9 +566,9 @@ export const InteractiveCanvas = ({
       });
       canvas.add(line);
 
-      // Add label
-      const midX = (viewStart.x + viewEnd.x) / 2;
-      const midY = (viewStart.y + viewEnd.y) / 2;
+      // Add label at WORLD position
+      const midX = (startPoint.x + worldEndPoint.x) / 2;
+      const midY = (startPoint.y + worldEndPoint.y) / 2;
       const displayValue = isCalibrated ? result.realValue : result.worldValue;
       const labelText = isCalibrated ? `${displayValue.toFixed(2)} m` : `${displayValue.toFixed(0)} px`;
       const label = new Text(labelText, {
@@ -614,14 +601,12 @@ export const InteractiveCanvas = ({
       const effectiveUnits = unitsPerMetre || 1;
       const result = calculateRectangleAreaWorld(startPoint, worldEndPoint, effectiveUnits);
       
-      // Create permanent rectangle at view positions
-      const viewStart = worldToView(startPoint, transform, viewport);
-      const viewEnd = worldToView(worldEndPoint, transform, viewport);
+      // Draw at WORLD coordinates
       const rect = new Rect({
-        left: Math.min(viewStart.x, viewEnd.x),
-        top: Math.min(viewStart.y, viewEnd.y),
-        width: Math.abs(viewEnd.x - viewStart.x),
-        height: Math.abs(viewEnd.y - viewStart.y),
+        left: Math.min(startPoint.x, worldEndPoint.x),
+        top: Math.min(startPoint.y, worldEndPoint.y),
+        width: Math.abs(worldEndPoint.x - startPoint.x),
+        height: Math.abs(worldEndPoint.y - startPoint.y),
         fill: isCalibrated ? 'rgba(76, 175, 80, 0.3)' : 'rgba(255, 152, 0, 0.3)',
         stroke: isCalibrated ? 'green' : 'orange',
         strokeWidth: 2,
@@ -630,9 +615,9 @@ export const InteractiveCanvas = ({
       });
       canvas.add(rect);
 
-      // Add label
-      const centerX = (viewStart.x + viewEnd.x) / 2;
-      const centerY = (viewStart.y + viewEnd.y) / 2;
+      // Add label at WORLD position
+      const centerX = (startPoint.x + worldEndPoint.x) / 2;
+      const centerY = (startPoint.y + worldEndPoint.y) / 2;
       const displayValue = isCalibrated ? result.realValue : result.worldValue;
       const labelText = isCalibrated ? `${displayValue.toFixed(2)} m²` : `${displayValue.toFixed(0)} px²`;
       const label = new Text(labelText, {
@@ -666,17 +651,16 @@ export const InteractiveCanvas = ({
       const effectiveUnits = unitsPerMetre || 1;
       const result = calculateCircleAreaWorld(startPoint, worldEndPoint, effectiveUnits);
       
-      // Create permanent circle at view positions
-      const viewStart = worldToView(startPoint, transform, viewport);
-      const viewEnd = worldToView(worldEndPoint, transform, viewport);
-      const dx = viewEnd.x - viewStart.x;
-      const dy = viewEnd.y - viewStart.y;
-      const radiusPixels = Math.sqrt(dx * dx + dy * dy);
+      // Calculate radius in WORLD coords
+      const dx = worldEndPoint.x - startPoint.x;
+      const dy = worldEndPoint.y - startPoint.y;
+      const radiusWorld = Math.sqrt(dx * dx + dy * dy);
       
+      // Draw at WORLD coordinates
       const circle = new Circle({
-        left: viewStart.x - radiusPixels,
-        top: viewStart.y - radiusPixels,
-        radius: radiusPixels,
+        left: startPoint.x - radiusWorld,
+        top: startPoint.y - radiusWorld,
+        radius: radiusWorld,
         fill: isCalibrated ? 'rgba(156, 39, 176, 0.3)' : 'rgba(255, 152, 0, 0.3)',
         stroke: isCalibrated ? 'purple' : 'orange',
         strokeWidth: 2,
@@ -685,12 +669,12 @@ export const InteractiveCanvas = ({
       });
       canvas.add(circle);
 
-      // Add label
+      // Add label at WORLD position
       const displayValue = isCalibrated ? result.realValue : result.worldValue;
       const labelText = isCalibrated ? `${displayValue.toFixed(2)} m²` : `${displayValue.toFixed(0)} px²`;
       const label = new Text(labelText, {
-        left: viewStart.x - 30,
-        top: viewStart.y - 10,
+        left: startPoint.x - 30,
+        top: startPoint.y - 10,
         fontSize: 14,
         fill: isCalibrated ? 'purple' : 'orange',
         backgroundColor: 'white',
@@ -733,12 +717,9 @@ export const InteractiveCanvas = ({
     const effectiveUnits = unitsPerMetre || 1;
     const result = calculatePolygonAreaWorld(polygonPoints, effectiveUnits);
     
-    // Create permanent polygon at view positions
-    const viewPoints = polygonPoints.map(wp => {
-      const vp = worldToView(wp, transform, viewport);
-      return new FabricPoint(vp.x, vp.y);
-    });
-    const polygon = new Polygon(viewPoints, {
+    // Draw polygon at WORLD coordinates
+    const worldPointsFabric = polygonPoints.map(wp => new FabricPoint(wp.x, wp.y));
+    const polygon = new Polygon(worldPointsFabric, {
       fill: isCalibrated ? 'rgba(76, 175, 80, 0.3)' : 'rgba(255, 152, 0, 0.3)',
       stroke: isCalibrated ? 'green' : 'orange',
       strokeWidth: 2,
@@ -747,14 +728,13 @@ export const InteractiveCanvas = ({
     });
     canvas.add(polygon);
 
-    // Add label at centroid
+    // Add label at WORLD centroid
     const worldCentroid = calculateCentroidWorld(polygonPoints);
-    const viewCentroid = worldToView(worldCentroid, transform, viewport);
     const displayValue = isCalibrated ? result.realValue : result.worldValue;
     const labelText = isCalibrated ? `${displayValue.toFixed(2)} m²` : `${displayValue.toFixed(0)} px²`;
     const label = new Text(labelText, {
-      left: viewCentroid.x - 30,
-      top: viewCentroid.y - 10,
+      left: worldCentroid.x - 30,
+      top: worldCentroid.y - 10,
       fontSize: 14,
       fill: isCalibrated ? 'green' : 'orange',
       backgroundColor: 'white',
