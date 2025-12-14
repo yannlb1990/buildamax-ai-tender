@@ -62,33 +62,56 @@ export const InteractiveCanvas = ({
   const [isPanning, setIsPanning] = useState(false);
   const [lastClientPos, setLastClientPos] = useState<{ x: number; y: number } | null>(null);
 
-  // Initialize Fabric canvas - SIZE TO CONTAINER
+  // Initialize Fabric canvas - SIZE TO CONTAINER with ResizeObserver
   useEffect(() => {
     if (!containerRef.current || fabricCanvasRef.current) return;
 
-    // CRITICAL FIX: Size canvas to CONTAINER, not PDF
-    const containerWidth = Math.max(containerRef.current.clientWidth, 1200);
-    const containerHeight = Math.max(containerRef.current.clientHeight, 800);
+    const container = containerRef.current;
+    
+    // Get initial size with minimum fallback
+    const getContainerSize = () => ({
+      width: Math.max(container.clientWidth || 0, 800),
+      height: Math.max(container.clientHeight || 0, 600)
+    });
+
+    const { width: initialWidth, height: initialHeight } = getContainerSize();
     
     const canvasElement = document.createElement('canvas');
-    canvasElement.width = containerWidth;
-    canvasElement.height = containerHeight;
-    containerRef.current.appendChild(canvasElement);
+    canvasElement.width = initialWidth;
+    canvasElement.height = initialHeight;
+    container.appendChild(canvasElement);
     canvasRef.current = canvasElement;
 
     const canvas = new FabricCanvas(canvasElement, {
-      width: containerWidth,
-      height: containerHeight,
+      width: initialWidth,
+      height: initialHeight,
       backgroundColor: '#f5f5f5',
       selection: false,
     });
 
     fabricCanvasRef.current = canvas;
 
+    // ResizeObserver for dynamic container sizing
+    const resizeObserver = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const { width, height } = entry.contentRect;
+        if (fabricCanvasRef.current && width > 0 && height > 0) {
+          const newWidth = Math.max(width, 800);
+          const newHeight = Math.max(height, 600);
+          fabricCanvasRef.current.setWidth(newWidth);
+          fabricCanvasRef.current.setHeight(newHeight);
+          fabricCanvasRef.current.requestRenderAll();
+        }
+      }
+    });
+
+    resizeObserver.observe(container);
+
     return () => {
+      resizeObserver.disconnect();
       canvas.dispose();
-      if (containerRef.current && canvasElement.parentNode === containerRef.current) {
-        containerRef.current.removeChild(canvasElement);
+      if (container && canvasElement.parentNode === container) {
+        container.removeChild(canvasElement);
       }
       fabricCanvasRef.current = null;
       canvasRef.current = null;
