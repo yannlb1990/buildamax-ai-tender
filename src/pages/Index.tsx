@@ -4,6 +4,7 @@ import Features from "@/components/Features";
 import DashboardPreview from "@/components/DashboardPreview";
 import CTA from "@/components/CTA";
 import Footer from "@/components/Footer";
+import TakeoffVisual from "@/components/TakeoffVisual";
 
 const Index = () => {
   return (
@@ -11,6 +12,7 @@ const Index = () => {
       <Navigation />
       <Hero />
       <Features />
+      <TakeoffVisual />
       <DashboardPreview />
       <CTA />
       <Footer />
