@@ -79,6 +79,17 @@ function takeoffReducer(state: TakeoffState, action: TakeoffAction): TakeoffStat
           : state.currentScale,
         isCalibrated: action.payload.pageIndex === state.currentPageIndex
       };
+
+    case 'RESET_SCALE':
+      const newScales = { ...state.scales };
+      delete newScales[action.payload];
+      return {
+        ...state,
+        scales: newScales,
+        currentScale: action.payload === state.currentPageIndex ? null : state.currentScale,
+        isCalibrated: action.payload === state.currentPageIndex ? false : state.isCalibrated,
+        calibrationMode: null
+      };
       
     case 'SET_CALIBRATION_MODE':
       return { ...state, calibrationMode: action.payload };

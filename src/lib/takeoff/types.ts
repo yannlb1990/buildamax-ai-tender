@@ -44,7 +44,29 @@ export interface PDFViewportData {
 // === MEASUREMENT TYPES ===
 export type MeasurementType = 'line' | 'rectangle' | 'polygon' | 'circle';
 export type MeasurementUnit = 'LM' | 'M2' | 'M3' | 'count';
-export type ToolType = 'line' | 'rectangle' | 'polygon' | 'circle' | 'count' | 'pan' | null;
+export type ToolType = 'select' | 'pan' | 'line' | 'rectangle' | 'polygon' | 'circle' | 'count' | null;
+
+// Area options for measurements
+export type MeasurementArea = 'Kitchen' | 'Bathroom' | 'Bedroom' | 'Living Room' | 'Dining Room' | 'Laundry' | 'Garage' | 'Patio' | 'Balcony' | 'Hallway' | 'Entry' | 'Office' | 'Storage' | 'Utility' | 'Ensuite' | 'WC' | 'External' | 'Other';
+
+// Material categories
+export const MATERIAL_CATEGORIES = {
+  Flooring: ['Tiles', 'Timber', 'Carpet', 'Vinyl', 'Concrete', 'Epoxy'],
+  Walls: ['Plasterboard', 'Render', 'Paint', 'Tiles', 'Cladding', 'Brick'],
+  Ceiling: ['Plasterboard', 'Acoustic Tiles', 'Exposed', 'Bulkhead'],
+  Waterproofing: ['Membrane', 'Sealant', 'Tanking'],
+  Insulation: ['Batts', 'Foam', 'Reflective'],
+  Structural: ['Steel', 'Timber Frame', 'Concrete', 'Block'],
+} as const;
+
+// Enhanced measurement with additional fields
+export interface EnhancedMeasurement extends Measurement {
+  area?: MeasurementArea;
+  materials?: string[];
+  nccCode?: string;
+  validated?: boolean;
+  addedToEstimate?: boolean;
+}
 export type CalibrationMode = 'preset' | 'manual' | null;
 export type DistanceUnit = 'm' | 'mm' | 'cm' | 'ft' | 'in';
 
@@ -178,6 +200,7 @@ export type TakeoffAction =
   | { type: 'SET_UPLOAD_ERROR'; payload: string }
   | { type: 'SET_CURRENT_PAGE'; payload: number }
   | { type: 'SET_SCALE'; payload: { pageIndex: number; scale: ScaleData } }
+  | { type: 'RESET_SCALE'; payload: number }
   | { type: 'SET_CALIBRATION_MODE'; payload: CalibrationMode }
   | { type: 'SET_TRANSFORM'; payload: Partial<Transform> }
   | { type: 'SET_ACTIVE_TOOL'; payload: ToolType }
