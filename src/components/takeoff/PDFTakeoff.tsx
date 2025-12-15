@@ -1,13 +1,17 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react';
-import { ZoomIn, ZoomOut, RotateCw, Maximize2, ChevronLeft, ChevronRight, Download, Trash2 } from 'lucide-react';
+import { Download, ZoomIn, ZoomOut, RotateCw, Maximize2, ChevronLeft, ChevronRight, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { PDFUploadManager } from './PDFUploadManager';
 import { InteractiveCanvas } from './InteractiveCanvas';
 import { ScalingCalibrator } from './ScalingCalibrator';
 import { MeasurementToolbar } from './MeasurementToolbar';
+import { ViewportControls } from './ViewportControls';
+import { Magnifier } from './Magnifier';
+import { TakeoffTable } from './TakeoffTable';
 import { useTakeoffState } from '@/hooks/useTakeoffState';
 import { WorldPoint, MeasurementUnit, Measurement, PDFViewportData } from '@/lib/takeoff/types';
+import { fetchNCCCode } from '@/lib/takeoff/nccCodeFetcher';
 import { toast } from 'sonner';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -27,7 +31,10 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
   const [manualCalibrationPoints, setManualCalibrationPoints] = useState<[WorldPoint, WorldPoint] | null>(null);
   const [pdfViewport, setPdfViewport] = useState<{ width: number; height: number } | null>(null);
   const [pageFilter, setPageFilter] = useState<number | 'all'>('all');
+  const [showMagnifier, setShowMagnifier] = useState(false);
+  const [showGrid, setShowGrid] = useState(false);
   const canvasContainerRef = useRef<HTMLDivElement | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const initialFitDoneRef = useRef(false);
 
   // Reset initial fit when PDF changes
@@ -167,6 +174,25 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
     }
   }, [dispatch]);
 
+  // New callbacks for upgraded components
+  const handleCalibrationCancel = useCallback(() => {
+    setManualCalibrationPoints(null);
+    dispatch({ type: 'SET_CALIBRATION_MODE', payload: null });
+  }, [dispatch]);
+
+  const handleResetScale = useCallback(() => {
+    dispatch({ type: 'RESET_SCALE', payload: state.currentPageIndex });
+  }, [dispatch, state.currentPageIndex]);
+
+  const handleFetchNCCCode = useCallback(async (id: string, area: string, materials: string[]) => {
+    return await fetchNCCCode(area, materials);
+  }, []);
+
+  const handleAddToEstimate = useCallback((measurementIds: string[]) => {
+    toast.success(`Added ${measurementIds.length} items to estimate`);
+    // Future: integrate with cost items
+  }, []);
+
   return (
     <div className="space-y-6">
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
@@ -208,6 +234,8 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                     dispatch({ type: 'SET_CALIBRATION_MODE', payload: 'manual' });
                     toast.info('Click two points on a known dimension');
                   }}
+                  onManualCalibrationCancel={handleCalibrationCancel}
+                  onResetScale={handleResetScale}
                   manualPoints={manualCalibrationPoints}
                   onCalibrationComplete={() => {
                     setManualCalibrationPoints(null);

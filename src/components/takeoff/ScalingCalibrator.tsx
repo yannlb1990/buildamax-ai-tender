@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import { Ruler, CheckCircle } from 'lucide-react';
+import { Ruler, CheckCircle, RotateCcw, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import { calculatePresetScaleWorld, calculateManualScaleWorld } from '@/lib/takeoff/calculations';
 import { ScaleData, WorldPoint, DistanceUnit } from '@/lib/takeoff/types';
 import { toast } from 'sonner';
@@ -14,6 +15,8 @@ interface ScalingCalibratorProps {
   isCalibrated: boolean;
   onScaleSet: (scale: ScaleData) => void;
   onManualCalibrationStart: () => void;
+  onManualCalibrationCancel?: () => void;
+  onResetScale?: () => void;
   manualPoints: [WorldPoint, WorldPoint] | null;
   onCalibrationComplete: () => void;
   pdfViewport?: { width: number; height: number } | null;
@@ -24,6 +27,8 @@ export const ScalingCalibrator = ({
   isCalibrated,
   onScaleSet,
   onManualCalibrationStart,
+  onManualCalibrationCancel,
+  onResetScale,
   manualPoints,
   onCalibrationComplete,
   pdfViewport
@@ -36,8 +41,6 @@ export const ScalingCalibrator = ({
   const presetScales = ['1:20', '1:50', '1:100', '1:200', '1:500'];
 
   const handlePresetScale = () => {
-    // Use actual PDF viewport width if available, otherwise default
-    // Typical A3 landscape = ~1191 points, A4 = ~595 points
     const pageWidth = pdfViewport?.width || 595;
     console.log('Preset scale using PDF width:', pageWidth);
     
@@ -78,13 +81,31 @@ export const ScalingCalibrator = ({
     onCalibrationComplete();
   };
 
+  const handleCancel = () => {
+    setManualDistance('');
+    onManualCalibrationCancel?.();
+  };
+
   return (
     <Card className="p-4 space-y-4">
       <div className="flex items-center gap-2">
         <Ruler className="h-5 w-5 text-primary" />
         <h3 className="font-semibold">Scale Calibration</h3>
         {isCalibrated && (
-          <CheckCircle className="h-4 w-4 text-green-500 ml-auto" />
+          <div className="flex items-center gap-1 ml-auto">
+            <CheckCircle className="h-4 w-4 text-green-500" />
+            {onResetScale && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6"
+                onClick={onResetScale}
+                title="Reset scale"
+              >
+                <RotateCcw className="h-3 w-3" />
+              </Button>
+            )}
+          </div>
         )}
       </div>
 
@@ -126,7 +147,7 @@ export const ScalingCalibrator = ({
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="bg-popover">
                 {presetScales.map(scale => (
                   <SelectItem key={scale} value={scale}>
                     {scale}
@@ -151,8 +172,7 @@ export const ScalingCalibrator = ({
           <div className="bg-muted p-3 rounded-md text-sm">
             <p className="font-medium mb-1">Instructions:</p>
             <ol className="list-decimal list-inside space-y-1 text-muted-foreground">
-              <li>Click "Start Calibration" below</li>
-              <li>Click two points on a known dimension</li>
+              <li>Click "Start" then drag a line on a known dimension</li>
               <li>Enter the real-world distance</li>
               <li>Click "Apply" to set scale</li>
             </ol>
@@ -166,6 +186,10 @@ export const ScalingCalibrator = ({
 
           {manualPoints && (
             <>
+              <Badge variant="secondary" className="w-full justify-center py-1">
+                Line drawn on plan ✓
+              </Badge>
+
               <div className="space-y-2">
                 <Label>Real-World Distance</Label>
                 <div className="flex gap-2">
@@ -181,7 +205,7 @@ export const ScalingCalibrator = ({
                     <SelectTrigger className="w-24">
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="bg-popover">
                       <SelectItem value="m">metres</SelectItem>
                       <SelectItem value="mm">mm</SelectItem>
                       <SelectItem value="cm">cm</SelectItem>
@@ -192,9 +216,19 @@ export const ScalingCalibrator = ({
                 </div>
               </div>
 
-              <Button onClick={handleManualCalibrationComplete} className="w-full">
-                Apply Manual Scale
-              </Button>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  onClick={handleCancel}
+                  className="flex-1"
+                >
+                  <X className="h-4 w-4 mr-1" />
+                  Cancel
+                </Button>
+                <Button onClick={handleManualCalibrationComplete} className="flex-1">
+                  Apply
+                </Button>
+              </div>
             </>
           )}
         </div>
