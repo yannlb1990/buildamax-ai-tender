@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { ZoomIn, ZoomOut, RotateCw, Maximize2, ChevronLeft, ChevronRight, Download, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -7,7 +7,7 @@ import { InteractiveCanvas } from './InteractiveCanvas';
 import { ScalingCalibrator } from './ScalingCalibrator';
 import { MeasurementToolbar } from './MeasurementToolbar';
 import { useTakeoffState } from '@/hooks/useTakeoffState';
-import { WorldPoint, MeasurementUnit } from '@/lib/takeoff/types';
+import { WorldPoint, MeasurementUnit, Measurement, PDFViewportData } from '@/lib/takeoff/types';
 import { toast } from 'sonner';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -28,6 +28,14 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
   const [pdfViewport, setPdfViewport] = useState<{ width: number; height: number } | null>(null);
   const [pageFilter, setPageFilter] = useState<number | 'all'>('all');
   const canvasContainerRef = useRef<HTMLDivElement | null>(null);
+  const initialFitDoneRef = useRef(false);
+
+  // Reset initial fit when PDF changes
+  React.useEffect(() => {
+    if (state.pdfFile) {
+      initialFitDoneRef.current = false;
+    }
+  }, [state.pdfFile?.url]);
 
   // Filter measurements by page
   const filteredMeasurements = useMemo(() => {
@@ -119,6 +127,45 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
       dispatch({ type: 'SET_CURRENT_PAGE', payload: state.currentPageIndex + 1 });
     }
   };
+
+  // FIX: Memoize callbacks to prevent infinite re-renders
+  const handleMeasurementComplete = useCallback((measurement: Measurement) => {
+    dispatch({ type: 'ADD_MEASUREMENT', payload: measurement });
+    toast.success('Measurement added');
+  }, [dispatch]);
+
+  const handleCalibrationPointsSet = useCallback((points: [WorldPoint, WorldPoint]) => {
+    setManualCalibrationPoints(points);
+    toast.info('Enter real-world distance below');
+  }, []);
+
+  const handleTransformChange = useCallback((transform: Partial<typeof state.transform>) => {
+    dispatch({ type: 'SET_TRANSFORM', payload: transform });
+  }, [dispatch]);
+
+  const handleViewportReady = useCallback((viewport: PDFViewportData) => {
+    setPdfViewport({ width: viewport.width, height: viewport.height });
+    
+    // CRITICAL: Only fit on initial load, not on every callback
+    if (!initialFitDoneRef.current) {
+      initialFitDoneRef.current = true;
+      
+      // Use setTimeout to ensure container has been laid out
+      setTimeout(() => {
+        const container = canvasContainerRef.current;
+        const containerWidth = container?.clientWidth || 1200;
+        const containerHeight = container?.clientHeight || 800;
+        
+        const fitZoom = Math.min(
+          containerWidth / viewport.width,
+          containerHeight / viewport.height,
+          1.5 // Cap at 150% to prevent oversized display
+        );
+        
+        dispatch({ type: 'SET_TRANSFORM', payload: { zoom: fitZoom, panX: 0, panY: 0 } });
+      }, 50);
+    }
+  }, [dispatch]);
 
   return (
     <div className="space-y-6">
@@ -243,31 +290,10 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                     calibrationMode={state.calibrationMode}
                     deductionMode={state.deductionMode}
                     selectedColor={state.selectedColor}
-                    onMeasurementComplete={(measurement) => {
-                      dispatch({ type: 'ADD_MEASUREMENT', payload: measurement });
-                      toast.success('Measurement added');
-                    }}
-                    onCalibrationPointsSet={(points) => {
-                      setManualCalibrationPoints(points);
-                      toast.info('Enter real-world distance below');
-                    }}
-                    onTransformChange={(transform) => {
-                      dispatch({ type: 'SET_TRANSFORM', payload: transform });
-                    }}
-                    onViewportReady={(viewport) => {
-                      setPdfViewport({ width: viewport.width, height: viewport.height });
-                      const container = canvasContainerRef.current;
-                      const containerWidth = container?.clientWidth || 1200;
-                      const containerHeight = container?.clientHeight || 800;
-                      const fitZoom = Math.min(
-                        containerWidth / viewport.width,
-                        containerHeight / viewport.height
-                      );
-                      dispatch({
-                        type: 'SET_TRANSFORM',
-                        payload: { zoom: fitZoom, panX: 0, panY: 0 }
-                      });
-                    }}
+                    onMeasurementComplete={handleMeasurementComplete}
+                    onCalibrationPointsSet={handleCalibrationPointsSet}
+                    onTransformChange={handleTransformChange}
+                    onViewportReady={handleViewportReady}
                   />
                 </div>
               </div>
