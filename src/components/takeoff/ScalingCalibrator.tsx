@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Slider } from '@/components/ui/slider';
 import { calculatePresetScaleWorld, calculateManualScaleWorld } from '@/lib/takeoff/calculations';
 import { ScaleData, WorldPoint, DistanceUnit } from '@/lib/takeoff/types';
 import { toast } from 'sonner';
@@ -37,16 +38,17 @@ export const ScalingCalibrator = ({
   const [selectedScale, setSelectedScale] = useState('1:100');
   const [manualDistance, setManualDistance] = useState('');
   const [unit, setUnit] = useState<DistanceUnit>('m');
+  const [drawingAreaPercent, setDrawingAreaPercent] = useState(85);
 
   const presetScales = ['1:20', '1:50', '1:100', '1:200', '1:500'];
 
   const handlePresetScale = () => {
     const pageWidth = pdfViewport?.width || 595;
-    console.log('Preset scale using PDF width:', pageWidth);
+    console.log('Preset scale using PDF width:', pageWidth, 'Drawing area:', drawingAreaPercent + '%');
     
-    const scale = calculatePresetScaleWorld(selectedScale, pageWidth);
+    const scale = calculatePresetScaleWorld(selectedScale, pageWidth, drawingAreaPercent / 100);
     onScaleSet(scale);
-    toast.success(`Scale set to ${selectedScale}`);
+    toast.success(`Scale set to ${selectedScale} (${drawingAreaPercent}% drawing area)`);
   };
 
   const handleManualCalibrationComplete = () => {
@@ -116,6 +118,7 @@ export const ScalingCalibrator = ({
           </p>
           <p className="text-xs text-green-700 dark:text-green-300 mt-1">
             {currentScale.unitsPerMetre.toFixed(2)} PDF units per metre
+            {currentScale.drawingAreaPercent && ` (${Math.round(currentScale.drawingAreaPercent * 100)}% drawing area)`}
           </p>
         </div>
       )}
@@ -140,7 +143,7 @@ export const ScalingCalibrator = ({
       </div>
 
       {calibrationMode === 'preset' && (
-        <div className="space-y-3">
+        <div className="space-y-4">
           <div>
             <Label>Select Scale</Label>
             <Select value={selectedScale} onValueChange={setSelectedScale}>
@@ -156,6 +159,25 @@ export const ScalingCalibrator = ({
               </SelectContent>
             </Select>
           </div>
+
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <Label className="text-xs">Drawing Area %</Label>
+              <span className="text-xs font-medium">{drawingAreaPercent}%</span>
+            </div>
+            <Slider
+              value={[drawingAreaPercent]}
+              onValueChange={(val) => setDrawingAreaPercent(val[0])}
+              min={60}
+              max={100}
+              step={5}
+              className="w-full"
+            />
+            <p className="text-[10px] text-muted-foreground">
+              Adjust for title blocks & borders (85% typical for A1/A3)
+            </p>
+          </div>
+
           {pdfViewport && (
             <p className="text-xs text-muted-foreground">
               PDF size: {pdfViewport.width.toFixed(0)} × {pdfViewport.height.toFixed(0)} pts
@@ -172,7 +194,7 @@ export const ScalingCalibrator = ({
           <div className="bg-muted p-3 rounded-md text-sm">
             <p className="font-medium mb-1">Instructions:</p>
             <ol className="list-decimal list-inside space-y-1 text-muted-foreground">
-              <li>Click "Start" then drag a line on a known dimension</li>
+              <li>Click "Start" then click-drag a line on a known dimension</li>
               <li>Enter the real-world distance</li>
               <li>Click "Apply" to set scale</li>
             </ol>

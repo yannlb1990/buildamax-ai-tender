@@ -54,9 +54,12 @@ export const InteractiveCanvas = ({
   const [polygonMarkers, setPolygonMarkers] = useState<Circle[]>([]);
   const [polygonLines, setPolygonLines] = useState<Line[]>([]);
 
-  // Calibration state
+  // Calibration state - now supports drag-to-calibrate
   const [calibrationPoints, setCalibrationPoints] = useState<WorldPoint[]>([]);
   const [calibrationObjects, setCalibrationObjects] = useState<any[]>([]);
+  const [isCalibrationDragging, setIsCalibrationDragging] = useState(false);
+  const [calibrationStartPoint, setCalibrationStartPoint] = useState<WorldPoint | null>(null);
+  const [calibrationPreviewLine, setCalibrationPreviewLine] = useState<any>(null);
 
   // Pan state
   const [isPanning, setIsPanning] = useState(false);
@@ -193,18 +196,19 @@ export const InteractiveCanvas = ({
   }, [pdfUrl, pageIndex, transform.rotation, onViewportReady]);
 
   // Apply zoom and pan transforms - SINGLE SOURCE OF TRUTH
+  // Re-render measurements when transform changes for stability
   useEffect(() => {
     if (!fabricCanvasRef.current) return;
     const canvas = fabricCanvasRef.current;
     
     // Apply viewportTransform for zoom and pan
     // [scaleX, skewY, skewX, scaleY, translateX, translateY]
-    canvas.viewportTransform = [
+    canvas.setViewportTransform([
       transform.zoom, 0, 0, 
       transform.zoom, 
       transform.panX, 
       transform.panY
-    ];
+    ]);
     
     canvas.requestRenderAll();
   }, [transform.zoom, transform.panX, transform.panY]);
@@ -262,15 +266,16 @@ export const InteractiveCanvas = ({
     };
   }, [onTransformChange, transform.zoom]);
 
-  // Handle calibration click
-  const handleCalibrationClick = useCallback((worldPoint: WorldPoint) => {
+  // Handle calibration DRAG (new drag-to-calibrate)
+  const handleCalibrationMouseDown = useCallback((worldPoint: WorldPoint) => {
     const canvas = fabricCanvasRef.current;
     if (!canvas || !viewport) return;
 
-    const newPoints = [...calibrationPoints, worldPoint];
-    const newObjects = [...calibrationObjects];
+    // Start drag - set start point
+    setIsCalibrationDragging(true);
+    setCalibrationStartPoint(worldPoint);
     
-    // Draw at WORLD coordinates - viewportTransform handles zoom/pan
+    // Draw start marker at WORLD coordinates
     const marker = new Circle({
       left: worldPoint.x - 5,
       top: worldPoint.y - 5,
@@ -282,10 +287,8 @@ export const InteractiveCanvas = ({
       evented: false,
     });
     canvas.add(marker);
-    newObjects.push(marker);
-
-    // Add label at WORLD position
-    const label = new Text(newPoints.length === 1 ? 'A' : 'B', {
+    
+    const label = new Text('A', {
       left: worldPoint.x + 10,
       top: worldPoint.y - 10,
       fontSize: 16,
@@ -295,30 +298,92 @@ export const InteractiveCanvas = ({
       evented: false,
     });
     canvas.add(label);
-    newObjects.push(label);
+    
+    setCalibrationObjects([marker, label]);
+    canvas.requestRenderAll();
+  }, [viewport]);
 
-    if (newPoints.length === 2) {
-      // Draw line at WORLD positions
-      const line = new Line([newPoints[0].x, newPoints[0].y, newPoints[1].x, newPoints[1].y], {
-        stroke: 'red',
-        strokeWidth: 2,
-        strokeDashArray: [5, 5],
-        selectable: false,
-        evented: false,
-      });
-      canvas.add(line);
-      newObjects.push(line);
-      
-      setCalibrationObjects(newObjects);
-      onCalibrationPointsSet([newPoints[0], newPoints[1]]);
-      setCalibrationPoints([]);
-    } else {
-      setCalibrationPoints(newPoints);
-      setCalibrationObjects(newObjects);
+  const handleCalibrationMouseMove = useCallback((worldPoint: WorldPoint) => {
+    const canvas = fabricCanvasRef.current;
+    if (!canvas || !isCalibrationDragging || !calibrationStartPoint) return;
+
+    // Remove previous preview line
+    if (calibrationPreviewLine) {
+      canvas.remove(calibrationPreviewLine);
     }
 
+    // Draw preview line at WORLD positions
+    const line = new Line([
+      calibrationStartPoint.x, calibrationStartPoint.y,
+      worldPoint.x, worldPoint.y
+    ], {
+      stroke: 'red',
+      strokeWidth: 2,
+      strokeDashArray: [5, 5],
+      selectable: false,
+      evented: false,
+    });
+    canvas.add(line);
+    setCalibrationPreviewLine(line);
     canvas.requestRenderAll();
-  }, [calibrationPoints, calibrationObjects, viewport, onCalibrationPointsSet]);
+  }, [isCalibrationDragging, calibrationStartPoint, calibrationPreviewLine]);
+
+  const handleCalibrationMouseUp = useCallback((worldPoint: WorldPoint) => {
+    const canvas = fabricCanvasRef.current;
+    if (!canvas || !isCalibrationDragging || !calibrationStartPoint || !viewport) return;
+
+    // Clean up preview line
+    if (calibrationPreviewLine) {
+      canvas.remove(calibrationPreviewLine);
+      setCalibrationPreviewLine(null);
+    }
+
+    // Draw final line at WORLD positions
+    const line = new Line([
+      calibrationStartPoint.x, calibrationStartPoint.y,
+      worldPoint.x, worldPoint.y
+    ], {
+      stroke: 'red',
+      strokeWidth: 2,
+      strokeDashArray: [5, 5],
+      selectable: false,
+      evented: false,
+    });
+    canvas.add(line);
+
+    // Add end marker
+    const marker = new Circle({
+      left: worldPoint.x - 5,
+      top: worldPoint.y - 5,
+      radius: 5,
+      fill: 'red',
+      stroke: 'white',
+      strokeWidth: 2,
+      selectable: false,
+      evented: false,
+    });
+    canvas.add(marker);
+
+    const label = new Text('B', {
+      left: worldPoint.x + 10,
+      top: worldPoint.y - 10,
+      fontSize: 16,
+      fill: 'red',
+      fontWeight: 'bold',
+      selectable: false,
+      evented: false,
+    });
+    canvas.add(label);
+
+    setCalibrationObjects(prev => [...prev, line, marker, label]);
+    
+    // Complete calibration
+    onCalibrationPointsSet([calibrationStartPoint, worldPoint]);
+    
+    setIsCalibrationDragging(false);
+    setCalibrationStartPoint(null);
+    canvas.requestRenderAll();
+  }, [isCalibrationDragging, calibrationStartPoint, calibrationPreviewLine, viewport, onCalibrationPointsSet]);
 
   // Handle mouse down
   const handleMouseDown = useCallback((e: any) => {
@@ -340,9 +405,9 @@ export const InteractiveCanvas = ({
       pan: { x: transform.panX, y: transform.panY }
     });
 
-    // Handle calibration
+    // Handle calibration (drag-to-calibrate)
     if (calibrationMode === 'manual' && !isCalibrated) {
-      handleCalibrationClick(worldPoint);
+      handleCalibrationMouseDown(worldPoint);
       return;
     }
 
@@ -435,13 +500,21 @@ export const InteractiveCanvas = ({
   }, [
     viewport, transform, calibrationMode, isCalibrated, activeTool, 
     polygonPoints, polygonMarkers, polygonLines, pageIndex,
-    handleCalibrationClick, onMeasurementComplete
+    handleCalibrationMouseDown, onMeasurementComplete
   ]);
 
   // Handle mouse move
   const handleMouseMove = useCallback((e: any) => {
     const canvas = fabricCanvasRef.current;
     if (!canvas || !viewport) return;
+
+    // Handle calibration drag preview
+    if (calibrationMode === 'manual' && isCalibrationDragging && calibrationStartPoint) {
+      const pointer = canvas.getPointer(e.e, false);
+      const currentWorld = viewToWorld({ x: pointer.x, y: pointer.y }, transform, viewport);
+      handleCalibrationMouseMove(currentWorld);
+      return;
+    }
 
     // Handle panning (use client coordinates for smooth panning)
     if (isPanning && lastClientPos) {
@@ -524,13 +597,22 @@ export const InteractiveCanvas = ({
     canvas.requestRenderAll();
   }, [
     viewport, transform, isPanning, lastClientPos, isDrawing, startPoint, 
-    previewShape, activeTool, isCalibrated, onTransformChange
+    previewShape, activeTool, isCalibrated, onTransformChange,
+    calibrationMode, isCalibrationDragging, calibrationStartPoint, handleCalibrationMouseMove
   ]);
 
   // Handle mouse up
   const handleMouseUp = useCallback((e: any) => {
     const canvas = fabricCanvasRef.current;
     if (!canvas) return;
+
+    // Handle calibration drag end
+    if (calibrationMode === 'manual' && isCalibrationDragging && calibrationStartPoint) {
+      const pointer = canvas.getPointer(e.e, false);
+      const worldEnd = viewToWorld({ x: pointer.x, y: pointer.y }, transform, viewport);
+      handleCalibrationMouseUp(worldEnd);
+      return;
+    }
 
     // Handle pan end
     if (isPanning) {
@@ -706,7 +788,8 @@ export const InteractiveCanvas = ({
   }, [
     viewport, transform, isPanning, isDrawing, startPoint, previewShape,
     activeTool, isCalibrated, unitsPerMetre, deductionMode, pageIndex,
-    onMeasurementComplete
+    onMeasurementComplete, calibrationMode, isCalibrationDragging, 
+    calibrationStartPoint, handleCalibrationMouseUp
   ]);
 
   // Handle double click to close polygon

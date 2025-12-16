@@ -1,12 +1,13 @@
 import { useState, useMemo } from 'react';
-import { Check, Trash2, ChevronDown, ChevronRight, Plus } from 'lucide-react';
+import { Check, Trash2, ChevronDown, ChevronRight, Plus, Search, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Card } from '@/components/ui/card';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 import { Measurement, MeasurementUnit, MeasurementArea, MATERIAL_CATEGORIES } from '@/lib/takeoff/types';
 
@@ -41,8 +42,31 @@ export const TakeoffTable = ({
 }: TakeoffTableProps) => {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  const [searchFilter, setSearchFilter] = useState('');
+  const [groupByArea, setGroupByArea] = useState(false);
+  const [isOpen, setIsOpen] = useState(false);
 
   const enhancedMeasurements = measurements as EnhancedMeasurement[];
+
+  const filteredMeasurements = useMemo(() => {
+    if (!searchFilter) return enhancedMeasurements;
+    const lower = searchFilter.toLowerCase();
+    return enhancedMeasurements.filter(m => 
+      m.label.toLowerCase().includes(lower) ||
+      m.area?.toLowerCase().includes(lower) ||
+      m.materials?.some(mat => mat.toLowerCase().includes(lower))
+    );
+  }, [enhancedMeasurements, searchFilter]);
+
+  const groupedMeasurements = useMemo(() => {
+    if (!groupByArea) return { All: filteredMeasurements };
+    return filteredMeasurements.reduce((acc, m) => {
+      const area = m.area || 'Unassigned';
+      if (!acc[area]) acc[area] = [];
+      acc[area].push(m);
+      return acc;
+    }, {} as Record<string, EnhancedMeasurement[]>);
+  }, [filteredMeasurements, groupByArea]);
 
   const totals = useMemo(() => {
     return enhancedMeasurements.reduce(
@@ -61,10 +85,10 @@ export const TakeoffTable = ({
   );
 
   const toggleSelectAll = () => {
-    if (selectedIds.size === measurements.length) {
+    if (selectedIds.size === filteredMeasurements.length) {
       setSelectedIds(new Set());
     } else {
-      setSelectedIds(new Set(measurements.map((m) => m.id)));
+      setSelectedIds(new Set(filteredMeasurements.map((m) => m.id)));
     }
   };
 
@@ -112,21 +136,218 @@ export const TakeoffTable = ({
     onUpdateMeasurement(id, { validated: !measurement?.validated });
   };
 
-  if (measurements.length === 0) {
-    return (
-      <Card className="p-6 text-center text-muted-foreground">
-        No measurements yet. Use the measurement tools to add items.
-      </Card>
-    );
-  }
-
-  return (
-    <Card className="overflow-hidden">
-      {/* Header */}
-      <div className="grid grid-cols-12 gap-2 p-3 bg-muted/50 border-b text-xs font-medium text-muted-foreground">
+  const renderMeasurementRow = (m: EnhancedMeasurement) => (
+    <div key={m.id}>
+      <div
+        className={cn(
+          'grid grid-cols-12 gap-2 p-2 border-b items-center text-sm',
+          m.validated && 'bg-green-50 dark:bg-green-950/30',
+          selectedIds.has(m.id) && 'bg-accent/50'
+        )}
+      >
+        {/* Checkbox */}
         <div className="col-span-1 flex items-center">
           <Checkbox
-            checked={selectedIds.size === measurements.length && measurements.length > 0}
+            checked={selectedIds.has(m.id)}
+            onCheckedChange={() => toggleSelect(m.id)}
+          />
+        </div>
+
+        {/* Name */}
+        <div className="col-span-2">
+          <Input
+            value={m.label}
+            onChange={(e) => onUpdateMeasurement(m.id, { label: e.target.value })}
+            className="h-8 text-xs"
+            placeholder="Label..."
+          />
+        </div>
+
+        {/* Area */}
+        <div className="col-span-2">
+          <Select
+            value={m.area || ''}
+            onValueChange={(v: MeasurementArea) => onUpdateMeasurement(m.id, { area: v })}
+          >
+            <SelectTrigger className="h-8 text-xs">
+              <SelectValue placeholder="Select..." />
+            </SelectTrigger>
+            <SelectContent className="bg-popover">
+              {AREA_OPTIONS.map((area) => (
+                <SelectItem key={area} value={area} className="text-xs">
+                  {area}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* Qty */}
+        <div className="col-span-1 font-mono text-xs">
+          {m.realValue.toFixed(2)}
+        </div>
+
+        {/* Unit */}
+        <div className="col-span-1">
+          <Select
+            value={m.unit}
+            onValueChange={(v: MeasurementUnit) => onUpdateMeasurement(m.id, { unit: v })}
+          >
+            <SelectTrigger className="h-8 text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent className="bg-popover">
+              <SelectItem value="LM">LM</SelectItem>
+              <SelectItem value="M2">M²</SelectItem>
+              <SelectItem value="M3">M³</SelectItem>
+              <SelectItem value="count">EA</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* Materials - Inline pills */}
+        <div className="col-span-2">
+          <div className="flex flex-wrap gap-1 items-center">
+            {m.materials?.slice(0, 2).map((mat) => (
+              <Badge key={mat} variant="secondary" className="text-[10px] px-1">
+                {mat}
+              </Badge>
+            ))}
+            {(m.materials?.length || 0) > 2 && (
+              <Badge variant="outline" className="text-[10px] px-1">
+                +{(m.materials?.length || 0) - 2}
+              </Badge>
+            )}
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-5 w-5"
+              onClick={() => toggleExpand(m.id)}
+            >
+              {expandedIds.has(m.id) ? (
+                <ChevronDown className="h-3 w-3" />
+              ) : (
+                <ChevronRight className="h-3 w-3" />
+              )}
+            </Button>
+          </div>
+        </div>
+
+        {/* NCC */}
+        <div className="col-span-2">
+          {m.nccCode ? (
+            <Badge variant="outline" className="text-xs">
+              {m.nccCode}
+            </Badge>
+          ) : (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 text-xs"
+              onClick={() => handleFetchNCC(m)}
+              disabled={!m.area}
+            >
+              Fetch NCC
+            </Button>
+          )}
+        </div>
+
+        {/* Actions */}
+        <div className="col-span-1 flex items-center gap-1">
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant={m.validated ? 'default' : 'ghost'}
+                  size="icon"
+                  className="h-7 w-7"
+                  onClick={() => handleValidate(m.id)}
+                >
+                  <Check className="h-3 w-3" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                {m.validated ? 'Validated' : 'Validate'}
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7 text-destructive hover:text-destructive"
+            onClick={() => onDeleteMeasurement(m.id)}
+          >
+            <Trash2 className="h-3 w-3" />
+          </Button>
+        </div>
+      </div>
+
+      {/* Material Selection Panel */}
+      {expandedIds.has(m.id) && (
+        <div className="p-3 bg-muted/30 border-b space-y-2">
+          {Object.entries(MATERIAL_CATEGORIES).map(([category, materials]) => (
+            <div key={category} className="space-y-1">
+              <span className="text-xs font-medium text-muted-foreground">
+                {category}
+              </span>
+              <div className="flex flex-wrap gap-1">
+                {materials.map((material) => (
+                  <Badge
+                    key={material}
+                    variant={m.materials?.includes(material) ? 'default' : 'outline'}
+                    className="cursor-pointer text-xs"
+                    onClick={() => handleMaterialToggle(m.id, material)}
+                  >
+                    {material}
+                  </Badge>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+
+  const tableContent = (
+    <div className="space-y-3">
+      {/* Search and Filters */}
+      <div className="flex items-center gap-2">
+        <div className="relative flex-1">
+          <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+          <Input
+            placeholder="Search measurements..."
+            value={searchFilter}
+            onChange={(e) => setSearchFilter(e.target.value)}
+            className="h-8 pl-8 text-xs"
+          />
+          {searchFilter && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="absolute right-1 top-1/2 -translate-y-1/2 h-5 w-5"
+              onClick={() => setSearchFilter('')}
+            >
+              <X className="h-3 w-3" />
+            </Button>
+          )}
+        </div>
+        <Button
+          variant={groupByArea ? 'default' : 'outline'}
+          size="sm"
+          className="h-8 text-xs"
+          onClick={() => setGroupByArea(!groupByArea)}
+        >
+          Group by Area
+        </Button>
+      </div>
+
+      {/* Table Header */}
+      <div className="grid grid-cols-12 gap-2 p-2 bg-muted/50 rounded-t-md text-xs font-medium text-muted-foreground">
+        <div className="col-span-1 flex items-center">
+          <Checkbox
+            checked={selectedIds.size === filteredMeasurements.length && filteredMeasurements.length > 0}
             onCheckedChange={toggleSelectAll}
           />
         </div>
@@ -139,178 +360,28 @@ export const TakeoffTable = ({
         <div className="col-span-1">Actions</div>
       </div>
 
-      {/* Rows */}
-      <div className="max-h-[400px] overflow-y-auto">
-        {enhancedMeasurements.map((m) => (
-          <div key={m.id}>
-            <div
-              className={cn(
-                'grid grid-cols-12 gap-2 p-2 border-b items-center text-sm',
-                m.validated && 'bg-green-50 dark:bg-green-950/30',
-                selectedIds.has(m.id) && 'bg-accent/50'
-              )}
-            >
-              {/* Checkbox */}
-              <div className="col-span-1 flex items-center">
-                <Checkbox
-                  checked={selectedIds.has(m.id)}
-                  onCheckedChange={() => toggleSelect(m.id)}
-                />
-              </div>
-
-              {/* Name */}
-              <div className="col-span-2">
-                <Input
-                  value={m.label}
-                  onChange={(e) => onUpdateMeasurement(m.id, { label: e.target.value })}
-                  className="h-8 text-xs"
-                  placeholder="Label..."
-                />
-              </div>
-
-              {/* Area */}
-              <div className="col-span-2">
-                <Select
-                  value={m.area || ''}
-                  onValueChange={(v: MeasurementArea) => onUpdateMeasurement(m.id, { area: v })}
-                >
-                  <SelectTrigger className="h-8 text-xs">
-                    <SelectValue placeholder="Select..." />
-                  </SelectTrigger>
-                  <SelectContent className="bg-popover">
-                    {AREA_OPTIONS.map((area) => (
-                      <SelectItem key={area} value={area} className="text-xs">
-                        {area}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Qty */}
-              <div className="col-span-1 font-mono text-xs">
-                {m.realValue.toFixed(2)}
-              </div>
-
-              {/* Unit */}
-              <div className="col-span-1">
-                <Select
-                  value={m.unit}
-                  onValueChange={(v: MeasurementUnit) => onUpdateMeasurement(m.id, { unit: v })}
-                >
-                  <SelectTrigger className="h-8 text-xs">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="bg-popover">
-                    <SelectItem value="LM">LM</SelectItem>
-                    <SelectItem value="M2">M²</SelectItem>
-                    <SelectItem value="M3">M³</SelectItem>
-                    <SelectItem value="count">EA</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Materials */}
-              <div className="col-span-2">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-8 w-full justify-between text-xs"
-                  onClick={() => toggleExpand(m.id)}
-                >
-                  <span className="truncate">
-                    {m.materials?.length
-                      ? `${m.materials.length} selected`
-                      : 'Select...'}
-                  </span>
-                  {expandedIds.has(m.id) ? (
-                    <ChevronDown className="h-3 w-3 ml-1" />
-                  ) : (
-                    <ChevronRight className="h-3 w-3 ml-1" />
-                  )}
-                </Button>
-              </div>
-
-              {/* NCC */}
-              <div className="col-span-2">
-                {m.nccCode ? (
-                  <Badge variant="outline" className="text-xs">
-                    {m.nccCode}
-                  </Badge>
-                ) : (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-7 text-xs"
-                    onClick={() => handleFetchNCC(m)}
-                    disabled={!m.area}
-                  >
-                    Fetch NCC
-                  </Button>
-                )}
-              </div>
-
-              {/* Actions */}
-              <div className="col-span-1 flex items-center gap-1">
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant={m.validated ? 'default' : 'ghost'}
-                        size="icon"
-                        className="h-7 w-7"
-                        onClick={() => handleValidate(m.id)}
-                      >
-                        <Check className="h-3 w-3" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      {m.validated ? 'Validated' : 'Validate'}
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-7 w-7 text-destructive hover:text-destructive"
-                  onClick={() => onDeleteMeasurement(m.id)}
-                >
-                  <Trash2 className="h-3 w-3" />
-                </Button>
-              </div>
-            </div>
-
-            {/* Material Selection Panel */}
-            {expandedIds.has(m.id) && (
-              <div className="p-3 bg-muted/30 border-b space-y-2">
-                {Object.entries(MATERIAL_CATEGORIES).map(([category, materials]) => (
-                  <div key={category} className="space-y-1">
-                    <span className="text-xs font-medium text-muted-foreground">
-                      {category}
-                    </span>
-                    <div className="flex flex-wrap gap-1">
-                      {materials.map((material) => (
-                        <Badge
-                          key={material}
-                          variant={m.materials?.includes(material) ? 'default' : 'outline'}
-                          className="cursor-pointer text-xs"
-                          onClick={() => handleMaterialToggle(m.id, material)}
-                        >
-                          {material}
-                        </Badge>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
+      {/* Table Body */}
+      <ScrollArea className="h-[400px] border rounded-md">
+        {filteredMeasurements.length === 0 ? (
+          <div className="p-6 text-center text-muted-foreground text-sm">
+            No measurements yet. Use the tools to add items.
           </div>
-        ))}
-      </div>
+        ) : groupByArea ? (
+          Object.entries(groupedMeasurements).map(([area, items]) => (
+            <div key={area}>
+              <div className="bg-muted px-3 py-1.5 text-xs font-semibold border-b">
+                {area} ({items.length})
+              </div>
+              {items.map(renderMeasurementRow)}
+            </div>
+          ))
+        ) : (
+          filteredMeasurements.map(renderMeasurementRow)
+        )}
+      </ScrollArea>
 
       {/* Footer */}
-      <div className="p-3 bg-muted/30 border-t space-y-3">
+      <div className="p-3 bg-muted/30 rounded-md space-y-3">
         {/* Totals */}
         <div className="flex items-center gap-4 text-xs">
           <span className="font-medium">Totals:</span>
@@ -337,6 +408,25 @@ export const TakeoffTable = ({
           </Button>
         )}
       </div>
-    </Card>
+    </div>
+  );
+
+  return (
+    <Sheet open={isOpen} onOpenChange={setIsOpen}>
+      <SheetTrigger asChild>
+        <Button variant="outline" className="w-full">
+          <Plus className="h-4 w-4 mr-2" />
+          Takeoff Table ({measurements.length})
+        </Button>
+      </SheetTrigger>
+      <SheetContent side="right" className="w-full sm:max-w-2xl">
+        <SheetHeader>
+          <SheetTitle>Takeoff Measurements</SheetTitle>
+        </SheetHeader>
+        <div className="mt-4">
+          {tableContent}
+        </div>
+      </SheetContent>
+    </Sheet>
   );
 };
