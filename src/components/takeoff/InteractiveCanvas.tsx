@@ -266,6 +266,11 @@ export const InteractiveCanvas = ({
     };
   }, [onTransformChange, transform.zoom]);
 
+  // Zoom-aware sizes for consistent visual appearance
+  const getZoomAwareSize = useCallback((baseSize: number) => {
+    return baseSize / transform.zoom;
+  }, [transform.zoom]);
+
   // Handle calibration DRAG (new drag-to-calibrate)
   const handleCalibrationMouseDown = useCallback((worldPoint: WorldPoint) => {
     const canvas = fabricCanvasRef.current;
@@ -274,34 +279,39 @@ export const InteractiveCanvas = ({
     // Start drag - set start point
     setIsCalibrationDragging(true);
     setCalibrationStartPoint(worldPoint);
-    
+
+    // Zoom-aware sizes for consistent visual appearance
+    const markerRadius = getZoomAwareSize(5);
+    const strokeWidth = getZoomAwareSize(2);
+    const fontSize = getZoomAwareSize(16);
+
     // Draw start marker at WORLD coordinates
     const marker = new Circle({
-      left: worldPoint.x - 5,
-      top: worldPoint.y - 5,
-      radius: 5,
+      left: worldPoint.x - markerRadius,
+      top: worldPoint.y - markerRadius,
+      radius: markerRadius,
       fill: 'red',
       stroke: 'white',
-      strokeWidth: 2,
+      strokeWidth: strokeWidth,
       selectable: false,
       evented: false,
     });
     canvas.add(marker);
-    
+
     const label = new Text('A', {
-      left: worldPoint.x + 10,
-      top: worldPoint.y - 10,
-      fontSize: 16,
+      left: worldPoint.x + getZoomAwareSize(10),
+      top: worldPoint.y - getZoomAwareSize(10),
+      fontSize: fontSize,
       fill: 'red',
       fontWeight: 'bold',
       selectable: false,
       evented: false,
     });
     canvas.add(label);
-    
+
     setCalibrationObjects([marker, label]);
     canvas.requestRenderAll();
-  }, [viewport]);
+  }, [viewport, getZoomAwareSize]);
 
   const handleCalibrationMouseMove = useCallback((worldPoint: WorldPoint) => {
     const canvas = fabricCanvasRef.current;
@@ -312,21 +322,24 @@ export const InteractiveCanvas = ({
       canvas.remove(calibrationPreviewLine);
     }
 
+    const strokeWidth = getZoomAwareSize(2);
+    const dashSize = getZoomAwareSize(5);
+
     // Draw preview line at WORLD positions
     const line = new Line([
       calibrationStartPoint.x, calibrationStartPoint.y,
       worldPoint.x, worldPoint.y
     ], {
       stroke: 'red',
-      strokeWidth: 2,
-      strokeDashArray: [5, 5],
+      strokeWidth: strokeWidth,
+      strokeDashArray: [dashSize, dashSize],
       selectable: false,
       evented: false,
     });
     canvas.add(line);
     setCalibrationPreviewLine(line);
     canvas.requestRenderAll();
-  }, [isCalibrationDragging, calibrationStartPoint, calibrationPreviewLine]);
+  }, [isCalibrationDragging, calibrationStartPoint, calibrationPreviewLine, getZoomAwareSize]);
 
   const handleCalibrationMouseUp = useCallback((worldPoint: WorldPoint) => {
     const canvas = fabricCanvasRef.current;
@@ -338,14 +351,19 @@ export const InteractiveCanvas = ({
       setCalibrationPreviewLine(null);
     }
 
+    const strokeWidth = getZoomAwareSize(2);
+    const dashSize = getZoomAwareSize(5);
+    const markerRadius = getZoomAwareSize(5);
+    const fontSize = getZoomAwareSize(16);
+
     // Draw final line at WORLD positions
     const line = new Line([
       calibrationStartPoint.x, calibrationStartPoint.y,
       worldPoint.x, worldPoint.y
     ], {
       stroke: 'red',
-      strokeWidth: 2,
-      strokeDashArray: [5, 5],
+      strokeWidth: strokeWidth,
+      strokeDashArray: [dashSize, dashSize],
       selectable: false,
       evented: false,
     });
@@ -353,21 +371,21 @@ export const InteractiveCanvas = ({
 
     // Add end marker
     const marker = new Circle({
-      left: worldPoint.x - 5,
-      top: worldPoint.y - 5,
-      radius: 5,
+      left: worldPoint.x - markerRadius,
+      top: worldPoint.y - markerRadius,
+      radius: markerRadius,
       fill: 'red',
       stroke: 'white',
-      strokeWidth: 2,
+      strokeWidth: strokeWidth,
       selectable: false,
       evented: false,
     });
     canvas.add(marker);
 
     const label = new Text('B', {
-      left: worldPoint.x + 10,
-      top: worldPoint.y - 10,
-      fontSize: 16,
+      left: worldPoint.x + getZoomAwareSize(10),
+      top: worldPoint.y - getZoomAwareSize(10),
+      fontSize: fontSize,
       fill: 'red',
       fontWeight: 'bold',
       selectable: false,
@@ -376,31 +394,32 @@ export const InteractiveCanvas = ({
     canvas.add(label);
 
     setCalibrationObjects(prev => [...prev, line, marker, label]);
-    
+
     // Complete calibration
     onCalibrationPointsSet([calibrationStartPoint, worldPoint]);
-    
+
     setIsCalibrationDragging(false);
     setCalibrationStartPoint(null);
     canvas.requestRenderAll();
-  }, [isCalibrationDragging, calibrationStartPoint, calibrationPreviewLine, viewport, onCalibrationPointsSet]);
+  }, [isCalibrationDragging, calibrationStartPoint, calibrationPreviewLine, viewport, onCalibrationPointsSet, getZoomAwareSize]);
 
   // Handle mouse down
   const handleMouseDown = useCallback((e: any) => {
     const canvas = fabricCanvasRef.current;
     if (!canvas || !viewport) return;
 
-    // CRITICAL FIX: Use getPointer(e.e, false) for scene coordinates
-    // This returns coordinates that account for viewportTransform
-    const pointer = canvas.getPointer(e.e, false);
+    // CRITICAL FIX: Use getPointer(e.e, true) to get raw canvas pixel coordinates
+    // Then manually convert to world coordinates using viewToWorld
+    // This is more reliable than getPointer(false) across Fabric.js versions
+    const pointer = canvas.getPointer(e.e, true);
     const viewPoint: ViewPoint = { x: pointer.x, y: pointer.y };
-    
-    // Convert to world coordinates for storage
+
+    // Convert to world coordinates for storage (applies inverse transform)
     const worldPoint = viewToWorld(viewPoint, transform, viewport);
 
-    console.log('Mouse down:', { 
-      raw: pointer, 
-      world: worldPoint, 
+    console.log('Mouse down:', {
+      canvasPixel: pointer,
+      world: worldPoint,
       zoom: transform.zoom,
       pan: { x: transform.panX, y: transform.panY }
     });
@@ -429,14 +448,17 @@ export const InteractiveCanvas = ({
 
     // Handle count tool (single click)
     if (activeTool === 'count') {
+      const markerRadius = getZoomAwareSize(4);
+      const strokeWidth = getZoomAwareSize(2);
+
       // Draw at WORLD coordinates
       const marker = new Circle({
-        left: worldPoint.x - 4,
-        top: worldPoint.y - 4,
-        radius: 4,
+        left: worldPoint.x - markerRadius,
+        top: worldPoint.y - markerRadius,
+        radius: markerRadius,
         fill: 'orange',
         stroke: 'white',
-        strokeWidth: 2,
+        strokeWidth: strokeWidth,
         selectable: false,
       });
       canvas.add(marker);
@@ -464,15 +486,18 @@ export const InteractiveCanvas = ({
     // Handle polygon tool
     if (activeTool === 'polygon') {
       const newPoints = [...polygonPoints, worldPoint];
-      
+      const markerRadius = getZoomAwareSize(3);
+      const strokeWidth = getZoomAwareSize(2);
+      const dashSize = getZoomAwareSize(5);
+
       // Draw point marker at WORLD position
       const marker = new Circle({
-        left: worldPoint.x - 3,
-        top: worldPoint.y - 3,
-        radius: 3,
+        left: worldPoint.x - markerRadius,
+        top: worldPoint.y - markerRadius,
+        radius: markerRadius,
         fill: 'green',
         stroke: 'white',
-        strokeWidth: 1,
+        strokeWidth: getZoomAwareSize(1),
         selectable: false,
         evented: false,
       });
@@ -484,8 +509,8 @@ export const InteractiveCanvas = ({
         const prevWorld = newPoints[newPoints.length - 2];
         const line = new Line([prevWorld.x, prevWorld.y, worldPoint.x, worldPoint.y], {
           stroke: 'green',
-          strokeWidth: 2,
-          strokeDashArray: [5, 5],
+          strokeWidth: strokeWidth,
+          strokeDashArray: [dashSize, dashSize],
           selectable: false,
           evented: false,
         });
@@ -498,9 +523,9 @@ export const InteractiveCanvas = ({
       return;
     }
   }, [
-    viewport, transform, calibrationMode, isCalibrated, activeTool, 
+    viewport, transform, calibrationMode, isCalibrated, activeTool,
     polygonPoints, polygonMarkers, polygonLines, pageIndex,
-    handleCalibrationMouseDown, onMeasurementComplete
+    handleCalibrationMouseDown, onMeasurementComplete, getZoomAwareSize
   ]);
 
   // Handle mouse move
@@ -510,7 +535,7 @@ export const InteractiveCanvas = ({
 
     // Handle calibration drag preview
     if (calibrationMode === 'manual' && isCalibrationDragging && calibrationStartPoint) {
-      const pointer = canvas.getPointer(e.e, false);
+      const pointer = canvas.getPointer(e.e, true);
       const currentWorld = viewToWorld({ x: pointer.x, y: pointer.y }, transform, viewport);
       handleCalibrationMouseMove(currentWorld);
       return;
@@ -533,11 +558,11 @@ export const InteractiveCanvas = ({
     // Allow preview even without calibration
     if (!isDrawing || !startPoint) return;
 
-    // CRITICAL FIX: Use getPointer(e.e, false) for scene coordinates
-    const pointer = canvas.getPointer(e.e, false);
+    // CRITICAL FIX: Use getPointer(e.e, true) for raw canvas coordinates
+    const pointer = canvas.getPointer(e.e, true);
     const currentWorldPoint: WorldPoint = viewToWorld(
-      { x: pointer.x, y: pointer.y }, 
-      transform, 
+      { x: pointer.x, y: pointer.y },
+      transform,
       viewport
     );
 
@@ -548,13 +573,15 @@ export const InteractiveCanvas = ({
 
     let shape: any = null;
     const color = isCalibrated ? 'red' : 'orange';
+    const strokeWidth = getZoomAwareSize(2);
+    const dashSize = getZoomAwareSize(5);
 
     // Draw preview shapes at WORLD coordinates - viewportTransform handles zoom/pan
     if (activeTool === 'line') {
       shape = new Line([startPoint.x, startPoint.y, currentWorldPoint.x, currentWorldPoint.y], {
         stroke: color,
-        strokeWidth: 2,
-        strokeDashArray: [5, 5],
+        strokeWidth: strokeWidth,
+        strokeDashArray: [dashSize, dashSize],
         selectable: false,
         evented: false,
       });
@@ -566,8 +593,8 @@ export const InteractiveCanvas = ({
         height: Math.abs(currentWorldPoint.y - startPoint.y),
         fill: isCalibrated ? 'rgba(76, 175, 80, 0.2)' : 'rgba(255, 152, 0, 0.2)',
         stroke: isCalibrated ? 'green' : 'orange',
-        strokeWidth: 2,
-        strokeDashArray: [5, 5],
+        strokeWidth: strokeWidth,
+        strokeDashArray: [dashSize, dashSize],
         selectable: false,
         evented: false,
       });
@@ -575,15 +602,15 @@ export const InteractiveCanvas = ({
       const dx = currentWorldPoint.x - startPoint.x;
       const dy = currentWorldPoint.y - startPoint.y;
       const radius = Math.sqrt(dx * dx + dy * dy);
-      
+
       shape = new Circle({
         left: startPoint.x - radius,
         top: startPoint.y - radius,
         radius: radius,
         fill: isCalibrated ? 'rgba(156, 39, 176, 0.2)' : 'rgba(255, 152, 0, 0.2)',
         stroke: isCalibrated ? 'purple' : 'orange',
-        strokeWidth: 2,
-        strokeDashArray: [5, 5],
+        strokeWidth: strokeWidth,
+        strokeDashArray: [dashSize, dashSize],
         selectable: false,
         evented: false,
       });
@@ -596,9 +623,10 @@ export const InteractiveCanvas = ({
 
     canvas.requestRenderAll();
   }, [
-    viewport, transform, isPanning, lastClientPos, isDrawing, startPoint, 
+    viewport, transform, isPanning, lastClientPos, isDrawing, startPoint,
     previewShape, activeTool, isCalibrated, onTransformChange,
-    calibrationMode, isCalibrationDragging, calibrationStartPoint, handleCalibrationMouseMove
+    calibrationMode, isCalibrationDragging, calibrationStartPoint, handleCalibrationMouseMove,
+    getZoomAwareSize
   ]);
 
   // Handle mouse up
@@ -608,7 +636,7 @@ export const InteractiveCanvas = ({
 
     // Handle calibration drag end
     if (calibrationMode === 'manual' && isCalibrationDragging && calibrationStartPoint) {
-      const pointer = canvas.getPointer(e.e, false);
+      const pointer = canvas.getPointer(e.e, true);
       const worldEnd = viewToWorld({ x: pointer.x, y: pointer.y }, transform, viewport);
       handleCalibrationMouseUp(worldEnd);
       return;
@@ -624,8 +652,8 @@ export const InteractiveCanvas = ({
 
     if (!isDrawing || !startPoint || !viewport) return;
 
-    // CRITICAL FIX: Use getPointer(e.e, false) for scene coordinates
-    const pointer = canvas.getPointer(e.e, false);
+    // CRITICAL FIX: Use getPointer(e.e, true) for raw canvas coordinates
+    const pointer = canvas.getPointer(e.e, true);
     const worldEndPoint = viewToWorld({ x: pointer.x, y: pointer.y }, transform, viewport);
 
     // Remove preview shape
@@ -634,15 +662,19 @@ export const InteractiveCanvas = ({
       setPreviewShape(null);
     }
 
+    // Zoom-aware sizes for final shapes
+    const strokeWidth = getZoomAwareSize(2);
+    const fontSize = getZoomAwareSize(14);
+
     // Complete measurement based on tool
     if (activeTool === 'line') {
       const effectiveUnits = unitsPerMetre || 1;
       const result = calculateLinearWorld(startPoint, worldEndPoint, effectiveUnits);
-      
+
       // Draw at WORLD coordinates - viewportTransform handles zoom/pan
       const line = new Line([startPoint.x, startPoint.y, worldEndPoint.x, worldEndPoint.y], {
         stroke: isCalibrated ? 'red' : 'orange',
-        strokeWidth: 2,
+        strokeWidth: strokeWidth,
         selectable: false,
         evented: false,
       });
@@ -655,8 +687,8 @@ export const InteractiveCanvas = ({
       const labelText = isCalibrated ? `${displayValue.toFixed(2)} m` : `${displayValue.toFixed(0)} px`;
       const label = new Text(labelText, {
         left: midX,
-        top: midY - 10,
-        fontSize: 14,
+        top: midY - getZoomAwareSize(10),
+        fontSize: fontSize,
         fill: isCalibrated ? 'red' : 'orange',
         backgroundColor: 'white',
         selectable: false,
@@ -682,7 +714,7 @@ export const InteractiveCanvas = ({
     } else if (activeTool === 'rectangle') {
       const effectiveUnits = unitsPerMetre || 1;
       const result = calculateRectangleAreaWorld(startPoint, worldEndPoint, effectiveUnits);
-      
+
       // Draw at WORLD coordinates
       const rect = new Rect({
         left: Math.min(startPoint.x, worldEndPoint.x),
@@ -691,7 +723,7 @@ export const InteractiveCanvas = ({
         height: Math.abs(worldEndPoint.y - startPoint.y),
         fill: isCalibrated ? 'rgba(76, 175, 80, 0.3)' : 'rgba(255, 152, 0, 0.3)',
         stroke: isCalibrated ? 'green' : 'orange',
-        strokeWidth: 2,
+        strokeWidth: strokeWidth,
         selectable: false,
         evented: false,
       });
@@ -703,9 +735,9 @@ export const InteractiveCanvas = ({
       const displayValue = isCalibrated ? result.realValue : result.worldValue;
       const labelText = isCalibrated ? `${displayValue.toFixed(2)} m²` : `${displayValue.toFixed(0)} px²`;
       const label = new Text(labelText, {
-        left: centerX - 30,
-        top: centerY - 10,
-        fontSize: 14,
+        left: centerX - getZoomAwareSize(30),
+        top: centerY - getZoomAwareSize(10),
+        fontSize: fontSize,
         fill: isCalibrated ? 'green' : 'orange',
         backgroundColor: 'white',
         selectable: false,
@@ -732,12 +764,12 @@ export const InteractiveCanvas = ({
     } else if (activeTool === 'circle') {
       const effectiveUnits = unitsPerMetre || 1;
       const result = calculateCircleAreaWorld(startPoint, worldEndPoint, effectiveUnits);
-      
+
       // Calculate radius in WORLD coords
       const dx = worldEndPoint.x - startPoint.x;
       const dy = worldEndPoint.y - startPoint.y;
       const radiusWorld = Math.sqrt(dx * dx + dy * dy);
-      
+
       // Draw at WORLD coordinates
       const circle = new Circle({
         left: startPoint.x - radiusWorld,
@@ -745,7 +777,7 @@ export const InteractiveCanvas = ({
         radius: radiusWorld,
         fill: isCalibrated ? 'rgba(156, 39, 176, 0.3)' : 'rgba(255, 152, 0, 0.3)',
         stroke: isCalibrated ? 'purple' : 'orange',
-        strokeWidth: 2,
+        strokeWidth: strokeWidth,
         selectable: false,
         evented: false,
       });
@@ -755,9 +787,9 @@ export const InteractiveCanvas = ({
       const displayValue = isCalibrated ? result.realValue : result.worldValue;
       const labelText = isCalibrated ? `${displayValue.toFixed(2)} m²` : `${displayValue.toFixed(0)} px²`;
       const label = new Text(labelText, {
-        left: startPoint.x - 30,
-        top: startPoint.y - 10,
-        fontSize: 14,
+        left: startPoint.x - getZoomAwareSize(30),
+        top: startPoint.y - getZoomAwareSize(10),
+        fontSize: fontSize,
         fill: isCalibrated ? 'purple' : 'orange',
         backgroundColor: 'white',
         selectable: false,
@@ -788,8 +820,8 @@ export const InteractiveCanvas = ({
   }, [
     viewport, transform, isPanning, isDrawing, startPoint, previewShape,
     activeTool, isCalibrated, unitsPerMetre, deductionMode, pageIndex,
-    onMeasurementComplete, calibrationMode, isCalibrationDragging, 
-    calibrationStartPoint, handleCalibrationMouseUp
+    onMeasurementComplete, calibrationMode, isCalibrationDragging,
+    calibrationStartPoint, handleCalibrationMouseUp, getZoomAwareSize
   ]);
 
   // Handle double click to close polygon
@@ -799,13 +831,16 @@ export const InteractiveCanvas = ({
 
     const effectiveUnits = unitsPerMetre || 1;
     const result = calculatePolygonAreaWorld(polygonPoints, effectiveUnits);
-    
+
+    const strokeWidth = getZoomAwareSize(2);
+    const fontSize = getZoomAwareSize(14);
+
     // Draw polygon at WORLD coordinates
     const worldPointsFabric = polygonPoints.map(wp => new FabricPoint(wp.x, wp.y));
     const polygon = new Polygon(worldPointsFabric, {
       fill: isCalibrated ? 'rgba(76, 175, 80, 0.3)' : 'rgba(255, 152, 0, 0.3)',
       stroke: isCalibrated ? 'green' : 'orange',
-      strokeWidth: 2,
+      strokeWidth: strokeWidth,
       selectable: false,
       evented: false,
     });
@@ -816,9 +851,9 @@ export const InteractiveCanvas = ({
     const displayValue = isCalibrated ? result.realValue : result.worldValue;
     const labelText = isCalibrated ? `${displayValue.toFixed(2)} m²` : `${displayValue.toFixed(0)} px²`;
     const label = new Text(labelText, {
-      left: worldCentroid.x - 30,
-      top: worldCentroid.y - 10,
-      fontSize: 14,
+      left: worldCentroid.x - getZoomAwareSize(30),
+      top: worldCentroid.y - getZoomAwareSize(10),
+      fontSize: fontSize,
       fill: isCalibrated ? 'green' : 'orange',
       backgroundColor: 'white',
       selectable: false,
@@ -851,7 +886,8 @@ export const InteractiveCanvas = ({
     canvas.requestRenderAll();
   }, [
     viewport, transform, activeTool, polygonPoints, polygonMarkers, polygonLines,
-    isCalibrated, unitsPerMetre, deductionMode, pageIndex, onMeasurementComplete
+    isCalibrated, unitsPerMetre, deductionMode, pageIndex, onMeasurementComplete,
+    getZoomAwareSize
   ]);
 
   // Attach event handlers with ALL dependencies

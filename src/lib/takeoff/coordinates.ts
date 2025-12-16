@@ -6,30 +6,30 @@ import { WorldPoint, ViewPoint, Transform, PDFViewportData } from './types';
 
 /**
  * Convert view (canvas) coordinates to world (PDF) coordinates
- * 
- * CRITICAL: When using canvas.getPointer(e.e, false), the pointer already accounts
- * for the viewportTransform (zoom/pan). So we only need to handle the conceptual
- * mapping between canvas and PDF coordinate systems.
- * 
- * Since PDF is rendered at base scale 1.0 and positioned at origin, the conversion
- * is straightforward when getPointer(false) is used.
+ *
+ * CRITICAL FIX: When using canvas.getPointer(e.e, true), we get raw canvas pixel
+ * coordinates that ignore the viewportTransform. We must manually apply the
+ * inverse transform to get world coordinates.
+ *
+ * This approach is more reliable than getPointer(false) which can have
+ * inconsistent behavior across Fabric.js versions.
  */
 export function viewToWorld(
   viewPoint: ViewPoint,
   transform: Transform,
   viewport: PDFViewportData
 ): WorldPoint {
-  // getPointer(e.e, false) returns scene coordinates that already account for
-  // viewportTransform (zoom/pan), so we just need to store the point directly
-  // as world coordinates. The Y-axis is the same since Fabric.js and our
-  // coordinate system both use top-left origin.
-  
-  // Note: If rotation is applied, we'd need to handle it here, but for now
-  // rotation is handled separately in the viewport rendering
-  
-  return { 
-    x: viewPoint.x, 
-    y: viewPoint.y 
+  // Apply inverse of viewportTransform to convert canvas pixels to world coords
+  // viewportTransform is [zoom, 0, 0, zoom, panX, panY]
+  // Inverse: worldX = (canvasX - panX) / zoom
+  //          worldY = (canvasY - panY) / zoom
+
+  const worldX = (viewPoint.x - transform.panX) / transform.zoom;
+  const worldY = (viewPoint.y - transform.panY) / transform.zoom;
+
+  return {
+    x: worldX,
+    y: worldY
   };
 }
 
