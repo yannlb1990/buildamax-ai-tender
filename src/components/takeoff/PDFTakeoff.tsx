@@ -9,8 +9,9 @@ import { MeasurementToolbar } from './MeasurementToolbar';
 import { ViewportControls } from './ViewportControls';
 import { Magnifier } from './Magnifier';
 import { TakeoffTable } from './TakeoffTable';
+import { CostEstimator } from './CostEstimator';
 import { useTakeoffState } from '@/hooks/useTakeoffState';
-import { WorldPoint, MeasurementUnit, Measurement, PDFViewportData } from '@/lib/takeoff/types';
+import { WorldPoint, MeasurementUnit, Measurement, PDFViewportData, CostItem } from '@/lib/takeoff/types';
 import { fetchNCCCode } from '@/lib/takeoff/nccCodeFetcher';
 import { toast } from 'sonner';
 import { Input } from '@/components/ui/input';
@@ -473,9 +474,16 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
         </TabsContent>
 
         <TabsContent value="costs">
-          <div className="text-center py-12">
-            <p className="text-muted-foreground">Cost linking functionality coming soon...</p>
-          </div>
+          <CostEstimator
+            measurements={state.measurements}
+            costItems={state.costItems}
+            onAddCostItem={(item) => dispatch({ type: 'ADD_COST_ITEM', payload: item })}
+            onUpdateCostItem={(id, updates) => dispatch({ type: 'UPDATE_COST_ITEM', payload: { id, updates } })}
+            onDeleteCostItem={(id) => dispatch({ type: 'DELETE_COST_ITEM', payload: id })}
+            onLinkMeasurement={(measurementId, costItemId) => {
+              dispatch({ type: 'UPDATE_MEASUREMENT', payload: { id: measurementId, updates: { linkedCostItem: costItemId } } });
+            }}
+          />
         </TabsContent>
       </Tabs>
     </div>
