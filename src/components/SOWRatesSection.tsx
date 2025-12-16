@@ -14,7 +14,7 @@ import { SCOPE_OF_WORK_RATES, getSOWCategories } from "@/data/scopeOfWorkRates";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
-type State = "NSW" | "VIC" | "QLD";
+type State = "NSW" | "VIC" | "QLD" | "SA" | "WA" | "TAS" | "NT" | "ACT";
 
 export const SOWRatesSection = () => {
   const [searchTerm, setSearchTerm] = useState("");
@@ -51,12 +51,10 @@ export const SOWRatesSection = () => {
     return acc;
   }, {} as Record<string, typeof SCOPE_OF_WORK_RATES>);
 
-  const getRate = (item: typeof SCOPE_OF_WORK_RATES[0]) => {
-    switch(selectedState) {
-      case "NSW": return item.nswRate;
-      case "VIC": return item.vicRate;
-      case "QLD": return item.qldRate;
-    }
+  const getRate = (item: typeof SCOPE_OF_WORK_RATES[0]): number => {
+    // Access rate directly using state as key (new data structure)
+    const rate = item[selectedState];
+    return typeof rate === 'number' ? rate : 0;
   };
 
   const handleAddSOW = async () => {
@@ -130,6 +128,11 @@ export const SOWRatesSection = () => {
                 <SelectItem value="NSW">NSW Pricing</SelectItem>
                 <SelectItem value="VIC">VIC Pricing</SelectItem>
                 <SelectItem value="QLD">QLD Pricing</SelectItem>
+                <SelectItem value="SA">SA Pricing</SelectItem>
+                <SelectItem value="WA">WA Pricing</SelectItem>
+                <SelectItem value="TAS">TAS Pricing</SelectItem>
+                <SelectItem value="NT">NT Pricing</SelectItem>
+                <SelectItem value="ACT">ACT Pricing</SelectItem>
               </SelectContent>
             </Select>
             <div className="flex border rounded-md">
@@ -339,6 +342,11 @@ export const SOWRatesSection = () => {
                   <SelectItem value="NSW">NSW</SelectItem>
                   <SelectItem value="VIC">VIC</SelectItem>
                   <SelectItem value="QLD">QLD</SelectItem>
+                  <SelectItem value="SA">SA</SelectItem>
+                  <SelectItem value="WA">WA</SelectItem>
+                  <SelectItem value="TAS">TAS</SelectItem>
+                  <SelectItem value="NT">NT</SelectItem>
+                  <SelectItem value="ACT">ACT</SelectItem>
                 </SelectContent>
               </Select>
             </div>
