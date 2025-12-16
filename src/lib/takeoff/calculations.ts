@@ -4,28 +4,36 @@ import { WorldPoint, ScaleData, DistanceUnit, Measurement } from './types';
 
 /**
  * Calculate scale from preset ratio using PDF page dimensions
+ * @param presetScale - Scale string like "1:100"
+ * @param pageWidthPoints - Full PDF page width in points
+ * @param drawingAreaPercent - Percentage of page that is actual drawing (0.6-1.0), accounting for title blocks/borders
  */
 export function calculatePresetScaleWorld(
   presetScale: string,
-  pageWidthPoints: number
+  pageWidthPoints: number,
+  drawingAreaPercent: number = 0.85 // Default 85% - typical for A1/A3 architectural plans
 ): ScaleData {
   const ratio = parseInt(presetScale.split(':')[1], 10);
   
   // PDF points to mm: 1 point = 1/72 inch = 25.4/72 mm
   const mmPerPoint = 25.4 / 72;
-  const pageWidthMM = pageWidthPoints * mmPerPoint;
+  
+  // Adjust for title blocks and borders - only the drawing area counts
+  const effectiveWidth = pageWidthPoints * Math.max(0.6, Math.min(1.0, drawingAreaPercent));
+  const pageWidthMM = effectiveWidth * mmPerPoint;
   const pageWidthMetres = pageWidthMM / 1000;
   
   // At scale 1:ratio, real width = page width × ratio
   const impliedRealWidth = pageWidthMetres * ratio;
   
   // World units (points) per real metre
-  const unitsPerMetre = pageWidthPoints / impliedRealWidth;
+  const unitsPerMetre = effectiveWidth / impliedRealWidth;
   
   return {
     unitsPerMetre,
     scaleFactor: ratio,
     scaleMethod: 'preset',
+    drawingAreaPercent,
   };
 }
 

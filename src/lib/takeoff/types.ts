@@ -75,6 +75,7 @@ export interface ScaleData {
   unitsPerMetre: number;    // World units (PDF points) per real metre
   scaleFactor: number | null;
   scaleMethod: 'preset' | 'manual';
+  drawingAreaPercent?: number;  // For preset scale - accounts for title blocks/borders (0.6-1.0)
   calibrationLine?: {
     p1: WorldPoint;
     p2: WorldPoint;
