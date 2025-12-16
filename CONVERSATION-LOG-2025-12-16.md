@@ -172,9 +172,82 @@ src/
 
 ---
 
+## Market Insights Enhancements (Session 2)
+
+### Files Added/Updated
+
+| File | Description |
+|------|-------------|
+| `src/data/marketLabourRates.ts` | Enhanced with all 8 states, categories, data freshness tracking |
+| `src/data/scopeOfWorkRates.ts` | Enhanced with all 8 states, complete SOW pricing |
+| `src/data/supplierDatabase.ts` | NEW - 5-7 suppliers per Australian state |
+| `src/lib/api/index.ts` | NEW - Central API export |
+| `src/lib/api/marketInsights.ts` | NEW - Unified API for market data |
+| `src/components/takeoff/CostEstimator.tsx` | NEW - Cost estimation with SOW linking |
+| `src/components/takeoff/PDFTakeoff.tsx` | Updated - Integrated CostEstimator |
+
+### Key Features Added
+
+1. **Labour Rates by State**
+   - All 8 Australian states/territories
+   - Categorized by trade type (Structural, Services, Finishing, etc.)
+   - Data freshness tracking (lastUpdated, source)
+   - Helper functions for rate lookup and comparison
+
+2. **SOW (Scope of Work) Rates**
+   - Complete pricing per state for common building tasks
+   - Categories: Framing, Fit Out, First Fix, External, etc.
+   - Unit-based pricing (LM, M², EA)
+
+3. **Supplier Database**
+   - 5-7 suppliers per state
+   - Search URL patterns for product lookups
+   - Trade discount and delivery info
+   - Ratings and price levels
+
+4. **CostEstimator Component**
+   - Links measurements to SOW rates
+   - State-based pricing selection
+   - Markup calculation
+   - CSV export
+   - Material and labour cost breakdown
+
+5. **API Layer**
+   - Unified access to all market data
+   - Data freshness status checks
+   - Fallback to local data if Edge Functions unavailable
+
+### Git Commit
+
+```
+commit 5266ac9
+Author: Yann Le Borgne
+Date: Dec 16, 2025
+
+feat: Market Insights enhancements + Estimation Tool fixes
+
+Market Insights:
+- Add supplier database with 5-7 suppliers per Australian state
+- Enhance labour rates with all 8 states and data freshness tracking
+- Enhance SOW rates with all 8 states and data freshness tracking
+- Add price webhook system for automatic updates
+- Create unified API layer for market data access
+- Fix component compatibility with new data structures
+
+Estimation Tool:
+- Fix measurement drift when zoomed/panned (getPointer coordinate fix)
+- Add zoom-aware stroke widths and font sizes
+- Improve responsive layout (12-column grid)
+- Add CostEstimator component with SOW rate linking
+- CSV export and markup calculation
+```
+
+---
+
 ## Notes for Future Sessions
 
 - Desktop version at `~/Desktop/buildamax-ai-tender` has additional local commits not pushed
 - Lovable version at `~/buildamax-lovable-fix` is synced with GitHub
 - Node.js/npm not installed on this machine - builds run through Lovable's platform
 - SSH key is now set up for read/write access to GitHub
+- **All Market Insights features now deployed to Lovable version**
