@@ -50,7 +50,7 @@ export const MaterialsPricingSection = () => {
     
     // Add SOW rates
     SCOPE_OF_WORK_RATES.forEach(s => {
-      csvContent += `SOW,${s.trade},${s.category},"${s.sow}","${s.description}",${s.unit},${s.nswRate.toFixed(2)},${s.vicRate.toFixed(2)},${s.qldRate.toFixed(2)},-,-,Complete rate\n`;
+      csvContent += `SOW,${s.trade},${s.category},"${s.sow}","${s.description}",${s.unit},${s.NSW.toFixed(2)},${s.VIC.toFixed(2)},${s.QLD.toFixed(2)},-,-,Complete rate\n`;
     });
     
     // Add labour rates
