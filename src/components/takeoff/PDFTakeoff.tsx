@@ -55,7 +55,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
   const totalsByUnit = useMemo(() => {
     return filteredMeasurements.reduce<Record<MeasurementUnit, number>>((acc, measurement) => {
       const current = acc[measurement.unit] || 0;
-      acc[measurement.unit] = current + measurement.realValue * (measurement.isDeduction ? -1 : 1);
+      acc[measurement.unit] = current + measurement.realValue;
       return acc;
     }, { LM: 0, M2: 0, M3: 0, count: 0 });
   }, [filteredMeasurements]);
@@ -250,11 +250,13 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
               <div className="lg:col-span-2 space-y-4">
                 <MeasurementToolbar
                   activeTool={state.activeTool}
-                  onToolSelect={(tool) => dispatch({ type: 'SET_ACTIVE_TOOL', payload: tool })}
-                  deductionMode={state.deductionMode}
-                  onDeductionToggle={() =>
-                    dispatch({ type: 'SET_DEDUCTION_MODE', payload: !state.deductionMode })
-                  }
+                  onToolSelect={(tool) => {
+                    dispatch({ type: 'SET_ACTIVE_TOOL', payload: tool });
+                    if (tool === 'eraser') {
+                      dispatch({ type: 'DELETE_LAST_MEASUREMENT' });
+                      dispatch({ type: 'SET_ACTIVE_TOOL', payload: 'select' });
+                    }
+                  }}
                   onUndo={() => dispatch({ type: 'UNDO' })}
                   onRedo={() => dispatch({ type: 'REDO' })}
                   canUndo={state.historyIndex > 0}
@@ -317,12 +319,12 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                     isCalibrated={state.isCalibrated}
                     unitsPerMetre={state.currentScale?.unitsPerMetre || null}
                     calibrationMode={state.calibrationMode}
-                    deductionMode={state.deductionMode}
                     selectedColor={state.selectedColor}
                     onMeasurementComplete={handleMeasurementComplete}
                     onCalibrationPointsSet={handleCalibrationPointsSet}
                     onTransformChange={handleTransformChange}
                     onViewportReady={handleViewportReady}
+                    onDeleteLastMeasurement={() => dispatch({ type: 'DELETE_LAST_MEASUREMENT' })}
                   />
                 </div>
               </div>
@@ -446,7 +448,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                             </div>
                           </div>
                           <p className="text-[11px] text-muted-foreground">
-                            {new Date(m.timestamp).toLocaleString()} | {m.isDeduction ? 'Deduction' : 'Primary'}
+                            {new Date(m.timestamp).toLocaleString()}
                           </p>
                         </div>
                       ))

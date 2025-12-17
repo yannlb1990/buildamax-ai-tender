@@ -1,4 +1,4 @@
-import { MousePointer, Move, Minus, Square, Pentagon, Circle, Hash, Scissors, Undo, Redo } from 'lucide-react';
+import { MousePointer, Move, Eraser, Minus, Square, Pentagon, Circle, Hash, Undo, Redo } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -9,8 +9,6 @@ import { cn } from '@/lib/utils';
 interface MeasurementToolbarProps {
   activeTool: ToolType;
   onToolSelect: (tool: ToolType) => void;
-  deductionMode: boolean;
-  onDeductionToggle: () => void;
   onUndo: () => void;
   onRedo: () => void;
   canUndo: boolean;
@@ -21,8 +19,6 @@ interface MeasurementToolbarProps {
 export const MeasurementToolbar = ({
   activeTool,
   onToolSelect,
-  deductionMode,
-  onDeductionToggle,
   onUndo,
   onRedo,
   canUndo,
@@ -64,6 +60,23 @@ export const MeasurementToolbar = ({
 
         <Separator orientation="vertical" className="h-6 mx-1" />
 
+        {/* Eraser Tool */}
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant={activeTool === 'eraser' ? 'destructive' : 'ghost'}
+              size="icon"
+              className="h-9 w-9"
+              onClick={() => onToolSelect('eraser')}
+            >
+              <Eraser className="h-4 w-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Eraser - Click to delete last measurement (E)</TooltipContent>
+        </Tooltip>
+
+        <Separator orientation="vertical" className="h-6 mx-1" />
+
         {/* Measurement Tools */}
         {measurementTools.map(({ id, icon: Icon, label, color }) => (
           <Tooltip key={id}>
@@ -89,24 +102,6 @@ export const MeasurementToolbar = ({
             Set scale first
           </Badge>
         )}
-
-        <Separator orientation="vertical" className="h-6 mx-1" />
-
-        {/* Deduction Tool */}
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant={deductionMode ? 'destructive' : 'ghost'}
-              size="icon"
-              className="h-9 w-9"
-              onClick={onDeductionToggle}
-              disabled={disabled}
-            >
-              <Scissors className="h-4 w-4" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>Deduction Mode (D)</TooltipContent>
-        </Tooltip>
 
         <Separator orientation="vertical" className="h-6 mx-1" />
 

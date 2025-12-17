@@ -44,7 +44,7 @@ export interface PDFViewportData {
 // === MEASUREMENT TYPES ===
 export type MeasurementType = 'line' | 'rectangle' | 'polygon' | 'circle';
 export type MeasurementUnit = 'LM' | 'M2' | 'M3' | 'count';
-export type ToolType = 'select' | 'pan' | 'line' | 'rectangle' | 'polygon' | 'circle' | 'count' | null;
+export type ToolType = 'select' | 'pan' | 'eraser' | 'line' | 'rectangle' | 'polygon' | 'circle' | 'count' | null;
 
 // Area options for measurements
 export type MeasurementArea = 'Kitchen' | 'Bathroom' | 'Bedroom' | 'Living Room' | 'Dining Room' | 'Laundry' | 'Garage' | 'Patio' | 'Balcony' | 'Hallway' | 'Entry' | 'Office' | 'Storage' | 'Utility' | 'Ensuite' | 'WC' | 'External' | 'Other';
@@ -94,9 +94,6 @@ export interface Measurement {
   unit: MeasurementUnit;
   color: string;
   label: string;
-  isDeduction: boolean;
-  parentMeasurementId?: string;  // For deductions
-  deductions?: string[];         // IDs of child deductions
   dimensions?: { width: number; height: number };
   roofPitch?: { rise: number; run: number };
   depth?: number;
@@ -184,7 +181,6 @@ export interface TakeoffState {
   };
   
   // UI state
-  deductionMode: boolean;
   roofPitch: { rise: number; run: number };
   depthInput: number;
   selectedColor: string;
@@ -214,10 +210,10 @@ export type TakeoffAction =
   | { type: 'UPDATE_COST_ITEM'; payload: { id: string; updates: Partial<CostItem> } }
   | { type: 'DELETE_COST_ITEM'; payload: string }
   | { type: 'LINK_MEASUREMENT_TO_COST'; payload: { measurementId: string; costItemId: string } }
-  | { type: 'SET_DEDUCTION_MODE'; payload: boolean }
   | { type: 'SET_ROOF_PITCH'; payload: { rise: number; run: number } }
   | { type: 'SET_DEPTH_INPUT'; payload: number }
   | { type: 'SET_SELECTED_COLOR'; payload: string }
   | { type: 'UNDO' }
   | { type: 'REDO' }
+  | { type: 'DELETE_LAST_MEASUREMENT' }
   | { type: 'CALCULATE_ESTIMATE' };

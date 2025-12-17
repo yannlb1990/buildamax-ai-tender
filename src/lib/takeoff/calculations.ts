@@ -215,20 +215,6 @@ export function calculateCentroidWorld(points: WorldPoint[]): WorldPoint {
 }
 
 /**
- * Apply deduction to parent measurement
- */
-export function applyDeduction(
-  parentMeasurement: Measurement,
-  deductionMeasurement: Measurement
-): Measurement {
-  return {
-    ...parentMeasurement,
-    realValue: parentMeasurement.realValue - deductionMeasurement.realValue,
-    deductions: [...(parentMeasurement.deductions || []), deductionMeasurement.id],
-  };
-}
-
-/**
  * Aggregate measurements by unit type
  */
 export function aggregateMeasurements(
@@ -236,7 +222,7 @@ export function aggregateMeasurements(
   unit: 'LM' | 'M2' | 'M3' | 'count'
 ): number {
   return measurements
-    .filter(m => m.unit === unit && !m.isDeduction)
+    .filter(m => m.unit === unit)
     .reduce((total, m) => total + m.realValue, 0);
 }
 

@@ -58,7 +58,7 @@ export const CostEstimator = ({
   // Get unlinked measurements
   const unlinkedMeasurements = useMemo(() => {
     const linkedIds = new Set(costItems.flatMap(item => item.linkedMeasurements));
-    return measurements.filter(m => !linkedIds.has(m.id) && !m.isDeduction);
+    return measurements.filter(m => !linkedIds.has(m.id));
   }, [measurements, costItems]);
 
   // Handle adding a new cost item from SOW

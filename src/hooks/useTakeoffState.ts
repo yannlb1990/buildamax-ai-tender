@@ -35,7 +35,6 @@ const initialState: TakeoffState = {
     markup: 0,
     total: 0
   },
-  deductionMode: false,
   roofPitch: { rise: 4, run: 12 },
   depthInput: 0.1,
   selectedColor: '#FF0000',
@@ -183,9 +182,6 @@ function takeoffReducer(state: TakeoffState, action: TakeoffAction): TakeoffStat
         )
       };
       
-    case 'SET_DEDUCTION_MODE':
-      return { ...state, deductionMode: action.payload };
-      
     case 'SET_ROOF_PITCH':
       return { ...state, roofPitch: action.payload };
       
@@ -211,6 +207,20 @@ function takeoffReducer(state: TakeoffState, action: TakeoffAction): TakeoffStat
           ...state,
           measurements: state.history[state.historyIndex + 1],
           historyIndex: state.historyIndex + 1
+        };
+      }
+      return state;
+
+    case 'DELETE_LAST_MEASUREMENT':
+      if (state.measurements.length > 0) {
+        const newMeasurements = state.measurements.slice(0, -1);
+        const newHistory = state.history.slice(0, state.historyIndex + 1);
+        newHistory.push(newMeasurements);
+        return {
+          ...state,
+          measurements: newMeasurements,
+          history: newHistory,
+          historyIndex: newHistory.length - 1
         };
       }
       return state;

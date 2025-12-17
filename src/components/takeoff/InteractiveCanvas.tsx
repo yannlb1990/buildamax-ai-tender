@@ -17,12 +17,12 @@ interface InteractiveCanvasProps {
   isCalibrated: boolean;
   unitsPerMetre: number | null;
   calibrationMode: 'preset' | 'manual' | null;
-  deductionMode: boolean;
   selectedColor?: string;
   onMeasurementComplete: (measurement: Measurement) => void;
   onCalibrationPointsSet: (points: [WorldPoint, WorldPoint]) => void;
   onTransformChange: (transform: Partial<Transform>) => void;
   onViewportReady: (viewport: PDFViewportData) => void;
+  onDeleteLastMeasurement?: () => void;
 }
 
 export const InteractiveCanvas = ({
@@ -33,11 +33,11 @@ export const InteractiveCanvas = ({
   isCalibrated,
   unitsPerMetre,
   calibrationMode,
-  deductionMode,
   onMeasurementComplete,
   onCalibrationPointsSet,
   onTransformChange,
   onViewportReady,
+  onDeleteLastMeasurement,
 }: InteractiveCanvasProps) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -472,7 +472,6 @@ export const InteractiveCanvas = ({
         unit: 'count',
         color: '#FF9800',
         label: 'Count',
-        isDeduction: false,
         pageIndex: pageIndex,
         timestamp: new Date(),
       };
@@ -705,7 +704,6 @@ export const InteractiveCanvas = ({
         unit: 'LM',
         color: isCalibrated ? '#FF6B6B' : '#FF9800',
         label: labelText,
-        isDeduction: deductionMode,
         pageIndex: pageIndex,
         timestamp: new Date(),
       };
@@ -755,7 +753,6 @@ export const InteractiveCanvas = ({
         dimensions: result.dimensions,
         color: isCalibrated ? '#4CAF50' : '#FF9800',
         label: labelText,
-        isDeduction: deductionMode,
         pageIndex: pageIndex,
         timestamp: new Date(),
       };
@@ -806,7 +803,6 @@ export const InteractiveCanvas = ({
         unit: 'M2',
         color: isCalibrated ? '#9C27B0' : '#FF9800',
         label: labelText,
-        isDeduction: deductionMode,
         pageIndex: pageIndex,
         timestamp: new Date(),
       };
@@ -819,7 +815,7 @@ export const InteractiveCanvas = ({
     canvas.requestRenderAll();
   }, [
     viewport, transform, isPanning, isDrawing, startPoint, previewShape,
-    activeTool, isCalibrated, unitsPerMetre, deductionMode, pageIndex,
+    activeTool, isCalibrated, unitsPerMetre, pageIndex,
     onMeasurementComplete, calibrationMode, isCalibrationDragging,
     calibrationStartPoint, handleCalibrationMouseUp, getZoomAwareSize
   ]);
@@ -876,7 +872,6 @@ export const InteractiveCanvas = ({
       unit: 'M2',
       color: isCalibrated ? '#4CAF50' : '#FF9800',
       label: labelText,
-      isDeduction: deductionMode,
       pageIndex: pageIndex,
       timestamp: new Date(),
     };
@@ -886,7 +881,7 @@ export const InteractiveCanvas = ({
     canvas.requestRenderAll();
   }, [
     viewport, transform, activeTool, polygonPoints, polygonMarkers, polygonLines,
-    isCalibrated, unitsPerMetre, deductionMode, pageIndex, onMeasurementComplete,
+    isCalibrated, unitsPerMetre, pageIndex, onMeasurementComplete,
     getZoomAwareSize
   ]);
 
