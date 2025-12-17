@@ -7,7 +7,6 @@ const CSV_HEADERS = [
   "realValue",
   "worldValue",
   "pageIndex",
-  "isDeduction",
   "timestamp",
   "points"
 ];
@@ -33,7 +32,6 @@ export function exportMeasurementsToCSV(measurements: Measurement[]): string {
       sanitizeValue(measurement.realValue.toFixed(3)),
       sanitizeValue(measurement.worldValue.toFixed(3)),
       sanitizeValue(measurement.pageIndex + 1),
-      sanitizeValue(measurement.isDeduction),
       sanitizeValue(measurement.timestamp instanceof Date ? measurement.timestamp.toISOString() : String(measurement.timestamp)),
       sanitizeValue(pointString)
     ].join(",");

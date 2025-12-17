@@ -71,8 +71,7 @@ export const TakeoffTable = ({
   const totals = useMemo(() => {
     return enhancedMeasurements.reduce(
       (acc, m) => {
-        const value = m.realValue * (m.isDeduction ? -1 : 1);
-        acc[m.unit] = (acc[m.unit] || 0) + value;
+        acc[m.unit] = (acc[m.unit] || 0) + m.realValue;
         return acc;
       },
       { LM: 0, M2: 0, M3: 0, count: 0 } as Record<MeasurementUnit, number>
