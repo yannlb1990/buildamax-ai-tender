@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { Canvas as FabricCanvas, FabricImage, Circle, Line, Rect, Polygon, Text, Point as FabricPoint } from 'fabric';
 import * as pdfjsLib from 'pdfjs-dist';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Check, X } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { WorldPoint, ViewPoint, Transform, PDFViewportData, Measurement, ToolType } from '@/lib/takeoff/types';
 import { calculateLinearWorld, calculateRectangleAreaWorld, calculatePolygonAreaWorld, calculateCentroidWorld, calculateCircleAreaWorld } from '@/lib/takeoff/calculations';
 import { viewToWorld } from '@/lib/takeoff/coordinates';
@@ -53,6 +54,10 @@ export const InteractiveCanvas = ({
   const [polygonPoints, setPolygonPoints] = useState<WorldPoint[]>([]);
   const [polygonMarkers, setPolygonMarkers] = useState<Circle[]>([]);
   const [polygonLines, setPolygonLines] = useState<Line[]>([]);
+
+  // Count tool state for grouped counting
+  const [countMarkers, setCountMarkers] = useState<any[]>([]);
+  const [countPoints, setCountPoints] = useState<WorldPoint[]>([]);
 
   // Calibration state - now supports drag-to-calibrate
   const [calibrationPoints, setCalibrationPoints] = useState<WorldPoint[]>([]);
@@ -438,6 +443,14 @@ export const InteractiveCanvas = ({
       return;
     }
 
+    // Handle eraser tool - delete last measurement
+    if (activeTool === 'eraser') {
+      if (onDeleteLastMeasurement) {
+        onDeleteLastMeasurement();
+      }
+      return;
+    }
+
     // Allow measurements even without calibration
     if (!isCalibrated) {
       console.warn('Measurement made without calibration - values will be in pixels');
@@ -446,12 +459,14 @@ export const InteractiveCanvas = ({
     setIsDrawing(true);
     setStartPoint(worldPoint);
 
-    // Handle count tool (single click)
+    // Handle count tool - add numbered markers for grouped counting
     if (activeTool === 'count') {
-      const markerRadius = getZoomAwareSize(4);
+      const markerRadius = getZoomAwareSize(6);
       const strokeWidth = getZoomAwareSize(2);
+      const fontSize = getZoomAwareSize(12);
+      const markerIndex = countPoints.length + 1;
 
-      // Draw at WORLD coordinates
+      // Draw numbered marker at WORLD coordinates
       const marker = new Circle({
         left: worldPoint.x - markerRadius,
         top: worldPoint.y - markerRadius,
@@ -460,23 +475,24 @@ export const InteractiveCanvas = ({
         stroke: 'white',
         strokeWidth: strokeWidth,
         selectable: false,
+        evented: false,
       });
       canvas.add(marker);
 
-      const measurement: Measurement = {
-        id: crypto.randomUUID(),
-        type: 'circle',
-        worldPoints: [worldPoint],
-        worldValue: 1,
-        realValue: 1,
-        unit: 'count',
-        color: '#FF9800',
-        label: 'Count',
-        pageIndex: pageIndex,
-        timestamp: new Date(),
-      };
+      // Add number label
+      const numberLabel = new Text(String(markerIndex), {
+        left: worldPoint.x - getZoomAwareSize(4),
+        top: worldPoint.y - getZoomAwareSize(6),
+        fontSize: fontSize,
+        fill: 'white',
+        fontWeight: 'bold',
+        selectable: false,
+        evented: false,
+      });
+      canvas.add(numberLabel);
 
-      onMeasurementComplete(measurement);
+      setCountMarkers(prev => [...prev, marker, numberLabel]);
+      setCountPoints(prev => [...prev, worldPoint]);
       setIsDrawing(false);
       canvas.requestRenderAll();
       return;
@@ -524,7 +540,8 @@ export const InteractiveCanvas = ({
   }, [
     viewport, transform, calibrationMode, isCalibrated, activeTool,
     polygonPoints, polygonMarkers, polygonLines, pageIndex,
-    handleCalibrationMouseDown, onMeasurementComplete, getZoomAwareSize
+    handleCalibrationMouseDown, onMeasurementComplete, onDeleteLastMeasurement,
+    getZoomAwareSize, countPoints
   ]);
 
   // Handle mouse move
@@ -885,6 +902,82 @@ export const InteractiveCanvas = ({
     getZoomAwareSize
   ]);
 
+  // Handle Complete Polygon button click
+  const handleCompletePolygon = useCallback(() => {
+    handleDoubleClick();
+  }, [handleDoubleClick]);
+
+  // Handle Cancel Polygon button click
+  const handleCancelPolygon = useCallback(() => {
+    const canvas = fabricCanvasRef.current;
+    if (!canvas) return;
+    
+    polygonMarkers.forEach(marker => canvas.remove(marker));
+    polygonLines.forEach(line => canvas.remove(line));
+    setPolygonMarkers([]);
+    setPolygonLines([]);
+    setPolygonPoints([]);
+    canvas.requestRenderAll();
+  }, [polygonMarkers, polygonLines]);
+
+  // Handle Finish Count button click
+  const handleFinishCount = useCallback(() => {
+    const canvas = fabricCanvasRef.current;
+    if (!canvas || countPoints.length === 0) return;
+
+    const measurement: Measurement = {
+      id: crypto.randomUUID(),
+      type: 'circle',
+      worldPoints: countPoints,
+      worldValue: countPoints.length,
+      realValue: countPoints.length,
+      unit: 'count',
+      color: '#FF9800',
+      label: `Count: ${countPoints.length}`,
+      pageIndex: pageIndex,
+      timestamp: new Date(),
+    };
+
+    onMeasurementComplete(measurement);
+    setCountMarkers([]);
+    setCountPoints([]);
+  }, [countPoints, pageIndex, onMeasurementComplete]);
+
+  // Handle Cancel Count button click
+  const handleCancelCount = useCallback(() => {
+    const canvas = fabricCanvasRef.current;
+    if (!canvas) return;
+    
+    countMarkers.forEach(marker => canvas.remove(marker));
+    setCountMarkers([]);
+    setCountPoints([]);
+    canvas.requestRenderAll();
+  }, [countMarkers]);
+
+  // Reset tool state when tool changes
+  useEffect(() => {
+    const canvas = fabricCanvasRef.current;
+    if (!canvas) return;
+
+    // Clear polygon state when switching away from polygon tool
+    if (activeTool !== 'polygon' && polygonPoints.length > 0) {
+      polygonMarkers.forEach(marker => canvas.remove(marker));
+      polygonLines.forEach(line => canvas.remove(line));
+      setPolygonMarkers([]);
+      setPolygonLines([]);
+      setPolygonPoints([]);
+      canvas.requestRenderAll();
+    }
+
+    // Clear count state when switching away from count tool
+    if (activeTool !== 'count' && countPoints.length > 0) {
+      countMarkers.forEach(marker => canvas.remove(marker));
+      setCountMarkers([]);
+      setCountPoints([]);
+      canvas.requestRenderAll();
+    }
+  }, [activeTool, polygonPoints.length, countPoints.length, polygonMarkers, polygonLines, countMarkers]);
+
   // Attach event handlers with ALL dependencies
   useEffect(() => {
     const canvas = fabricCanvasRef.current;
@@ -915,11 +1008,79 @@ export const InteractiveCanvas = ({
           <p className="text-destructive">{error}</p>
         </div>
       )}
-      {!isCalibrated && activeTool && activeTool !== 'pan' && (
+      {!isCalibrated && activeTool && activeTool !== 'pan' && activeTool !== 'eraser' && (
         <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-yellow-500/90 text-black px-4 py-2 rounded-md text-sm font-medium z-10 shadow-lg">
           ⚠️ Set scale first for accurate measurements (currently showing pixel values)
         </div>
       )}
+
+      {/* Polygon Tool Buttons - Show when 3+ points */}
+      {activeTool === 'polygon' && polygonPoints.length >= 3 && (
+        <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex gap-2 z-20">
+          <Button
+            variant="default"
+            size="sm"
+            className="bg-green-600 hover:bg-green-700 text-white"
+            onClick={handleCompletePolygon}
+          >
+            <Check className="h-4 w-4 mr-1" />
+            Complete Polygon
+          </Button>
+          <Button
+            variant="destructive"
+            size="sm"
+            onClick={handleCancelPolygon}
+          >
+            <X className="h-4 w-4 mr-1" />
+            Cancel
+          </Button>
+        </div>
+      )}
+
+      {/* Polygon Hint - Show when less than 3 points */}
+      {activeTool === 'polygon' && polygonPoints.length > 0 && polygonPoints.length < 3 && (
+        <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-blue-500/90 text-white px-4 py-2 rounded-md text-sm z-10">
+          Click to add points ({polygonPoints.length}/3 minimum)
+        </div>
+      )}
+
+      {/* Count Tool Buttons - Show when any counts exist */}
+      {activeTool === 'count' && countPoints.length > 0 && (
+        <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex gap-2 z-20">
+          <Button
+            variant="default"
+            size="sm"
+            className="bg-orange-600 hover:bg-orange-700 text-white"
+            onClick={handleFinishCount}
+          >
+            <Check className="h-4 w-4 mr-1" />
+            Finish Count ({countPoints.length})
+          </Button>
+          <Button
+            variant="destructive"
+            size="sm"
+            onClick={handleCancelCount}
+          >
+            <X className="h-4 w-4 mr-1" />
+            Cancel
+          </Button>
+        </div>
+      )}
+
+      {/* Count Tool Hint - Show when no counts yet */}
+      {activeTool === 'count' && countPoints.length === 0 && (
+        <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-orange-500/90 text-white px-4 py-2 rounded-md text-sm z-10">
+          Click to count items - click Finish Count when done
+        </div>
+      )}
+
+      {/* Eraser Tool Hint */}
+      {activeTool === 'eraser' && (
+        <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-red-500/90 text-white px-4 py-2 rounded-md text-sm z-10">
+          Click anywhere to delete the last measurement
+        </div>
+      )}
+
       <div ref={containerRef} className="w-full h-full" />
     </div>
   );
