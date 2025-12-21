@@ -13,7 +13,7 @@ interface MeasurementToolbarProps {
   onRedo: () => void;
   canUndo: boolean;
   canRedo: boolean;
-  disabled: boolean;
+  measurementToolsDisabled: boolean;
 }
 
 export const MeasurementToolbar = ({
@@ -23,7 +23,7 @@ export const MeasurementToolbar = ({
   onRedo,
   canUndo,
   canRedo,
-  disabled
+  measurementToolsDisabled
 }: MeasurementToolbarProps) => {
   const navigationTools = [
     { id: 'select' as const, icon: MousePointer, label: 'Select (V)', shortcut: 'V' },
@@ -86,7 +86,7 @@ export const MeasurementToolbar = ({
                 size="icon"
                 className={cn('h-9 w-9 relative', activeTool === id && 'ring-2 ring-offset-1')}
                 onClick={() => onToolSelect(id)}
-                disabled={disabled}
+                disabled={measurementToolsDisabled}
               >
                 <Icon className="h-4 w-4" />
                 <span className={cn('absolute bottom-1 right-1 h-2 w-2 rounded-full', color)} />
@@ -97,7 +97,7 @@ export const MeasurementToolbar = ({
         ))}
 
         {/* Set Scale Badge */}
-        {disabled && (
+        {measurementToolsDisabled && (
           <Badge variant="secondary" className="ml-1 text-xs">
             Set scale first
           </Badge>
@@ -113,7 +113,7 @@ export const MeasurementToolbar = ({
               size="icon"
               className="h-9 w-9"
               onClick={onUndo}
-              disabled={!canUndo || disabled}
+              disabled={!canUndo}
             >
               <Undo className="h-4 w-4" />
             </Button>
@@ -128,7 +128,7 @@ export const MeasurementToolbar = ({
               size="icon"
               className="h-9 w-9"
               onClick={onRedo}
-              disabled={!canRedo || disabled}
+              disabled={!canRedo}
             >
               <Redo className="h-4 w-4" />
             </Button>

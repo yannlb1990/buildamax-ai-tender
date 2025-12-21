@@ -261,7 +261,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                   onRedo={() => dispatch({ type: 'REDO' })}
                   canUndo={state.historyIndex > 0}
                   canRedo={state.historyIndex < state.history.length - 1}
-                  disabled={!state.isCalibrated && state.activeTool !== 'pan'}
+                  measurementToolsDisabled={!state.isCalibrated}
                 />
 
                 {/* Canvas Controls */}
