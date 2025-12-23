@@ -19,11 +19,15 @@ interface InteractiveCanvasProps {
   unitsPerMetre: number | null;
   calibrationMode: 'preset' | 'manual' | null;
   selectedColor?: string;
+  selectedMeasurementId?: string | null;
+  measurements?: Measurement[];
   onMeasurementComplete: (measurement: Measurement) => void;
+  onMeasurementUpdate?: (id: string, updates: Partial<Measurement>) => void;
   onCalibrationPointsSet: (points: [WorldPoint, WorldPoint]) => void;
   onTransformChange: (transform: Partial<Transform>) => void;
   onViewportReady: (viewport: PDFViewportData) => void;
   onDeleteLastMeasurement?: () => void;
+  onSelectMeasurement?: (id: string | null) => void;
 }
 
 export const InteractiveCanvas = ({
@@ -34,11 +38,15 @@ export const InteractiveCanvas = ({
   isCalibrated,
   unitsPerMetre,
   calibrationMode,
+  selectedMeasurementId,
+  measurements = [],
   onMeasurementComplete,
+  onMeasurementUpdate,
   onCalibrationPointsSet,
   onTransformChange,
   onViewportReady,
   onDeleteLastMeasurement,
+  onSelectMeasurement,
 }: InteractiveCanvasProps) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -58,6 +66,12 @@ export const InteractiveCanvas = ({
   // Count tool state for grouped counting
   const [countMarkers, setCountMarkers] = useState<any[]>([]);
   const [countPoints, setCountPoints] = useState<WorldPoint[]>([]);
+
+  // Vertex editing state
+  const [vertexAnchors, setVertexAnchors] = useState<Circle[]>([]);
+  const [midEdgeHandles, setMidEdgeHandles] = useState<Rect[]>([]);
+  const [draggingVertexIndex, setDraggingVertexIndex] = useState<number | null>(null);
+  const [editingMeasurement, setEditingMeasurement] = useState<Measurement | null>(null);
 
   // Calibration state - now supports drag-to-calibrate
   const [calibrationPoints, setCalibrationPoints] = useState<WorldPoint[]>([]);

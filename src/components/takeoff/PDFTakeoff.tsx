@@ -1,14 +1,12 @@
 import React, { useCallback, useMemo, useRef, useState, useEffect } from 'react';
-import { Download, ZoomIn, ZoomOut, RotateCw, Maximize2, ChevronLeft, ChevronRight, Trash2 } from 'lucide-react';
+import { Download, ZoomIn, ZoomOut, RotateCw, Maximize2, ChevronLeft, ChevronRight, Trash2, ChevronUp, ChevronDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { PDFUploadManager } from './PDFUploadManager';
 import { InteractiveCanvas } from './InteractiveCanvas';
 import { ScalingCalibrator } from './ScalingCalibrator';
 import { MeasurementToolbar } from './MeasurementToolbar';
-import { ViewportControls } from './ViewportControls';
-import { Magnifier } from './Magnifier';
-import { TakeoffTable } from './TakeoffTable';
+import { TakeoffTableEnhanced } from './TakeoffTableEnhanced';
 import { CostEstimator } from './CostEstimator';
 import { useTakeoffState } from '@/hooks/useTakeoffState';
 import { WorldPoint, MeasurementUnit, Measurement, PDFViewportData, CostItem } from '@/lib/takeoff/types';
@@ -18,6 +16,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { exportMeasurementsToCSV, exportMeasurementsToJSON } from '@/lib/takeoff/export';
 import { Card } from '@/components/ui/card';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 
 interface PDFTakeoffProps {
   projectId: string;
@@ -32,8 +31,8 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
   const [manualCalibrationPoints, setManualCalibrationPoints] = useState<[WorldPoint, WorldPoint] | null>(null);
   const [pdfViewport, setPdfViewport] = useState<{ width: number; height: number } | null>(null);
   const [pageFilter, setPageFilter] = useState<number | 'all'>('all');
-  const [showMagnifier, setShowMagnifier] = useState(false);
-  const [showGrid, setShowGrid] = useState(false);
+  const [calibrationOpen, setCalibrationOpen] = useState(true);
+  const [selectedMeasurementId, setSelectedMeasurementId] = useState<string | null>(null);
   const canvasContainerRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const initialFitDoneRef = useRef(false);
@@ -294,36 +293,9 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
 
         <TabsContent value="measure" className="space-y-4">
           {state.pdfFile && (
-            <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
-              {/* Left Sidebar - Calibration */}
-              <div className="lg:col-span-1 space-y-4">
-                <ScalingCalibrator
-                  currentScale={state.currentScale}
-                  isCalibrated={state.isCalibrated}
-                  onScaleSet={(scale) => {
-                    dispatch({
-                      type: 'SET_SCALE',
-                      payload: { pageIndex: state.currentPageIndex, scale }
-                    });
-                    toast.success('Scale set successfully');
-                  }}
-                  onManualCalibrationStart={() => {
-                    dispatch({ type: 'SET_CALIBRATION_MODE', payload: 'manual' });
-                    toast.info('Click two points on a known dimension');
-                  }}
-                  onManualCalibrationCancel={handleCalibrationCancel}
-                  onResetScale={handleResetScale}
-                  manualPoints={manualCalibrationPoints}
-                  onCalibrationComplete={() => {
-                    setManualCalibrationPoints(null);
-                    dispatch({ type: 'SET_CALIBRATION_MODE', payload: null });
-                  }}
-                  pdfViewport={pdfViewport}
-                />
-              </div>
-
-              {/* Center - Canvas */}
-              <div className="lg:col-span-2 space-y-4">
+            <div className="space-y-4">
+              {/* Top Bar: Toolbar + Controls + Page Nav */}
+              <div className="flex items-center gap-4 flex-wrap">
                 <MeasurementToolbar
                   activeTool={state.activeTool}
                   onToolSelect={(tool) => {
@@ -340,53 +312,132 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                   measurementToolsDisabled={!state.isCalibrated}
                 />
 
-                {/* Canvas Controls */}
-                <div className="flex items-center gap-2 justify-between p-2 bg-card border rounded-lg">
-                  <div className="flex items-center gap-2">
-                    <Button variant="outline" size="sm" onClick={handleZoomOut}>
-                      <ZoomOut className="h-4 w-4" />
-                    </Button>
-                    <span className="text-sm font-medium min-w-16 text-center">
-                      {Math.round(state.transform.zoom * 100)}%
-                    </span>
-                    <Button variant="outline" size="sm" onClick={handleZoomIn}>
-                      <ZoomIn className="h-4 w-4" />
-                    </Button>
-                    <Button variant="outline" size="sm" onClick={handleRotate}>
-                      <RotateCw className="h-4 w-4" />
-                    </Button>
-                    <Button variant="outline" size="sm" onClick={handleFitToScreen}>
-                      <Maximize2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-
-                  {/* Page Navigation */}
-                  {state.pdfFile && state.pdfFile.pageCount > 1 && (
-                    <div className="flex items-center gap-2">
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
-                        onClick={handlePagePrevious}
-                        disabled={state.currentPageIndex === 0}
-                      >
-                        <ChevronLeft className="h-4 w-4" />
-                      </Button>
-                      <span className="text-sm font-medium">
-                        Page {state.currentPageIndex + 1} / {state.pdfFile.pageCount}
-                      </span>
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
-                        onClick={handlePageNext}
-                        disabled={state.currentPageIndex === state.pdfFile.pageCount - 1}
-                      >
-                        <ChevronRight className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  )}
+                {/* Zoom/Rotate Controls */}
+                <div className="flex items-center gap-1">
+                  <Button variant="outline" size="sm" onClick={handleZoomOut}>
+                    <ZoomOut className="h-4 w-4" />
+                  </Button>
+                  <span className="text-sm font-medium min-w-14 text-center">
+                    {Math.round(state.transform.zoom * 100)}%
+                  </span>
+                  <Button variant="outline" size="sm" onClick={handleZoomIn}>
+                    <ZoomIn className="h-4 w-4" />
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={handleRotate}>
+                    <RotateCw className="h-4 w-4" />
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={handleFitToScreen}>
+                    <Maximize2 className="h-4 w-4" />
+                  </Button>
                 </div>
 
-                <div className="h-[800px]" ref={canvasContainerRef}>
+                {/* Page Navigation */}
+                {state.pdfFile && state.pdfFile.pageCount > 1 && (
+                  <div className="flex items-center gap-2">
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={handlePagePrevious}
+                      disabled={state.currentPageIndex === 0}
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                    </Button>
+                    <span className="text-sm font-medium">
+                      Page {state.currentPageIndex + 1} / {state.pdfFile.pageCount}
+                    </span>
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={handlePageNext}
+                      disabled={state.currentPageIndex === state.pdfFile.pageCount - 1}
+                    >
+                      <ChevronRight className="h-4 w-4" />
+                    </Button>
+                  </div>
+                )}
+
+                {/* Export Buttons */}
+                <div className="flex items-center gap-2 ml-auto">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() =>
+                      downloadFile(
+                        'measurements.csv',
+                        exportMeasurementsToCSV(filteredMeasurements),
+                        'text/csv'
+                      )
+                    }
+                    disabled={!filteredMeasurements.length}
+                  >
+                    <Download className="h-4 w-4 mr-1" />
+                    CSV
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() =>
+                      downloadFile(
+                        'measurements.json',
+                        exportMeasurementsToJSON(filteredMeasurements),
+                        'application/json'
+                      )
+                    }
+                    disabled={!filteredMeasurements.length}
+                  >
+                    <Download className="h-4 w-4 mr-1" />
+                    JSON
+                  </Button>
+                </div>
+              </div>
+
+              {/* Main Content: Calibration (collapsible) + Canvas */}
+              <div className="flex gap-4">
+                {/* Collapsible Calibration Panel */}
+                <Collapsible open={calibrationOpen} onOpenChange={setCalibrationOpen}>
+                  <Card className="w-72 shrink-0">
+                    <CollapsibleTrigger asChild>
+                      <Button variant="ghost" className="w-full justify-between p-3 h-auto">
+                        <span className="font-semibold text-sm">Scale Calibration</span>
+                        {calibrationOpen ? (
+                          <ChevronUp className="h-4 w-4" />
+                        ) : (
+                          <ChevronDown className="h-4 w-4" />
+                        )}
+                      </Button>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent>
+                      <div className="p-3 pt-0">
+                        <ScalingCalibrator
+                          currentScale={state.currentScale}
+                          isCalibrated={state.isCalibrated}
+                          onScaleSet={(scale) => {
+                            dispatch({
+                              type: 'SET_SCALE',
+                              payload: { pageIndex: state.currentPageIndex, scale }
+                            });
+                            toast.success('Scale set successfully');
+                          }}
+                          onManualCalibrationStart={() => {
+                            dispatch({ type: 'SET_CALIBRATION_MODE', payload: 'manual' });
+                            toast.info('Click two points on a known dimension');
+                          }}
+                          onManualCalibrationCancel={handleCalibrationCancel}
+                          onResetScale={handleResetScale}
+                          manualPoints={manualCalibrationPoints}
+                          onCalibrationComplete={() => {
+                            setManualCalibrationPoints(null);
+                            dispatch({ type: 'SET_CALIBRATION_MODE', payload: null });
+                          }}
+                          pdfViewport={pdfViewport}
+                        />
+                      </div>
+                    </CollapsibleContent>
+                  </Card>
+                </Collapsible>
+
+                {/* Canvas */}
+                <div className="flex-1 h-[60vh] min-h-[500px]" ref={canvasContainerRef}>
                   <InteractiveCanvas
                     pdfUrl={state.pdfFile.url}
                     pageIndex={state.currentPageIndex}
@@ -405,16 +456,59 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                 </div>
               </div>
 
-              {/* Right Sidebar - Measurements */}
-              <div className="lg:col-span-1 space-y-4">
-                <Card className="p-4 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <h3 className="font-semibold">Measurements</h3>
+              {/* Takeoff Table - Full Width Below Canvas */}
+              <TakeoffTableEnhanced
+                measurements={filteredMeasurements}
+                selectedMeasurementId={selectedMeasurementId}
+                onSelectMeasurement={setSelectedMeasurementId}
+                onUpdateMeasurement={(id, updates) => {
+                  dispatch({
+                    type: 'UPDATE_MEASUREMENT',
+                    payload: { id, updates }
+                  });
+                }}
+                onDeleteMeasurement={(id) => {
+                  dispatch({ type: 'DELETE_MEASUREMENT', payload: id });
+                }}
+                onAddToEstimate={handleAddToEstimate}
+              />
+
+              {/* Summary Footer */}
+              <Card className="p-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-6 text-sm">
+                    <span className="font-medium">Summary:</span>
+                    <span>
+                      <span className="text-muted-foreground">Total:</span>{' '}
+                      <span className="font-semibold">{filteredMeasurements.length}</span> measurements
+                    </span>
+                    {totalsByUnit.LM > 0 && (
+                      <span className="font-mono">
+                        <span className="text-muted-foreground">LM:</span> {totalsByUnit.LM.toFixed(2)}
+                      </span>
+                    )}
+                    {totalsByUnit.M2 > 0 && (
+                      <span className="font-mono">
+                        <span className="text-muted-foreground">m²:</span> {totalsByUnit.M2.toFixed(2)}
+                      </span>
+                    )}
+                    {totalsByUnit.M3 > 0 && (
+                      <span className="font-mono">
+                        <span className="text-muted-foreground">m³:</span> {totalsByUnit.M3.toFixed(3)}
+                      </span>
+                    )}
+                    {totalsByUnit.count > 0 && (
+                      <span className="font-mono">
+                        <span className="text-muted-foreground">EA:</span> {totalsByUnit.count.toFixed(0)}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
                     <Select
                       value={String(pageFilter)}
                       onValueChange={(val) => setPageFilter(val === 'all' ? 'all' : Number(val))}
                     >
-                      <SelectTrigger className="w-32">
+                      <SelectTrigger className="w-32 h-8">
                         <SelectValue placeholder="All pages" />
                       </SelectTrigger>
                       <SelectContent>
@@ -427,126 +521,8 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                       </SelectContent>
                     </Select>
                   </div>
-
-                  <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      className="flex-1"
-                      size="sm"
-                      onClick={() =>
-                        downloadFile(
-                          'measurements.csv',
-                          exportMeasurementsToCSV(filteredMeasurements),
-                          'text/csv'
-                        )
-                      }
-                      disabled={!filteredMeasurements.length}
-                    >
-                      <Download className="h-4 w-4 mr-2" />
-                      CSV
-                    </Button>
-                    <Button
-                      variant="outline"
-                      className="flex-1"
-                      size="sm"
-                      onClick={() =>
-                        downloadFile(
-                          'measurements.json',
-                          exportMeasurementsToJSON(filteredMeasurements),
-                          'application/json'
-                        )
-                      }
-                      disabled={!filteredMeasurements.length}
-                    >
-                      <Download className="h-4 w-4 mr-2" />
-                      JSON
-                    </Button>
-                  </div>
-                </Card>
-
-                <Card className="p-4">
-                  <div className="space-y-3 max-h-[520px] overflow-y-auto">
-                    {filteredMeasurements.length === 0 ? (
-                      <p className="text-sm text-muted-foreground">No measurements yet</p>
-                    ) : (
-                      filteredMeasurements.map((m) => (
-                        <div key={m.id} className="p-3 border border-border/60 rounded-md space-y-2 bg-muted/40">
-                          <div className="flex items-center justify-between text-xs text-muted-foreground">
-                            <span className="capitalize">{m.type}</span>
-                            <span className="font-medium">Page {m.pageIndex + 1}</span>
-                          </div>
-                          <Input
-                            value={m.label}
-                            onChange={(e) =>
-                              dispatch({
-                                type: 'UPDATE_MEASUREMENT',
-                                payload: { id: m.id, updates: { label: e.target.value } }
-                              })
-                            }
-                            placeholder="Label"
-                            className="h-8"
-                          />
-                          <div className="flex items-center gap-2 text-sm">
-                            <span className="font-semibold">{m.realValue.toFixed(2)}</span>
-                            <Select
-                              value={m.unit}
-                              onValueChange={(unit: MeasurementUnit) =>
-                                dispatch({
-                                  type: 'UPDATE_MEASUREMENT',
-                                  payload: { id: m.id, updates: { unit } }
-                                })
-                              }
-                            >
-                              <SelectTrigger className="w-24 h-8 text-xs">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="LM">LM</SelectItem>
-                                <SelectItem value="M2">M²</SelectItem>
-                                <SelectItem value="M3">M³</SelectItem>
-                                <SelectItem value="count">Count</SelectItem>
-                              </SelectContent>
-                            </Select>
-                            <div className="ml-auto flex items-center gap-2">
-                              <span 
-                                className="inline-flex h-3 w-3 rounded-full" 
-                                style={{ backgroundColor: m.color }} 
-                              />
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8"
-                                onClick={() => dispatch({ type: 'DELETE_MEASUREMENT', payload: m.id })}
-                                aria-label="Delete measurement"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </div>
-                          </div>
-                          <p className="text-[11px] text-muted-foreground">
-                            {new Date(m.timestamp).toLocaleString()}
-                          </p>
-                        </div>
-                      ))
-                    )}
-                  </div>
-
-                  {filteredMeasurements.length > 0 && (
-                    <div className="mt-4 pt-3 border-t space-y-2 text-sm">
-                      <div className="flex justify-between">
-                        <span>Total measurements</span>
-                        <span className="font-semibold">{filteredMeasurements.length}</span>
-                      </div>
-                      <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
-                        <span>LM: {totalsByUnit.LM.toFixed(2)}</span>
-                        <span>M²: {totalsByUnit.M2.toFixed(2)}</span>
-                        <span>M³: {totalsByUnit.M3.toFixed(2)}</span>
-                        <span>Count: {totalsByUnit.count.toFixed(0)}</span>
-                      </div>
-                    </div>
-                  )}
-                </Card>
-              </div>
+                </div>
+              </Card>
             </div>
           )}
         </TabsContent>
