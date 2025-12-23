@@ -147,6 +147,46 @@ export function calculatePolygonAreaWorld(
 }
 
 /**
+ * Calculate polygon perimeter in world space (sum of edge lengths)
+ * Used for columns, wall perimeters, etc.
+ */
+export function calculatePolygonPerimeterWorld(
+  points: WorldPoint[],
+  unitsPerMetre: number
+): { worldValue: number; realValue: number; unit: 'LM' } {
+  if (points.length < 2) {
+    return { worldValue: 0, realValue: 0, unit: 'LM' };
+  }
+
+  let worldPerimeter = 0;
+  for (let i = 0; i < points.length; i++) {
+    const j = (i + 1) % points.length;
+    worldPerimeter += Math.hypot(
+      points[j].x - points[i].x,
+      points[j].y - points[i].y
+    );
+  }
+
+  const realPerimeter = worldPerimeter / unitsPerMetre;
+  
+  return {
+    worldValue: worldPerimeter,
+    realValue: realPerimeter,
+    unit: 'LM',
+  };
+}
+
+/**
+ * Format perimeter value with appropriate units (m or mm)
+ */
+export function formatPerimeter(metres: number): string {
+  if (metres < 1) {
+    return `${(metres * 1000).toFixed(0)} mm`;
+  }
+  return `${metres.toFixed(2)} m`;
+}
+
+/**
  * Calculate circle area in world space
  */
 export function calculateCircleAreaWorld(
