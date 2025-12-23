@@ -49,6 +49,12 @@ export type ToolType = 'select' | 'pan' | 'eraser' | 'line' | 'rectangle' | 'pol
 // Area options for measurements
 export type MeasurementArea = 'Kitchen' | 'Bathroom' | 'Bedroom' | 'Living Room' | 'Dining Room' | 'Laundry' | 'Garage' | 'Patio' | 'Balcony' | 'Hallway' | 'Entry' | 'Office' | 'Storage' | 'Utility' | 'Ensuite' | 'WC' | 'External' | 'Other';
 
+// Structure types for wall assemblies
+export type StructureType = 'external_wall' | 'internal_wall' | 'load_bearing' | 'non_load_bearing' | 'column' | 'floor' | 'wet_area';
+
+// Lining sides
+export type LiningSides = 'one' | 'both';
+
 // Material categories
 export const MATERIAL_CATEGORIES = {
   Flooring: ['Tiles', 'Timber', 'Carpet', 'Vinyl', 'Concrete', 'Epoxy'],
@@ -59,13 +65,21 @@ export const MATERIAL_CATEGORIES = {
   Structural: ['Steel', 'Timber Frame', 'Concrete', 'Block'],
 } as const;
 
-// Enhanced measurement with additional fields
+// Enhanced measurement with additional fields for wall assemblies
 export interface EnhancedMeasurement extends Measurement {
   area?: MeasurementArea;
   materials?: string[];
   nccCode?: string;
   validated?: boolean;
   addedToEstimate?: boolean;
+  // Structure assembly fields
+  structureType?: StructureType;
+  framing?: string;
+  lining?: { type: string; sides: LiningSides };
+  insulation?: string;
+  flooring?: string;
+  notes?: string;
+  isSelected?: boolean;
 }
 export type CalibrationMode = 'preset' | 'manual' | null;
 export type DistanceUnit = 'm' | 'mm' | 'cm' | 'ft' | 'in';

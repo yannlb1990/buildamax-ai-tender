@@ -4,7 +4,7 @@ import * as pdfjsLib from 'pdfjs-dist';
 import { Loader2, Check, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { WorldPoint, ViewPoint, Transform, PDFViewportData, Measurement, ToolType } from '@/lib/takeoff/types';
-import { calculateLinearWorld, calculateRectangleAreaWorld, calculatePolygonAreaWorld, calculateCentroidWorld, calculateCircleAreaWorld } from '@/lib/takeoff/calculations';
+import { calculateLinearWorld, calculateRectangleAreaWorld, calculatePolygonPerimeterWorld, calculateCentroidWorld, calculateCircleAreaWorld, formatPerimeter } from '@/lib/takeoff/calculations';
 import { viewToWorld } from '@/lib/takeoff/coordinates';
 
 // Set up PDF.js worker
@@ -837,13 +837,14 @@ export const InteractiveCanvas = ({
     calibrationStartPoint, handleCalibrationMouseUp, getZoomAwareSize
   ]);
 
-  // Handle double click to close polygon
+  // Handle double click to close polygon - NOW CALCULATES PERIMETER
   const handleDoubleClick = useCallback(() => {
     const canvas = fabricCanvasRef.current;
     if (!canvas || activeTool !== 'polygon' || polygonPoints.length < 3 || !viewport) return;
 
     const effectiveUnits = unitsPerMetre || 1;
-    const result = calculatePolygonAreaWorld(polygonPoints, effectiveUnits);
+    // Use perimeter calculation instead of area
+    const result = calculatePolygonPerimeterWorld(polygonPoints, effectiveUnits);
 
     const strokeWidth = getZoomAwareSize(2);
     const fontSize = getZoomAwareSize(14);
@@ -851,24 +852,26 @@ export const InteractiveCanvas = ({
     // Draw polygon at WORLD coordinates
     const worldPointsFabric = polygonPoints.map(wp => new FabricPoint(wp.x, wp.y));
     const polygon = new Polygon(worldPointsFabric, {
-      fill: isCalibrated ? 'rgba(76, 175, 80, 0.3)' : 'rgba(255, 152, 0, 0.3)',
-      stroke: isCalibrated ? 'green' : 'orange',
+      fill: isCalibrated ? 'rgba(33, 150, 243, 0.2)' : 'rgba(255, 152, 0, 0.2)',
+      stroke: isCalibrated ? '#2196F3' : 'orange',
       strokeWidth: strokeWidth,
       selectable: false,
       evented: false,
     });
     canvas.add(polygon);
 
-    // Add label at WORLD centroid
+    // Add perimeter label at WORLD centroid
     const worldCentroid = calculateCentroidWorld(polygonPoints);
     const displayValue = isCalibrated ? result.realValue : result.worldValue;
-    const labelText = isCalibrated ? `${displayValue.toFixed(2)} m²` : `${displayValue.toFixed(0)} px²`;
+    const labelText = isCalibrated 
+      ? `Perimeter: ${formatPerimeter(displayValue)}` 
+      : `${displayValue.toFixed(0)} px`;
     const label = new Text(labelText, {
-      left: worldCentroid.x - getZoomAwareSize(30),
+      left: worldCentroid.x - getZoomAwareSize(50),
       top: worldCentroid.y - getZoomAwareSize(10),
       fontSize: fontSize,
-      fill: isCalibrated ? 'green' : 'orange',
-      backgroundColor: 'white',
+      fill: isCalibrated ? '#2196F3' : 'orange',
+      backgroundColor: 'rgba(255,255,255,0.9)',
       selectable: false,
       evented: false,
     });
@@ -880,14 +883,15 @@ export const InteractiveCanvas = ({
     setPolygonMarkers([]);
     setPolygonLines([]);
 
+    // Create measurement with LM unit for perimeter
     const measurement: Measurement = {
       id: crypto.randomUUID(),
       type: 'polygon',
       worldPoints: polygonPoints,
       worldValue: result.worldValue,
       realValue: isCalibrated ? result.realValue : result.worldValue,
-      unit: 'M2',
-      color: isCalibrated ? '#4CAF50' : '#FF9800',
+      unit: 'LM', // Changed from M2 to LM for perimeter
+      color: isCalibrated ? '#2196F3' : '#FF9800',
       label: labelText,
       pageIndex: pageIndex,
       timestamp: new Date(),
