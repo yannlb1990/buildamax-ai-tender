@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState, useEffect } from 'react';
 import { Download, ZoomIn, ZoomOut, RotateCw, Maximize2, ChevronLeft, ChevronRight, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -193,6 +193,82 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
     toast.success(`Added ${measurementIds.length} items to estimate`);
     // Future: integrate with cost items
   }, []);
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't trigger shortcuts when typing in inputs
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      
+      // Tool selection shortcuts
+      if (e.key === '1' || e.key.toLowerCase() === 'l') {
+        dispatch({ type: 'SET_ACTIVE_TOOL', payload: 'line' });
+        toast.info('Line tool selected');
+      }
+      if (e.key === '2' || e.key.toLowerCase() === 'r') {
+        dispatch({ type: 'SET_ACTIVE_TOOL', payload: 'rectangle' });
+        toast.info('Rectangle tool selected');
+      }
+      if (e.key === '3' || e.key.toLowerCase() === 'p') {
+        dispatch({ type: 'SET_ACTIVE_TOOL', payload: 'polygon' });
+        toast.info('Polygon tool selected');
+      }
+      if (e.key === '4' || e.key.toLowerCase() === 'c') {
+        dispatch({ type: 'SET_ACTIVE_TOOL', payload: 'circle' });
+        toast.info('Circle tool selected');
+      }
+      if (e.key === '5' || e.key.toLowerCase() === 'n') {
+        dispatch({ type: 'SET_ACTIVE_TOOL', payload: 'count' });
+        toast.info('Count tool selected');
+      }
+      if (e.key.toLowerCase() === 'h' || e.key === ' ') {
+        e.preventDefault();
+        dispatch({ type: 'SET_ACTIVE_TOOL', payload: 'pan' });
+      }
+      if (e.key.toLowerCase() === 'v') {
+        dispatch({ type: 'SET_ACTIVE_TOOL', payload: 'select' });
+      }
+      if (e.key.toLowerCase() === 'e') {
+        dispatch({ type: 'SET_ACTIVE_TOOL', payload: 'eraser' });
+      }
+      
+      // Undo/Redo
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
+        e.preventDefault();
+        dispatch({ type: 'UNDO' });
+      }
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.shiftKey && e.key === 'z'))) {
+        e.preventDefault();
+        dispatch({ type: 'REDO' });
+      }
+      
+      // Escape - cancel current tool
+      if (e.key === 'Escape') {
+        dispatch({ type: 'SET_ACTIVE_TOOL', payload: 'select' });
+      }
+      
+      // Delete - remove last measurement
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        if (!(e.target instanceof HTMLInputElement)) {
+          dispatch({ type: 'DELETE_LAST_MEASUREMENT' });
+        }
+      }
+      
+      // Zoom shortcuts
+      if (e.key === '+' || e.key === '=') {
+        handleZoomIn();
+      }
+      if (e.key === '-') {
+        handleZoomOut();
+      }
+      if (e.key === '0') {
+        handleFitToScreen();
+      }
+    };
+    
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [dispatch, handleZoomIn, handleZoomOut, handleFitToScreen]);
 
   return (
     <div className="space-y-6">
