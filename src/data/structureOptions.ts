@@ -1,4 +1,5 @@
 // Structure assembly options for wall/column measurements
+// Australian construction standards
 
 export const STRUCTURE_TYPES = [
   { value: 'external_wall', label: 'External Wall' },
