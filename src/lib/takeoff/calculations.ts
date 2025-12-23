@@ -1,4 +1,5 @@
 // Pure calculation functions for PDF Takeoff measurements in world coordinates
+// Australian construction estimation
 
 import { WorldPoint, ScaleData, DistanceUnit, Measurement } from './types';
 
