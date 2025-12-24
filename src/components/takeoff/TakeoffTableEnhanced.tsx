@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Check, Trash2, ChevronDown, ChevronRight, Search, X, Eye, Edit2 } from 'lucide-react';
+import { Check, Trash2, ChevronDown, ChevronRight, Search, X, AlertTriangle, Lightbulb, Calculator, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -8,7 +8,12 @@ import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Textarea } from '@/components/ui/textarea';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
+import { calculateRelatedMaterials, MaterialCalculationResult } from '@/lib/takeoff/materialCalculator';
+import { calculatedMaterialsToCostItems } from '@/lib/takeoff/estimateConnector';
+import { CostItem } from '@/lib/takeoff/types';
 import { Measurement, MeasurementUnit, MeasurementArea } from '@/lib/takeoff/types';
 import {
   STRUCTURE_TYPES,
@@ -46,6 +51,7 @@ interface TakeoffTableEnhancedProps {
   onUpdateMeasurement: (id: string, updates: Partial<EnhancedMeasurement>) => void;
   onDeleteMeasurement: (id: string) => void;
   onAddToEstimate: (measurementIds: string[]) => void;
+  onAddCostItem?: (item: CostItem) => void;
 }
 
 export const TakeoffTableEnhanced = ({
@@ -55,6 +61,7 @@ export const TakeoffTableEnhanced = ({
   onUpdateMeasurement,
   onDeleteMeasurement,
   onAddToEstimate,
+  onAddCostItem,
 }: TakeoffTableEnhancedProps) => {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
