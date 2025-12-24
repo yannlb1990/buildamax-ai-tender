@@ -471,6 +471,9 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                   dispatch({ type: 'DELETE_MEASUREMENT', payload: id });
                 }}
                 onAddToEstimate={handleAddToEstimate}
+                onAddCostItem={(item) => {
+                  dispatch({ type: 'ADD_COST_ITEM', payload: item });
+                }}
               />
 
               {/* Summary Footer */}
