@@ -72,6 +72,7 @@ export interface EnhancedMeasurement extends Measurement {
   nccCode?: string;
   validated?: boolean;
   addedToEstimate?: boolean;
+  locked?: boolean;  // Lock to prevent accidental edits
   // Structure assembly fields
   structureType?: StructureType;
   framing?: string;
