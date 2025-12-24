@@ -153,3 +153,110 @@ export async function getPageElementStats(
     total: elements.length,
   };
 }
+
+// ===== AS/NCC EXTRACTION =====
+
+export interface ExtractedStandard {
+  code: string;
+  type: 'AS' | 'NCC' | 'AS/NZS';
+  fullReference: string;
+  context: string;
+  pageNumber: number;
+}
+
+export interface ExtractedMaterial {
+  name: string;
+  specification?: string;
+  quantity?: string;
+  context: string;
+  pageNumber: number;
+}
+
+export interface PDFAnalysisSummary {
+  standards: ExtractedStandard[];
+  materials: ExtractedMaterial[];
+  totalPages: number;
+  extractedText: string;
+}
+
+export function extractStandards(text: string, pageNumber: number): ExtractedStandard[] {
+  const standards: ExtractedStandard[] = [];
+  
+  // AS/NZS patterns
+  const asNzsPattern = /AS\/NZS\s+(\d+(?:\.\d+)?)/gi;
+  let match;
+  while ((match = asNzsPattern.exec(text)) !== null) {
+    const idx = match.index;
+    standards.push({
+      code: match[1],
+      type: 'AS/NZS',
+      fullReference: match[0],
+      context: text.slice(Math.max(0, idx - 50), Math.min(text.length, idx + 50)),
+      pageNumber,
+    });
+  }
+
+  // AS patterns (not AS/NZS)
+  const asPattern = /(?<!\/NZS\s)AS\s+(\d+(?:\.\d+)?)/gi;
+  while ((match = asPattern.exec(text)) !== null) {
+    const idx = match.index;
+    standards.push({
+      code: match[1],
+      type: 'AS',
+      fullReference: match[0],
+      context: text.slice(Math.max(0, idx - 50), Math.min(text.length, idx + 50)),
+      pageNumber,
+    });
+  }
+
+  // NCC patterns
+  const nccPattern = /NCC\s+([A-Z]\d+(?:\.\d+)?)/gi;
+  while ((match = nccPattern.exec(text)) !== null) {
+    const idx = match.index;
+    standards.push({
+      code: match[1],
+      type: 'NCC',
+      fullReference: match[0],
+      context: text.slice(Math.max(0, idx - 50), Math.min(text.length, idx + 50)),
+      pageNumber,
+    });
+  }
+
+  return standards;
+}
+
+export function extractMaterials(text: string, pageNumber: number): ExtractedMaterial[] {
+  const materials: ExtractedMaterial[] = [];
+  const keywords = [
+    'plasterboard', 'gypsum', 'villaboard', 'timber', 'steel', 'concrete',
+    'insulation', 'batts', 'tiles', 'waterproofing', 'membrane', 'framing',
+    'studs', 'flooring', 'render', 'cladding', 'paint'
+  ];
+
+  const lower = text.toLowerCase();
+  for (const kw of keywords) {
+    const idx = lower.indexOf(kw);
+    if (idx !== -1) {
+      const context = text.slice(Math.max(0, idx - 30), Math.min(text.length, idx + 60));
+      const specMatch = context.match(/(\d+(?:\.\d+)?)\s*(mm|m²|m2|sheets?|bags?|R\d+(?:\.\d+)?)/i);
+      materials.push({
+        name: kw,
+        specification: specMatch?.[0],
+        context,
+        pageNumber,
+      });
+    }
+  }
+
+  return materials;
+}
+
+export function getUniqueStandards(standards: ExtractedStandard[]): ExtractedStandard[] {
+  const seen = new Set<string>();
+  return standards.filter(s => {
+    const key = s.fullReference;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
