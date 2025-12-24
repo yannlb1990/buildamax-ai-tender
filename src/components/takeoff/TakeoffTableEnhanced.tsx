@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Check, Trash2, ChevronDown, ChevronRight, Plus, Search, X } from 'lucide-react';
+import { Check, Trash2, ChevronDown, ChevronRight, Plus, Search, X, Calculator, AlertTriangle, Lightbulb, Package } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -7,7 +7,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
-import { Measurement, MeasurementUnit, MeasurementArea, MATERIAL_CATEGORIES, StructureType, LiningSides } from '@/lib/takeoff/types';
+import { Measurement, MeasurementUnit, MeasurementArea, MATERIAL_CATEGORIES, StructureType, LiningSides, CostItem } from '@/lib/takeoff/types';
+import { calculateRelatedMaterials } from '@/lib/takeoff/materialCalculator';
+import { calculatedMaterialsToCostItems } from '@/lib/takeoff/estimateConnector';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { toast } from 'sonner';
 
 const AREA_OPTIONS: MeasurementArea[] = [
   'Kitchen', 'Bathroom', 'Bedroom', 'Living Room', 'Dining Room', 'Laundry',
@@ -86,6 +90,7 @@ interface TakeoffTableEnhancedProps {
   onDeleteMeasurement: (id: string) => void;
   onAddToEstimate: (measurementIds: string[]) => void;
   onFetchNCCCode?: (measurementId: string, area: string, materials: string[]) => Promise<string>;
+  onAddCostItem?: (item: CostItem) => void;
 }
 
 export const TakeoffTableEnhanced = ({
@@ -94,6 +99,7 @@ export const TakeoffTableEnhanced = ({
   onDeleteMeasurement,
   onAddToEstimate,
   onFetchNCCCode,
+  onAddCostItem,
 }: TakeoffTableEnhancedProps) => {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
@@ -514,6 +520,167 @@ export const TakeoffTableEnhanced = ({
               placeholder="Add notes..."
             />
           </div>
+
+          {/* Calculated Materials Section */}
+          {(() => {
+            const enhancedM = m as EnhancedMeasurement;
+            const calculation = calculateRelatedMaterials(enhancedM);
+
+            if (calculation.materials.length === 0 && calculation.warnings.length === 0 && calculation.suggestions.length === 0) {
+              return null;
+            }
+
+            return (
+              <div className="space-y-3 pt-3 border-t">
+                <div className="flex items-center gap-2">
+                  <Calculator className="h-4 w-4" />
+                  <h4 className="text-sm font-semibold">Calculated Materials & Requirements</h4>
+                </div>
+
+                {/* Warnings */}
+                {calculation.warnings.length > 0 && (
+                  <Alert variant="destructive" className="py-2">
+                    <AlertTriangle className="h-4 w-4" />
+                    <AlertDescription className="text-xs">
+                      <ul className="list-disc list-inside space-y-1">
+                        {calculation.warnings.map((warning, idx) => (
+                          <li key={idx}>{warning}</li>
+                        ))}
+                      </ul>
+                    </AlertDescription>
+                  </Alert>
+                )}
+
+                {/* Suggestions */}
+                {calculation.suggestions.length > 0 && (
+                  <Alert className="py-2 border-blue-200 bg-blue-50 dark:bg-blue-950/30">
+                    <Lightbulb className="h-4 w-4 text-blue-600" />
+                    <AlertDescription className="text-xs text-blue-900 dark:text-blue-100">
+                      <ul className="list-disc list-inside space-y-1">
+                        {calculation.suggestions.map((suggestion, idx) => (
+                          <li key={idx}>{suggestion}</li>
+                        ))}
+                      </ul>
+                    </AlertDescription>
+                  </Alert>
+                )}
+
+                {/* Calculated Materials Table */}
+                {calculation.materials.length > 0 && (
+                  <div className="border rounded-md overflow-hidden">
+                    <div className="bg-muted/50 px-3 py-2 flex items-center gap-2">
+                      <Package className="h-3.5 w-3.5" />
+                      <span className="text-xs font-medium">Required Materials ({calculation.materials.length})</span>
+                    </div>
+                    <div className="max-h-[300px] overflow-y-auto">
+                      <table className="w-full text-xs">
+                        <thead className="bg-muted/30 sticky top-0">
+                          <tr>
+                            <th className="text-left p-2 font-medium">Material</th>
+                            <th className="text-right p-2 font-medium">Qty</th>
+                            <th className="text-left p-2 font-medium">Unit</th>
+                            <th className="text-left p-2 font-medium">NCC/AS</th>
+                            <th className="text-left p-2 font-medium">Calculation</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {calculation.materials.map((material, idx) => (
+                            <tr key={idx} className={cn(
+                              'border-t',
+                              material.isRequired ? 'bg-background' : 'bg-muted/20'
+                            )}>
+                              <td className="p-2">
+                                <div className="flex items-center gap-2">
+                                  <span className={material.isRequired ? 'font-medium' : ''}>
+                                    {material.name}
+                                  </span>
+                                  {!material.isRequired && (
+                                    <Badge variant="outline" className="text-[9px] px-1">Optional</Badge>
+                                  )}
+                                </div>
+                                <div className="text-[10px] text-muted-foreground mt-0.5">
+                                  {material.description}
+                                </div>
+                              </td>
+                              <td className="p-2 text-right font-mono font-medium">
+                                {material.quantity.toFixed(material.unit.includes('ea') ? 0 : 2)}
+                              </td>
+                              <td className="p-2">{material.unit}</td>
+                              <td className="p-2">
+                                <div className="space-y-1">
+                                  {material.nccCode && (
+                                    <Badge variant="secondary" className="text-[9px] px-1">
+                                      NCC {material.nccCode}
+                                    </Badge>
+                                  )}
+                                  {material.asStandard && (
+                                    <Badge variant="outline" className="text-[9px] px-1">
+                                      {material.asStandard}
+                                    </Badge>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="p-2">
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <span className="text-[10px] text-muted-foreground cursor-help underline decoration-dotted">
+                                      How calculated?
+                                    </span>
+                                  </TooltipTrigger>
+                                  <TooltipContent className="max-w-xs text-xs">
+                                    {material.calculationMethod}
+                                  </TooltipContent>
+                                </Tooltip>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-xs h-7"
+                    onClick={() => {
+                      if (!onAddCostItem) {
+                        toast.error('Cost item creation not available');
+                        return;
+                      }
+
+                      const costItems = calculatedMaterialsToCostItems(
+                        calculation.materials,
+                        enhancedM.id
+                      );
+
+                      costItems.forEach(item => onAddCostItem(item));
+
+                      toast.success(`Added ${costItems.length} materials to estimate`);
+                    }}
+                    disabled={!onAddCostItem}
+                  >
+                    <Plus className="h-3 w-3 mr-1" />
+                    Add All to Estimate ({calculation.materials.length})
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-xs h-7"
+                    onClick={() => {
+                      // Mark this measurement as added to estimate
+                      onUpdateMeasurement(enhancedM.id, { addedToEstimate: true });
+                      toast.success('Measurement marked as added to estimate');
+                    }}
+                  >
+                    Mark as Added
+                  </Button>
+                </div>
+              </div>
+            );
+          })()}
         </div>
       )}
     </div>

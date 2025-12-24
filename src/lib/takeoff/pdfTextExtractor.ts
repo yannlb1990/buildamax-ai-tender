@@ -11,11 +11,35 @@ export interface ExtractedText {
 }
 
 export interface ExtractedElement {
-  type: 'text' | 'dimension' | 'room_label' | 'annotation';
+  type: 'text' | 'dimension' | 'room_label' | 'annotation' | 'standard' | 'material';
   content: string;
   bounds: { x: number; y: number; width: number; height: number };
   pageIndex: number;
   confidence?: number;
+  metadata?: any;
+}
+
+export interface ExtractedStandard {
+  code: string;
+  type: 'AS' | 'NCC' | 'AS/NZS';
+  fullReference: string;
+  context: string;
+  pageNumber: number;
+}
+
+export interface ExtractedMaterial {
+  name: string;
+  specification?: string;
+  quantity?: string;
+  context: string;
+  pageNumber: number;
+}
+
+export interface PDFAnalysisSummary {
+  standards: ExtractedStandard[];
+  materials: ExtractedMaterial[];
+  totalPages: number;
+  extractedText: string;
 }
 
 // Extract all text items from a PDF page
@@ -145,11 +169,183 @@ export async function getPageElementStats(
   pageIndex: number
 ): Promise<{ dimensions: number; roomLabels: number; annotations: number; total: number }> {
   const elements = await extractAllElements(pdfUrl, pageIndex);
-  
+
   return {
     dimensions: elements.filter(e => e.type === 'dimension').length,
     roomLabels: elements.filter(e => e.type === 'room_label').length,
     annotations: elements.filter(e => e.type === 'annotation').length,
     total: elements.length,
   };
+}
+
+// === AS/NCC STANDARDS AND MATERIALS EXTRACTION ===
+
+/**
+ * Extract Australian Standards (AS/NZS) and NCC codes from text
+ */
+export function extractStandards(text: string, pageNumber: number): ExtractedStandard[] {
+  const standards: ExtractedStandard[] = [];
+
+  // Regex patterns for different standard types
+  const patterns = [
+    { regex: /AS\/NZS\s+(\d+(?:\.\d+)?(?:\.\d+)?)/gi, type: 'AS/NZS' as const },
+    { regex: /AS\s+(\d+(?:\.\d+)?(?:\.\d+)?)/gi, type: 'AS' as const },
+    { regex: /NCC\s+([A-Z]\d+(?:\.\d+)?)/gi, type: 'NCC' as const }
+  ];
+
+  patterns.forEach(({ regex, type }) => {
+    let match;
+    const regexCopy = new RegExp(regex.source, regex.flags);
+    while ((match = regexCopy.exec(text)) !== null) {
+      const code = match[1];
+      const fullReference = match[0];
+      const matchIndex = match.index;
+      const contextStart = Math.max(0, matchIndex - 50);
+      const contextEnd = Math.min(text.length, matchIndex + fullReference.length + 50);
+      const context = text.substring(contextStart, contextEnd).trim();
+
+      const isDuplicate = standards.some(
+        s => s.code === code && s.type === type && s.pageNumber === pageNumber
+      );
+
+      if (!isDuplicate) {
+        standards.push({ code, type, fullReference, context, pageNumber });
+      }
+    }
+  });
+
+  return standards;
+}
+
+/**
+ * Extract construction materials from text
+ */
+export function extractMaterials(text: string, pageNumber: number): ExtractedMaterial[] {
+  const materials: ExtractedMaterial[] = [];
+
+  const materialKeywords = [
+    'plasterboard', 'gypsum', 'drywall', 'villaboard',
+    'timber', 'steel', 'concrete',
+    'insulation', 'batts', 'glasswool',
+    'tiles', 'ceramic', 'porcelain',
+    'waterproofing', 'membrane',
+    'framing', 'studs',
+    'flooring', 'carpet', 'vinyl',
+    'render', 'cladding',
+    'paint', 'sealer', 'coating', 'epoxy'
+  ];
+
+  materialKeywords.forEach(keyword => {
+    const regex = new RegExp(`\\b${keyword}[\\w\\s-]*`, 'gi');
+    let match;
+    const regexCopy = new RegExp(regex.source, regex.flags);
+
+    while ((match = regexCopy.exec(text)) !== null) {
+      const name = match[0];
+      const matchIndex = match.index;
+      const contextStart = Math.max(0, matchIndex - 50);
+      const contextEnd = Math.min(text.length, matchIndex + name.length + 100);
+      const context = text.substring(contextStart, contextEnd).trim();
+
+      const specMatch = context.match(/(\d+mm|\d+x\d+mm|R\d+\.?\d*|F\d+|MGP\d+|BMT\s*\d+\.?\d*)/i);
+      const specification = specMatch ? specMatch[0] : undefined;
+
+      const qtyMatch = context.match(/(\d+(?:\.\d+)?\s*(?:m²|m2|m³|m3|LM|sheets?|bags?|boxes?))/i);
+      const quantity = qtyMatch ? qtyMatch[0] : undefined;
+
+      const isDuplicate = materials.some(
+        m => m.name.toLowerCase() === name.toLowerCase() &&
+             m.specification === specification &&
+             m.pageNumber === pageNumber
+      );
+
+      if (!isDuplicate) {
+        materials.push({ name, specification, quantity, context, pageNumber });
+      }
+    }
+  });
+
+  return materials;
+}
+
+/**
+ * Analyze entire PDF for standards and materials
+ */
+export async function analyzePDFForStandards(pdfUrl: string, maxPages: number = 20): Promise<PDFAnalysisSummary> {
+  try {
+    const pdf = await pdfjs.getDocument(pdfUrl).promise;
+    const totalPages = pdf.numPages;
+    const pagesToExtract = Math.min(totalPages, maxPages);
+
+    const allStandards: ExtractedStandard[] = [];
+    const allMaterials: ExtractedMaterial[] = [];
+    let extractedText = '';
+
+    for (let pageNum = 1; pageNum <= pagesToExtract; pageNum++) {
+      const page = await pdf.getPage(pageNum);
+      const textContent = await page.getTextContent();
+      const pageText = textContent.items.map((item: any) => item.str).join(' ');
+
+      extractedText += pageText + '\n\n';
+
+      const standards = extractStandards(pageText, pageNum);
+      const materials = extractMaterials(pageText, pageNum);
+
+      allStandards.push(...standards);
+      allMaterials.push(...materials);
+    }
+
+    return {
+      standards: allStandards,
+      materials: allMaterials,
+      totalPages,
+      extractedText: extractedText.substring(0, 5000) // Limit to 5000 chars
+    };
+  } catch (error) {
+    console.error('Error analyzing PDF:', error);
+    return {
+      standards: [],
+      materials: [],
+      totalPages: 0,
+      extractedText: ''
+    };
+  }
+}
+
+/**
+ * Get unique standards (remove duplicates)
+ */
+export function getUniqueStandards(standards: ExtractedStandard[]): ExtractedStandard[] {
+  const uniqueMap = new Map<string, ExtractedStandard>();
+  standards.forEach(standard => {
+    const key = `${standard.type}-${standard.code}`;
+    if (!uniqueMap.has(key)) {
+      uniqueMap.set(key, standard);
+    }
+  });
+  return Array.from(uniqueMap.values());
+}
+
+/**
+ * Group materials by category
+ */
+export function groupMaterialsByCategory(materials: ExtractedMaterial[]): Record<string, ExtractedMaterial[]> {
+  const categorize = (name: string): string => {
+    const lower = name.toLowerCase();
+    if (lower.includes('plaster') || lower.includes('gypsum') || lower.includes('villaboard')) return 'Lining';
+    if (lower.includes('timber') || lower.includes('steel') || lower.includes('stud')) return 'Framing';
+    if (lower.includes('insulation') || lower.includes('batts')) return 'Insulation';
+    if (lower.includes('tile') || lower.includes('ceramic') || lower.includes('porcelain')) return 'Flooring';
+    if (lower.includes('waterproof') || lower.includes('membrane')) return 'Waterproofing';
+    if (lower.includes('concrete')) return 'Structural';
+    if (lower.includes('paint') || lower.includes('sealer') || lower.includes('coating')) return 'Finishing';
+    return 'Other';
+  };
+
+  return materials.reduce((acc, material) => {
+    const category = categorize(material.name);
+    if (!acc[category]) acc[category] = [];
+    acc[category].push(material);
+    return acc;
+  }, {} as Record<string, ExtractedMaterial[]>);
 }

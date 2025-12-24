@@ -564,6 +564,9 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                 }}
                 onAddToEstimate={handleAddToEstimate}
                 onFetchNCCCode={handleFetchNCCCode}
+                onAddCostItem={(item) => {
+                  dispatch({ type: 'ADD_COST_ITEM', payload: item });
+                }}
               />
             </Card>
             </>
