@@ -9,6 +9,7 @@ import { MeasurementToolbar } from './MeasurementToolbar';
 import { ViewportControls } from './ViewportControls';
 import { Magnifier } from './Magnifier';
 import { TakeoffTable } from './TakeoffTable';
+import { TakeoffTableEnhanced } from './TakeoffTableEnhanced';
 import { CostEstimator } from './CostEstimator';
 import { useTakeoffState } from '@/hooks/useTakeoffState';
 import { WorldPoint, MeasurementUnit, Measurement, PDFViewportData, CostItem } from '@/lib/takeoff/types';
@@ -294,6 +295,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
 
         <TabsContent value="measure" className="space-y-4">
           {state.pdfFile && (
+            <>
             <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
               {/* Left Sidebar - Calibration */}
               <div className="lg:col-span-1 space-y-4">
@@ -548,6 +550,23 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                 </Card>
               </div>
             </div>
+
+            {/* Table Below Canvas */}
+            <Card className="mt-6 p-4">
+              <h2 className="text-lg font-semibold mb-4">Takeoff Measurements Table</h2>
+              <TakeoffTableEnhanced
+                measurements={state.measurements}
+                onUpdateMeasurement={(id, updates) => {
+                  dispatch({ type: 'UPDATE_MEASUREMENT', payload: { id, updates } });
+                }}
+                onDeleteMeasurement={(id) => {
+                  dispatch({ type: 'DELETE_MEASUREMENT', payload: id });
+                }}
+                onAddToEstimate={handleAddToEstimate}
+                onFetchNCCCode={handleFetchNCCCode}
+              />
+            </Card>
+            </>
           )}
         </TabsContent>
 
