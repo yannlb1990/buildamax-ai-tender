@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { WorldPoint, ViewPoint, Transform, PDFViewportData, Measurement, ToolType, EnhancedMeasurement } from '@/lib/takeoff/types';
 import { calculateLinearWorld, calculateRectangleAreaWorld, calculatePolygonPerimeterWorld, calculateCentroidWorld, calculateCircleAreaWorld, formatPerimeter } from '@/lib/takeoff/calculations';
 import { viewToWorld } from '@/lib/takeoff/coordinates';
+import { toast } from 'sonner';
 
 // Set up PDF.js worker
 pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
@@ -27,6 +28,7 @@ interface InteractiveCanvasProps {
   onTransformChange: (transform: Partial<Transform>) => void;
   onViewportReady: (viewport: PDFViewportData) => void;
   onDeleteLastMeasurement?: () => void;
+  onDeleteMeasurement?: (id: string) => void; // FIX #2: Delete specific measurement
   onSelectMeasurement?: (id: string | null) => void;
 }
 
@@ -46,6 +48,7 @@ export const InteractiveCanvas = ({
   onTransformChange,
   onViewportReady,
   onDeleteLastMeasurement,
+  onDeleteMeasurement,
   onSelectMeasurement,
 }: InteractiveCanvasProps) => {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -540,6 +543,21 @@ export const InteractiveCanvas = ({
     canvas.requestRenderAll();
   }, [measurements, pageIndex, renderMeasurement]);
 
+  // FIX #1: PDF-Table Sync - Detect deleted measurements and remove their canvas objects
+  useEffect(() => {
+    const canvas = fabricCanvasRef.current;
+    if (!canvas) return;
+
+    const currentIds = new Set(measurements.map(m => m.id));
+    measurementObjectsRef.current.forEach((objects, id) => {
+      if (!currentIds.has(id)) {
+        objects.forEach(obj => canvas.remove(obj));
+        measurementObjectsRef.current.delete(id);
+      }
+    });
+    canvas.requestRenderAll();
+  }, [measurements]);
+
   // Handle object:modified event for drag/resize
   useEffect(() => {
     const canvas = fabricCanvasRef.current;
@@ -789,10 +807,17 @@ export const InteractiveCanvas = ({
       return;
     }
 
-    // Handle eraser tool - delete last measurement
+    // FIX #2: Handle eraser tool - delete the specific clicked measurement
     if (activeTool === 'eraser') {
-      if (onDeleteLastMeasurement) {
-        onDeleteLastMeasurement();
+      const target = canvas.findTarget(e.e);
+      if (target && (target as any).measurementId) {
+        const measurementId = (target as any).measurementId;
+        if (onDeleteMeasurement) {
+          onDeleteMeasurement(measurementId);
+          toast.success('Measurement deleted');
+        }
+      } else {
+        toast.info('Click on a measurement to delete it');
       }
       return;
     }
@@ -886,7 +911,7 @@ export const InteractiveCanvas = ({
   }, [
     viewport, transform, calibrationMode, isCalibrated, activeTool,
     polygonPoints, polygonMarkers, polygonLines, pageIndex,
-    handleCalibrationMouseDown, onMeasurementComplete, onDeleteLastMeasurement,
+    handleCalibrationMouseDown, onMeasurementComplete, onDeleteLastMeasurement, onDeleteMeasurement,
     getZoomAwareSize, countPoints
   ]);
 

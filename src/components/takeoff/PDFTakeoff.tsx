@@ -457,6 +457,7 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                     onTransformChange={handleTransformChange}
                     onViewportReady={handleViewportReady}
                     onDeleteLastMeasurement={() => dispatch({ type: 'DELETE_LAST_MEASUREMENT' })}
+                    onDeleteMeasurement={(id) => dispatch({ type: 'DELETE_MEASUREMENT', payload: id })}
                     onSelectMeasurement={setSelectedMeasurementId}
                   />
                 </div>
