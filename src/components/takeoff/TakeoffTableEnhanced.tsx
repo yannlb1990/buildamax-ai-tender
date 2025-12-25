@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Check, Trash2, ChevronDown, ChevronRight, Search, X, AlertTriangle, Lightbulb, Calculator, Plus } from 'lucide-react';
+import { Check, Trash2, ChevronDown, ChevronRight, Search, X, AlertTriangle, Lightbulb, Calculator, Plus, Lock, Unlock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -42,6 +42,7 @@ export interface EnhancedMeasurement extends Measurement {
   nccCode?: string;
   notes?: string;
   validated?: boolean;
+  locked?: boolean;
 }
 
 interface TakeoffTableEnhancedProps {
@@ -342,6 +343,25 @@ export const TakeoffTableEnhanced = ({
 
           {/* Actions */}
           <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
+            {/* Lock Toggle */}
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className={cn("h-6 w-6", m.locked ? "text-amber-500" : "text-muted-foreground")}
+                    onClick={() => onUpdateMeasurement(m.id, { locked: !m.locked })}
+                  >
+                    {m.locked ? <Lock className="h-3 w-3" /> : <Unlock className="h-3 w-3" />}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  {m.locked ? 'Unlock to edit' : 'Lock to prevent edits'}
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -364,7 +384,13 @@ export const TakeoffTableEnhanced = ({
               variant="ghost"
               size="icon"
               className="h-6 w-6 text-destructive hover:text-destructive"
-              onClick={() => onDeleteMeasurement(m.id)}
+              onClick={() => {
+                if (m.locked) {
+                  toast.error('Unlock measurement before deleting');
+                  return;
+                }
+                onDeleteMeasurement(m.id);
+              }}
             >
               <Trash2 className="h-3 w-3" />
             </Button>

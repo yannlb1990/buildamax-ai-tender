@@ -447,11 +447,17 @@ export const PDFTakeoff = ({ projectId, estimateId, onAddCostItems }: PDFTakeoff
                     unitsPerMetre={state.currentScale?.unitsPerMetre || null}
                     calibrationMode={state.calibrationMode}
                     selectedColor={state.selectedColor}
+                    measurements={state.measurements}
+                    selectedMeasurementId={selectedMeasurementId}
                     onMeasurementComplete={handleMeasurementComplete}
+                    onMeasurementUpdate={(id, updates) => {
+                      dispatch({ type: 'UPDATE_MEASUREMENT', payload: { id, updates } });
+                    }}
                     onCalibrationPointsSet={handleCalibrationPointsSet}
                     onTransformChange={handleTransformChange}
                     onViewportReady={handleViewportReady}
                     onDeleteLastMeasurement={() => dispatch({ type: 'DELETE_LAST_MEASUREMENT' })}
+                    onSelectMeasurement={setSelectedMeasurementId}
                   />
                 </div>
               </div>

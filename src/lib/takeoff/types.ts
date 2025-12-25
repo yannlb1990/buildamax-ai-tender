@@ -80,6 +80,7 @@ export interface EnhancedMeasurement extends Measurement {
   flooring?: string;
   notes?: string;
   isSelected?: boolean;
+  locked?: boolean;  // Prevent accidental edits
 }
 export type CalibrationMode = 'preset' | 'manual' | null;
 export type DistanceUnit = 'm' | 'mm' | 'cm' | 'ft' | 'in';
