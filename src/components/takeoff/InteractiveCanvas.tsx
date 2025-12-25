@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { Canvas as FabricCanvas, FabricImage, Circle, Line, Rect, Polygon, Text, Point as FabricPoint } from 'fabric';
+import { Canvas as FabricCanvas, FabricImage, Circle, Line, Rect, Polygon, Text, Point as FabricPoint, FabricObject } from 'fabric';
 import * as pdfjsLib from 'pdfjs-dist';
 import { Loader2, Check, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { WorldPoint, ViewPoint, Transform, PDFViewportData, Measurement, ToolType } from '@/lib/takeoff/types';
+import { WorldPoint, ViewPoint, Transform, PDFViewportData, Measurement, ToolType, EnhancedMeasurement } from '@/lib/takeoff/types';
 import { calculateLinearWorld, calculateRectangleAreaWorld, calculatePolygonPerimeterWorld, calculateCentroidWorld, calculateCircleAreaWorld, formatPerimeter } from '@/lib/takeoff/calculations';
 import { viewToWorld } from '@/lib/takeoff/coordinates';
 
@@ -54,6 +54,9 @@ export const InteractiveCanvas = ({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [viewport, setViewport] = useState<PDFViewportData | null>(null);
+
+  // Measurement tracking - map measurementId to Fabric objects
+  const measurementObjectsRef = useRef<Map<string, FabricObject[]>>(new Map());
 
   // Drawing state
   const [isDrawing, setIsDrawing] = useState(false);
@@ -289,6 +292,335 @@ export const InteractiveCanvas = ({
   const getZoomAwareSize = useCallback((baseSize: number) => {
     return baseSize / transform.zoom;
   }, [transform.zoom]);
+
+  // Render a single measurement on the canvas
+  const renderMeasurement = useCallback((measurement: Measurement) => {
+    const canvas = fabricCanvasRef.current;
+    if (!canvas) return;
+
+    const enhanced = measurement as EnhancedMeasurement;
+    const isLocked = enhanced.locked ?? false;
+    const isSelected = measurement.id === selectedMeasurementId;
+
+    // Remove existing objects for this measurement
+    const existingObjects = measurementObjectsRef.current.get(measurement.id);
+    if (existingObjects) {
+      existingObjects.forEach(obj => canvas.remove(obj));
+    }
+
+    const objects: FabricObject[] = [];
+    const strokeWidth = getZoomAwareSize(2);
+    const markerRadius = getZoomAwareSize(8);
+
+    // Helper to create start marker (green circle)
+    const createStartMarker = (point: WorldPoint) => {
+      const marker = new Circle({
+        left: point.x - markerRadius / 2,
+        top: point.y - markerRadius / 2,
+        radius: markerRadius / 2,
+        fill: '#22c55e',
+        stroke: 'white',
+        strokeWidth: getZoomAwareSize(1),
+        selectable: false,
+        evented: false,
+      });
+      return marker;
+    };
+
+    // Helper to create end marker (red square)
+    const createEndMarker = (point: WorldPoint) => {
+      const size = markerRadius;
+      const marker = new Rect({
+        left: point.x - size / 2,
+        top: point.y - size / 2,
+        width: size,
+        height: size,
+        fill: '#ef4444',
+        stroke: 'white',
+        strokeWidth: getZoomAwareSize(1),
+        selectable: false,
+        evented: false,
+      });
+      return marker;
+    };
+
+    if (measurement.type === 'line' && measurement.worldPoints.length >= 2) {
+      const p1 = measurement.worldPoints[0];
+      const p2 = measurement.worldPoints[1];
+
+      const line = new Line([p1.x, p1.y, p2.x, p2.y], {
+        stroke: isSelected ? '#3b82f6' : measurement.color,
+        strokeWidth: strokeWidth,
+        selectable: !isLocked,
+        evented: !isLocked,
+        hasControls: !isLocked,
+        hasBorders: !isLocked,
+        lockRotation: true,
+      });
+      // Store measurement data as custom property
+      (line as any).measurementId = measurement.id;
+      (line as any).measurementType = 'line';
+      objects.push(line);
+      canvas.add(line);
+
+      // Add start/end markers
+      const startMarker = createStartMarker(p1);
+      const endMarker = createEndMarker(p2);
+      objects.push(startMarker, endMarker);
+      canvas.add(startMarker);
+      canvas.add(endMarker);
+
+    } else if (measurement.type === 'rectangle' && measurement.worldPoints.length >= 2) {
+      const p1 = measurement.worldPoints[0];
+      const p2 = measurement.worldPoints[1];
+
+      const rect = new Rect({
+        left: Math.min(p1.x, p2.x),
+        top: Math.min(p1.y, p2.y),
+        width: Math.abs(p2.x - p1.x),
+        height: Math.abs(p2.y - p1.y),
+        fill: 'rgba(76, 175, 80, 0.2)',
+        stroke: isSelected ? '#3b82f6' : measurement.color,
+        strokeWidth: strokeWidth,
+        selectable: !isLocked,
+        evented: !isLocked,
+        hasControls: !isLocked,
+        hasBorders: !isLocked,
+        lockRotation: true,
+      });
+      // Store measurement data as custom property
+      (rect as any).measurementId = measurement.id;
+      (rect as any).measurementType = 'rectangle';
+      objects.push(rect);
+      canvas.add(rect);
+
+      // Add start/end markers at corners
+      const startMarker = createStartMarker(p1);
+      const endMarker = createEndMarker(p2);
+      objects.push(startMarker, endMarker);
+      canvas.add(startMarker);
+      canvas.add(endMarker);
+
+    } else if (measurement.type === 'circle' && measurement.unit === 'count') {
+      // Count markers - larger size (2x)
+      const countRadius = getZoomAwareSize(12);
+      const fontSize = getZoomAwareSize(16);
+
+      measurement.worldPoints.forEach((point, idx) => {
+        const marker = new Circle({
+          left: point.x - countRadius,
+          top: point.y - countRadius,
+          radius: countRadius,
+          fill: 'orange',
+          stroke: 'white',
+          strokeWidth: getZoomAwareSize(3),
+          selectable: false,
+          evented: false,
+        });
+        objects.push(marker);
+        canvas.add(marker);
+
+        const label = new Text(String(idx + 1), {
+          left: point.x - getZoomAwareSize(5),
+          top: point.y - getZoomAwareSize(8),
+          fontSize: fontSize,
+          fill: 'white',
+          fontWeight: 'bold',
+          selectable: false,
+          evented: false,
+        });
+        objects.push(label);
+        canvas.add(label);
+      });
+
+    } else if (measurement.type === 'circle' && measurement.worldPoints.length >= 2) {
+      const center = measurement.worldPoints[0];
+      const edge = measurement.worldPoints[1];
+      const dx = edge.x - center.x;
+      const dy = edge.y - center.y;
+      const radius = Math.sqrt(dx * dx + dy * dy);
+
+      const circle = new Circle({
+        left: center.x - radius,
+        top: center.y - radius,
+        radius: radius,
+        fill: 'rgba(156, 39, 176, 0.2)',
+        stroke: isSelected ? '#3b82f6' : measurement.color,
+        strokeWidth: strokeWidth,
+        selectable: !isLocked,
+        evented: !isLocked,
+        hasControls: !isLocked,
+        hasBorders: !isLocked,
+        lockRotation: true,
+      });
+      // Store measurement data as custom property
+      (circle as any).measurementId = measurement.id;
+      (circle as any).measurementType = 'circle';
+      objects.push(circle);
+      canvas.add(circle);
+
+      // Green circle at center, red square at edge
+      const centerMarker = createStartMarker(center);
+      const edgeMarker = createEndMarker(edge);
+      objects.push(centerMarker, edgeMarker);
+      canvas.add(centerMarker);
+      canvas.add(edgeMarker);
+
+    } else if (measurement.type === 'polygon' && measurement.worldPoints.length >= 3) {
+      const worldPointsFabric = measurement.worldPoints.map(wp => new FabricPoint(wp.x, wp.y));
+      const polygon = new Polygon(worldPointsFabric, {
+        fill: 'rgba(33, 150, 243, 0.2)',
+        stroke: isSelected ? '#3b82f6' : measurement.color,
+        strokeWidth: strokeWidth,
+        selectable: !isLocked,
+        evented: !isLocked,
+        hasControls: !isLocked,
+        hasBorders: !isLocked,
+        lockRotation: true,
+      });
+      // Store measurement data as custom property
+      (polygon as any).measurementId = measurement.id;
+      (polygon as any).measurementType = 'polygon';
+      objects.push(polygon);
+      canvas.add(polygon);
+
+      // Add vertex markers - green diamond for first, blue for others
+      measurement.worldPoints.forEach((point, idx) => {
+        const size = getZoomAwareSize(6);
+        const marker = new Rect({
+          left: point.x - size / 2,
+          top: point.y - size / 2,
+          width: size,
+          height: size,
+          fill: idx === 0 ? '#22c55e' : '#3b82f6',
+          stroke: 'white',
+          strokeWidth: getZoomAwareSize(1),
+          angle: 45,
+          selectable: false,
+          evented: false,
+        });
+        objects.push(marker);
+        canvas.add(marker);
+      });
+    }
+
+    // Add lock indicator if locked
+    if (isLocked && measurement.worldPoints.length > 0) {
+      const firstPoint = measurement.worldPoints[0];
+      const lockLabel = new Text('🔒', {
+        left: firstPoint.x + getZoomAwareSize(10),
+        top: firstPoint.y - getZoomAwareSize(10),
+        fontSize: getZoomAwareSize(14),
+        selectable: false,
+        evented: false,
+      });
+      objects.push(lockLabel);
+      canvas.add(lockLabel);
+    }
+
+    measurementObjectsRef.current.set(measurement.id, objects);
+    canvas.requestRenderAll();
+  }, [selectedMeasurementId, getZoomAwareSize]);
+
+  // Render all measurements when they change
+  useEffect(() => {
+    const canvas = fabricCanvasRef.current;
+    if (!canvas) return;
+
+    // Clear all existing measurement objects
+    measurementObjectsRef.current.forEach((objects) => {
+      objects.forEach(obj => canvas.remove(obj));
+    });
+    measurementObjectsRef.current.clear();
+
+    // Filter measurements for current page and render them
+    const pageMeasurements = measurements.filter(m => m.pageIndex === pageIndex);
+    pageMeasurements.forEach(m => renderMeasurement(m));
+
+    canvas.requestRenderAll();
+  }, [measurements, pageIndex, renderMeasurement]);
+
+  // Handle object:modified event for drag/resize
+  useEffect(() => {
+    const canvas = fabricCanvasRef.current;
+    if (!canvas || !onMeasurementUpdate) return;
+
+    const handleObjectModified = (e: any) => {
+      const obj = e.target;
+      const measurementId = obj.measurementId;
+      const measurementType = obj.measurementType;
+      if (!measurementId) return;
+
+      let newWorldPoints: WorldPoint[] = [];
+
+      if (measurementType === 'line') {
+        // Line object has x1, y1, x2, y2
+        newWorldPoints = [
+          { x: obj.x1 + obj.left, y: obj.y1 + obj.top },
+          { x: obj.x2 + obj.left, y: obj.y2 + obj.top },
+        ];
+      } else if (measurementType === 'rectangle') {
+        // Rect - get corners after transformation
+        const left = obj.left;
+        const top = obj.top;
+        const width = obj.width * obj.scaleX;
+        const height = obj.height * obj.scaleY;
+        newWorldPoints = [
+          { x: left, y: top },
+          { x: left + width, y: top + height },
+        ];
+      } else if (measurementType === 'circle') {
+        // Circle - center and edge point
+        const radius = obj.radius * obj.scaleX;
+        const centerX = obj.left + radius;
+        const centerY = obj.top + radius;
+        newWorldPoints = [
+          { x: centerX, y: centerY },
+          { x: centerX + radius, y: centerY },
+        ];
+      } else if (measurementType === 'polygon') {
+        // Polygon - get all points after transformation
+        const points = obj.points || [];
+        newWorldPoints = points.map((p: any) => ({
+          x: p.x + obj.left,
+          y: p.y + obj.top,
+        }));
+      }
+
+      if (newWorldPoints.length === 0) return;
+
+      // Recalculate real value based on measurement type
+      const effectiveUnits = unitsPerMetre || 1;
+      let updates: Partial<Measurement> = { worldPoints: newWorldPoints };
+
+      if (measurementType === 'line' && newWorldPoints.length >= 2) {
+        const result = calculateLinearWorld(newWorldPoints[0], newWorldPoints[1], effectiveUnits);
+        updates.worldValue = result.worldValue;
+        updates.realValue = result.realValue;
+      } else if (measurementType === 'rectangle' && newWorldPoints.length >= 2) {
+        const result = calculateRectangleAreaWorld(newWorldPoints[0], newWorldPoints[1], effectiveUnits);
+        updates.worldValue = result.worldValue;
+        updates.realValue = result.realValue;
+        updates.dimensions = result.dimensions;
+      } else if (measurementType === 'circle' && newWorldPoints.length >= 2) {
+        const result = calculateCircleAreaWorld(newWorldPoints[0], newWorldPoints[1], effectiveUnits);
+        updates.worldValue = result.worldValue;
+        updates.realValue = result.realValue;
+      } else if (measurementType === 'polygon' && newWorldPoints.length >= 3) {
+        const result = calculatePolygonPerimeterWorld(newWorldPoints, effectiveUnits);
+        updates.worldValue = result.worldValue;
+        updates.realValue = result.realValue;
+      }
+
+      onMeasurementUpdate(measurementId, updates);
+    };
+
+    canvas.on('object:modified', handleObjectModified);
+
+    return () => {
+      canvas.off('object:modified', handleObjectModified);
+    };
+  }, [onMeasurementUpdate, unitsPerMetre]);
 
   // Handle calibration DRAG (new drag-to-calibrate)
   const handleCalibrationMouseDown = useCallback((worldPoint: WorldPoint) => {
