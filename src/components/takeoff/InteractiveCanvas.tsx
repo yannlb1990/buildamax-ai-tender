@@ -270,24 +270,11 @@ export const InteractiveCanvas = ({
     console.log('  ✅ Render complete');
   }, [measurements, pageIndex, viewport, renderMeasurement]);
 
-  // STAGE 1: Re-render measurements when zoom changes (for zoom-aware sizing)
-  useEffect(() => {
-    const canvas = fabricCanvasRef.current;
-    if (!canvas || !viewport) return;
-
-    // Clear and re-render with new zoom-aware sizes
-    measurementObjectsRef.current.forEach((objects) => {
-      objects.forEach(obj => canvas.remove(obj));
-    });
-    measurementObjectsRef.current.clear();
-
-    const pageMeasurements = measurements.filter(m => m.pageIndex === pageIndex);
-    pageMeasurements.forEach(measurement => {
-      renderMeasurement(measurement);
-    });
-
-    canvas.requestRenderAll();
-  }, [transform.zoom, measurements, pageIndex, viewport, renderMeasurement]);
+  // ZOOM HANDLING:
+  // Zoom changes are already handled by the main rendering useEffect above!
+  // When zoom changes → transform changes → renderMeasurement is recreated (has transform in deps)
+  // → main useEffect runs (has renderMeasurement in deps) → re-renders with new zoom-aware sizes
+  // No separate zoom useEffect needed! (was causing double-render race condition)
 
   // STAGE 4: Handle measurement movement and resizing
   useEffect(() => {
