@@ -43,6 +43,12 @@ export interface EnhancedMeasurement extends Measurement {
   notes?: string;
   validated?: boolean;
   locked?: boolean;
+  addedToEstimate?: boolean;
+  // FIX #5 & #6: Height/Depth calculation fields
+  height?: number;              // Wall height for LM → M2 calculation
+  calculatedArea?: number;      // LM × height = M2
+  calculatedVolume?: number;    // M2 × depth = M3
+  materialDescription?: string; // Freetext material description
 }
 
 interface TakeoffTableEnhancedProps {
@@ -135,15 +141,13 @@ export const TakeoffTableEnhanced = ({
     setExpandedIds(newSet);
   };
 
-  // Export to Estimate - creates cost items with calculated M2/M3 values
+  // Export to Estimate - creates cost items with calculated M2/M3 values (uses stored values)
   const handleExportToEstimate = () => {
-    // 1. Check if onAddCostItem is available
     if (!onAddCostItem) {
       toast.error('Cost item creation not available');
       return;
     }
 
-    // 2. Filter selected measurements
     const selectedMeasurements = enhancedMeasurements.filter(m => selectedIds.has(m.id));
     
     if (selectedMeasurements.length === 0) {
@@ -151,51 +155,29 @@ export const TakeoffTableEnhanced = ({
       return;
     }
 
-    // 3. Create cost items for each selected measurement
     selectedMeasurements.forEach(m => {
-      // Calculate area/volume from dimensions
-      const calculatedArea = m.dimensions ? m.dimensions.width * m.dimensions.height : 0;
-      const calculatedVolume = calculatedArea > 0 && m.depth ? calculatedArea * m.depth : 0;
-
-      // Build material description from selections
-      const materialParts: string[] = [];
-      if (m.framing) {
-        const framingOpt = FRAMING_OPTIONS.find(o => o.value === m.framing);
-        materialParts.push(framingOpt?.label || m.framing);
-      }
-      if (m.lining) {
-        const liningOpt = LINING_OPTIONS.find(o => o.value === m.lining);
-        materialParts.push(liningOpt?.label || m.lining);
-      }
-      if (m.insulation) {
-        const insulOpt = INSULATION_OPTIONS.find(o => o.value === m.insulation);
-        materialParts.push(insulOpt?.label || m.insulation);
-      }
-      if (m.flooring) {
-        const floorOpt = FLOORING_OPTIONS.find(o => o.value === m.flooring);
-        materialParts.push(floorOpt?.label || m.flooring);
-      }
-      const materialDescription = materialParts.join(', ');
-
       // Get structure type label
       const structureLabel = m.structureType 
         ? STRUCTURE_TYPES.find(s => s.value === m.structureType)?.label 
         : undefined;
 
-      // Determine quantity, unit, and notes based on calculated values
+      // Determine quantity, unit, and notes based on STORED calculated values
       let quantity: number;
       let unit: MeasurementUnit;
       const notes: string[] = [];
 
-      if (calculatedArea > 0 && m.dimensions) {
-        quantity = calculatedArea;
-        unit = 'M2';
-        notes.push(`Calculated: ${m.dimensions.width.toFixed(2)}m × ${m.dimensions.height.toFixed(2)}m`);
-      } else if (calculatedVolume > 0) {
-        quantity = calculatedVolume;
+      if (m.calculatedVolume && m.calculatedVolume > 0) {
+        // M3 calculation: M2 × depth
+        quantity = m.calculatedVolume;
         unit = 'M3';
-        notes.push(`Calculated: Area ${calculatedArea.toFixed(2)}m² × Depth ${m.depth?.toFixed(2)}m`);
+        notes.push(`Calculation: ${m.realValue.toFixed(2)} M² × ${m.depth?.toFixed(2)}m depth = ${m.calculatedVolume.toFixed(3)} M³`);
+      } else if (m.calculatedArea && m.calculatedArea > 0) {
+        // M2 calculation: LM × height
+        quantity = m.calculatedArea;
+        unit = 'M2';
+        notes.push(`Calculation: ${m.realValue.toFixed(2)} LM × ${m.height?.toFixed(2)}m height = ${m.calculatedArea.toFixed(2)} M²`);
       } else {
+        // Use original measurement value
         quantity = m.realValue;
         unit = m.unit;
       }
@@ -207,31 +189,50 @@ export const TakeoffTableEnhanced = ({
         notes.push(m.notes);
       }
 
-      // 4. Create cost item
+      // Use stored materialDescription or build from selections
+      let description = m.materialDescription;
+      if (!description) {
+        const materialParts: string[] = [];
+        if (m.framing) {
+          const framingOpt = FRAMING_OPTIONS.find(o => o.value === m.framing);
+          materialParts.push(framingOpt?.label || m.framing);
+        }
+        if (m.lining) {
+          const liningOpt = LINING_OPTIONS.find(o => o.value === m.lining);
+          materialParts.push(liningOpt?.label || m.lining);
+        }
+        if (m.insulation) {
+          const insulOpt = INSULATION_OPTIONS.find(o => o.value === m.insulation);
+          materialParts.push(insulOpt?.label || m.insulation);
+        }
+        if (m.flooring) {
+          const floorOpt = FLOORING_OPTIONS.find(o => o.value === m.flooring);
+          materialParts.push(floorOpt?.label || m.flooring);
+        }
+        description = materialParts.length > 0 
+          ? materialParts.join(', ')
+          : `${m.type} - ${formatValue(m.realValue, m.unit)} ${getUnitLabel(m.unit)}`;
+      }
+
       const costItem: CostItem = {
         id: `cost-${crypto.randomUUID().slice(0, 8)}`,
         category: m.area || 'General',
         name: m.label || `${m.type} measurement`,
-        description: materialDescription || `${m.type} - ${formatValue(m.realValue, m.unit)} ${getUnitLabel(m.unit)}`,
+        description,
         unit,
         unitCost: 0,
         quantity,
         linkedMeasurements: [m.id],
         wasteFactor: 0,
-        notes: notes.join('. '),
+        notes: notes.join(' | '),
         subtotal: 0,
       };
 
       onAddCostItem(costItem);
-      
-      // 5. Mark measurement as added to estimate
       onUpdateMeasurement(m.id, { addedToEstimate: true } as Partial<EnhancedMeasurement>);
     });
 
-    // 6. Show success toast
     toast.success(`Exported ${selectedMeasurements.length} measurement(s) to estimate`);
-
-    // 7. Clear selectedIds
     setSelectedIds(new Set());
   };
 
@@ -258,6 +259,44 @@ export const TakeoffTableEnhanced = ({
     }
 
     onUpdateMeasurement(measurementId, updates);
+  };
+
+  // FIX #5: Auto-calculation for HEIGHT (LM → M2) and DEPTH (M2 → M3)
+  const handleDimensionChange = (measurementId: string, field: 'height' | 'depth', value: number | undefined) => {
+    const m = enhancedMeasurements.find(x => x.id === measurementId);
+    if (!m) return;
+
+    const updates: Partial<EnhancedMeasurement> = { [field]: value };
+
+    if (field === 'height') {
+      // Wall: LM × height = M2
+      if (value && m.unit === 'LM') {
+        updates.calculatedArea = m.realValue * value;
+      } else {
+        updates.calculatedArea = undefined;
+      }
+    }
+
+    if (field === 'depth') {
+      // Slab: M2 × depth = M3
+      if (value && m.unit === 'M2') {
+        updates.calculatedVolume = m.realValue * value;
+      } else {
+        updates.calculatedVolume = undefined;
+      }
+    }
+
+    onUpdateMeasurement(measurementId, updates);
+  };
+
+  // Helper: Check if HEIGHT column should be visible for a measurement
+  const shouldShowHeight = (m: EnhancedMeasurement) => {
+    return m.unit === 'LM' && m.structureType?.includes('wall');
+  };
+
+  // Helper: Check if DEPTH column should be visible for a measurement
+  const shouldShowDepth = (m: EnhancedMeasurement) => {
+    return m.unit === 'M2' && m.structureType === 'floor';
   };
 
   const handleValidate = (id: string) => {
@@ -287,10 +326,12 @@ export const TakeoffTableEnhanced = ({
 
     return (
       <div key={m.id}>
+        {/* FIX #5: Restructured row with HEIGHT, DEPTH, CALCULATED, MATERIAL columns */}
         <div
           className={cn(
-            'grid grid-cols-[40px_minmax(100px,1fr)_80px_100px_120px_100px_100px_100px_100px_minmax(60px,80px)_80px] gap-1 p-2 border-b items-center text-xs cursor-pointer transition-colors',
+            'grid grid-cols-[40px_minmax(80px,1fr)_70px_50px_70px_70px_80px_90px_80px_80px_80px_minmax(100px,1fr)_60px_70px] gap-1 p-2 border-b items-center text-xs cursor-pointer transition-colors',
             m.validated && 'bg-green-50 dark:bg-green-950/30',
+            m.addedToEstimate && 'bg-blue-50 dark:bg-blue-950/30',
             selectedIds.has(m.id) && 'bg-accent/50',
             isSelected && 'ring-2 ring-primary ring-inset bg-primary/10'
           )}
@@ -326,14 +367,82 @@ export const TakeoffTableEnhanced = ({
             </Button>
           </div>
 
-          {/* Type */}
-          <div className="text-muted-foreground capitalize truncate">
-            {m.type}
+          {/* Area */}
+          <div onClick={(e) => e.stopPropagation()}>
+            <Select
+              value={m.area || ''}
+              onValueChange={(v: MeasurementArea) => onUpdateMeasurement(m.id, { area: v })}
+            >
+              <SelectTrigger className="h-7 text-xs">
+                <SelectValue placeholder="Area" />
+              </SelectTrigger>
+              <SelectContent className="bg-popover">
+                {AREA_OPTIONS.map((area) => (
+                  <SelectItem key={area} value={area} className="text-xs">
+                    {area}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
-          {/* Value + Unit */}
-          <div className="font-mono font-medium">
-            {formatValue(m.realValue, m.unit)} {getUnitLabel(m.unit)}
+          {/* Qty (realValue) */}
+          <div className="font-mono font-medium text-center">
+            {formatValue(m.realValue, m.unit)}
+          </div>
+
+          {/* Unit */}
+          <div className="text-muted-foreground text-center">
+            {getUnitLabel(m.unit)}
+          </div>
+
+          {/* HEIGHT - Conditional: Only for LM + Wall */}
+          <div onClick={(e) => e.stopPropagation()}>
+            {shouldShowHeight(m) ? (
+              <Input
+                type="number"
+                step="0.1"
+                min="0"
+                value={m.height || ''}
+                onChange={(e) => handleDimensionChange(m.id, 'height', e.target.value ? parseFloat(e.target.value) : undefined)}
+                className="h-7 text-xs font-mono text-center"
+                placeholder="2.4"
+              />
+            ) : (
+              <span className="text-muted-foreground text-[10px] block text-center">—</span>
+            )}
+          </div>
+
+          {/* DEPTH - Conditional: Only for M2 + Floor */}
+          <div onClick={(e) => e.stopPropagation()}>
+            {shouldShowDepth(m) ? (
+              <Input
+                type="number"
+                step="0.01"
+                min="0"
+                value={m.depth || ''}
+                onChange={(e) => handleDimensionChange(m.id, 'depth', e.target.value ? parseFloat(e.target.value) : undefined)}
+                className="h-7 text-xs font-mono text-center"
+                placeholder="0.15"
+              />
+            ) : (
+              <span className="text-muted-foreground text-[10px] block text-center">—</span>
+            )}
+          </div>
+
+          {/* CALCULATED - Shows M2 (green) or M3 (blue) */}
+          <div className="text-center">
+            {m.calculatedArea ? (
+              <Badge className="bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300 text-[10px] font-mono">
+                {m.calculatedArea.toFixed(2)} M²
+              </Badge>
+            ) : m.calculatedVolume ? (
+              <Badge className="bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300 text-[10px] font-mono">
+                {m.calculatedVolume.toFixed(3)} M³
+              </Badge>
+            ) : (
+              <span className="text-muted-foreground text-[10px]">—</span>
+            )}
           </div>
 
           {/* Structure Type */}
@@ -343,7 +452,7 @@ export const TakeoffTableEnhanced = ({
               onValueChange={(v) => handleStructureChange(m.id, 'structureType', v)}
             >
               <SelectTrigger className="h-7 text-xs">
-                <SelectValue placeholder="Type..." />
+                <SelectValue placeholder="Type" />
               </SelectTrigger>
               <SelectContent className="bg-popover">
                 {STRUCTURE_TYPES.map((opt) => (
@@ -362,7 +471,7 @@ export const TakeoffTableEnhanced = ({
               onValueChange={(v) => handleStructureChange(m.id, 'framing', v)}
             >
               <SelectTrigger className="h-7 text-xs">
-                <SelectValue placeholder="Frame..." />
+                <SelectValue placeholder="Frame" />
               </SelectTrigger>
               <SelectContent className="bg-popover">
                 {FRAMING_OPTIONS.map((opt) => (
@@ -381,7 +490,7 @@ export const TakeoffTableEnhanced = ({
               onValueChange={(v) => handleStructureChange(m.id, 'lining', v)}
             >
               <SelectTrigger className="h-7 text-xs">
-                <SelectValue placeholder="Lining..." />
+                <SelectValue placeholder="Lining" />
               </SelectTrigger>
               <SelectContent className="bg-popover">
                 {LINING_OPTIONS.map((opt) => (
@@ -393,27 +502,18 @@ export const TakeoffTableEnhanced = ({
             </Select>
           </div>
 
-          {/* Insulation */}
+          {/* MATERIAL - FIX #6: Freetext input */}
           <div onClick={(e) => e.stopPropagation()}>
-            <Select
-              value={m.insulation || ''}
-              onValueChange={(v) => onUpdateMeasurement(m.id, { insulation: v })}
-            >
-              <SelectTrigger className="h-7 text-xs">
-                <SelectValue placeholder="Insul..." />
-              </SelectTrigger>
-              <SelectContent className="bg-popover">
-                {INSULATION_OPTIONS.map((opt) => (
-                  <SelectItem key={opt.value} value={opt.value} className="text-xs">
-                    {opt.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Input
+              value={m.materialDescription || ''}
+              onChange={(e) => onUpdateMeasurement(m.id, { materialDescription: e.target.value })}
+              className="h-7 text-xs"
+              placeholder="e.g., Concrete 25MPa"
+            />
           </div>
 
           {/* NCC Code */}
-          <div>
+          <div className="text-center">
             {m.nccCode ? (
               <Badge variant="outline" className="text-[10px] font-mono">
                 {m.nccCode}
@@ -423,41 +523,22 @@ export const TakeoffTableEnhanced = ({
             )}
           </div>
 
-          {/* Notes indicator */}
-          <div className="flex justify-center">
-            {m.notes ? (
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger>
-                    <Badge variant="secondary" className="text-[10px]">
-                      Note
-                    </Badge>
-                  </TooltipTrigger>
-                  <TooltipContent className="max-w-xs">
-                    <p className="text-xs">{m.notes}</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            ) : null}
-          </div>
-
           {/* Actions */}
-          <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
-            {/* Lock Toggle */}
+          <div className="flex items-center justify-end gap-0.5" onClick={(e) => e.stopPropagation()}>
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
                     variant="ghost"
                     size="icon"
-                    className={cn("h-6 w-6", m.locked ? "text-amber-500" : "text-muted-foreground")}
+                    className={cn("h-5 w-5", m.locked ? "text-amber-500" : "text-muted-foreground")}
                     onClick={() => onUpdateMeasurement(m.id, { locked: !m.locked })}
                   >
                     {m.locked ? <Lock className="h-3 w-3" /> : <Unlock className="h-3 w-3" />}
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>
-                  {m.locked ? 'Unlock to edit' : 'Lock to prevent edits'}
+                  {m.locked ? 'Unlock' : 'Lock'}
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
@@ -468,7 +549,7 @@ export const TakeoffTableEnhanced = ({
                   <Button
                     variant={m.validated ? 'default' : 'ghost'}
                     size="icon"
-                    className="h-6 w-6"
+                    className="h-5 w-5"
                     onClick={() => handleValidate(m.id)}
                   >
                     <Check className="h-3 w-3" />
@@ -483,7 +564,7 @@ export const TakeoffTableEnhanced = ({
             <Button
               variant="ghost"
               size="icon"
-              className="h-6 w-6 text-destructive hover:text-destructive"
+              className="h-5 w-5 text-destructive hover:text-destructive"
               onClick={() => {
                 if (m.locked) {
                   toast.error('Unlock measurement before deleting');
@@ -771,8 +852,8 @@ export const TakeoffTableEnhanced = ({
         </Button>
       </div>
 
-      {/* Table Header */}
-      <div className="grid grid-cols-[40px_minmax(100px,1fr)_80px_100px_120px_100px_100px_100px_100px_minmax(60px,80px)_80px] gap-1 p-2 bg-muted/50 text-[10px] font-medium text-muted-foreground uppercase tracking-wide border-b">
+      {/* Table Header - FIX #5: Restructured with HEIGHT, DEPTH, CALCULATED, MATERIAL columns */}
+      <div className="grid grid-cols-[40px_minmax(80px,1fr)_70px_50px_70px_70px_80px_90px_80px_80px_80px_minmax(100px,1fr)_60px_70px] gap-1 p-2 bg-muted/50 text-[10px] font-medium text-muted-foreground uppercase tracking-wide border-b">
         <div className="flex items-center justify-center">
           <Checkbox
             checked={selectedIds.size === filteredMeasurements.length && filteredMeasurements.length > 0}
@@ -780,14 +861,17 @@ export const TakeoffTableEnhanced = ({
           />
         </div>
         <div>Name</div>
-        <div>Type</div>
-        <div>Value</div>
+        <div>Area</div>
+        <div>Qty</div>
+        <div>Unit</div>
+        <div>Height</div>
+        <div>Depth</div>
+        <div>Calculated</div>
         <div>Structure</div>
         <div>Framing</div>
         <div>Lining</div>
-        <div>Insulation</div>
+        <div>Material</div>
         <div>NCC</div>
-        <div className="text-center">Notes</div>
         <div className="text-right">Actions</div>
       </div>
 
