@@ -525,51 +525,41 @@ export const InteractiveCanvas = ({
     canvas.requestRenderAll();
   }, [selectedMeasurementId, getZoomAwareSize]);
 
-  // Render all measurements when they change
+  // Render all measurements when they change - SINGLE useEffect handles all sync
+  // (Removed duplicate deletion detection useEffect that caused race condition)
   useEffect(() => {
     const canvas = fabricCanvasRef.current;
-    if (!canvas) return;
+    if (!canvas) {
+      console.log('🔄 RENDER: Canvas not ready');
+      return;
+    }
 
-    // Clear all existing measurement objects
-    measurementObjectsRef.current.forEach((objects) => {
+    const previouslyTracked = measurementObjectsRef.current.size;
+    console.log('🔄 RENDER: Re-rendering all measurements', {
+      totalMeasurements: measurements.length,
+      currentPage: pageIndex,
+      previouslyTracked
+    });
+
+    // Clear all existing measurement objects from canvas
+    measurementObjectsRef.current.forEach((objects, id) => {
+      console.log(`🧹 Clearing objects for: ${id} (${objects.length} objects)`);
       objects.forEach(obj => canvas.remove(obj));
     });
     measurementObjectsRef.current.clear();
 
     // Filter measurements for current page and render them
     const pageMeasurements = measurements.filter(m => m.pageIndex === pageIndex);
-    pageMeasurements.forEach(m => renderMeasurement(m));
+    console.log(`✏️ Rendering ${pageMeasurements.length} measurements on page ${pageIndex}`);
+    
+    pageMeasurements.forEach(m => {
+      console.log(`  → Rendering: ${m.id} (${m.type}/${m.unit}) "${m.label || 'no label'}"`);
+      renderMeasurement(m);
+    });
 
     canvas.requestRenderAll();
+    console.log('✅ Render complete');
   }, [measurements, pageIndex, renderMeasurement]);
-
-  // FIX #1 + #12: PDF-Table Sync - Detect deleted measurements and remove their canvas objects
-  useEffect(() => {
-    const canvas = fabricCanvasRef.current;
-    if (!canvas) {
-      console.log('FIX #1: Deletion check - Canvas not ready');
-      return;
-    }
-
-    const currentIds = new Set(measurements.map(m => m.id));
-    console.log('FIX #1: Deletion check -', {
-      measurementsCount: measurements.length,
-      trackedObjects: measurementObjectsRef.current.size,
-      currentIds: Array.from(currentIds)
-    });
-
-    measurementObjectsRef.current.forEach((objects, id) => {
-      if (!currentIds.has(id)) {
-        console.log('FIX #1: ⚠️ DELETING measurement from canvas:', id, 'objects:', objects.length);
-        objects.forEach(obj => {
-          const removed = canvas.remove(obj);
-          console.log('FIX #1: Object removed:', removed ? 'SUCCESS' : 'FAILED');
-        });
-        measurementObjectsRef.current.delete(id);
-      }
-    });
-    canvas.requestRenderAll();
-  }, [measurements]);
 
   // Handle object:modified event for drag/resize
   useEffect(() => {

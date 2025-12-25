@@ -650,6 +650,8 @@ export const TakeoffTableEnhanced = ({
         {/* Expanded Details Panel - FIX #7: Simplified for count measurements */}
         {isExpanded && (
           <div className="p-3 bg-muted/30 border-b space-y-3">
+            {/* Debug logging for expanded panel */}
+            {(() => { console.log('🔍 EXPANDED PANEL:', { id: m.id, type: m.type, unit: m.unit, isCount: m.unit === 'count', label: m.label }); return null; })()}
             {/* FIX #7: Simplified panel for Count measurements - only Item Name, Count (EA), Notes */}
             {m.unit === 'count' ? (
               <div className="grid grid-cols-3 gap-3">
