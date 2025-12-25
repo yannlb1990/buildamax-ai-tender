@@ -270,6 +270,88 @@ export const InteractiveCanvas = ({
     canvas.requestRenderAll();
   }, [transform.zoom, measurements, pageIndex, viewport, renderMeasurement]);
 
+  // STAGE 4: Handle measurement movement and resizing
+  useEffect(() => {
+    const canvas = fabricCanvasRef.current;
+    if (!canvas || !viewport || !onMeasurementUpdate) return;
+
+    const handleObjectModified = (e: any) => {
+      const obj = e.target;
+      if (!obj || !obj.data || !obj.data.measurementId) return;
+
+      const measurementId = obj.data.measurementId;
+      const measurementType = obj.data.measurementType;
+
+      console.log('Object modified:', measurementId, measurementType);
+
+      // Extract new positions and update measurement
+      let newWorldPoints: WorldPoint[] = [];
+      let newRealValue = 0;
+      const effectiveUnits = unitsPerMetre || 1;
+
+      if (measurementType === 'line') {
+        // Line: extract x1, y1, x2, y2
+        const line = obj as any;
+        newWorldPoints = [
+          { x: line.x1 + line.left, y: line.y1 + line.top },
+          { x: line.x2 + line.left, y: line.y2 + line.top }
+        ];
+        const result = calculateLinearWorld(newWorldPoints[0], newWorldPoints[1], effectiveUnits);
+        newRealValue = result.realValue;
+
+      } else if (measurementType === 'rectangle') {
+        // Rectangle: extract corners from left, top, width, height
+        const rect = obj as any;
+        newWorldPoints = [
+          { x: rect.left, y: rect.top },
+          { x: rect.left + rect.width * rect.scaleX, y: rect.top + rect.height * rect.scaleY }
+        ];
+        const result = calculateRectangleAreaWorld(newWorldPoints[0], newWorldPoints[1], effectiveUnits);
+        newRealValue = result.realValue;
+
+      } else if (measurementType === 'circle') {
+        // Circle: extract center and radius
+        const circle = obj as any;
+        const centerX = circle.left + circle.radius * circle.scaleX;
+        const centerY = circle.top + circle.radius * circle.scaleY;
+        const radius = circle.radius * circle.scaleX;
+        newWorldPoints = [
+          { x: centerX, y: centerY },
+          { x: centerX + radius, y: centerY }
+        ];
+        const result = calculateCircleAreaWorld(newWorldPoints[0], newWorldPoints[1], effectiveUnits);
+        newRealValue = result.realValue;
+
+      } else if (measurementType === 'polygon') {
+        // Polygon: extract all points
+        const polygon = obj as any;
+        if (polygon.points) {
+          newWorldPoints = polygon.points.map((p: any) => ({
+            x: p.x * polygon.scaleX + polygon.left,
+            y: p.y * polygon.scaleY + polygon.top
+          }));
+          const result = calculatePolygonPerimeterWorld(newWorldPoints, effectiveUnits);
+          newRealValue = result.realValue;
+        }
+      }
+
+      // Update measurement with new positions and value
+      if (newWorldPoints.length > 0 && onMeasurementUpdate) {
+        console.log('Updating measurement with new points:', newWorldPoints);
+        onMeasurementUpdate(measurementId, {
+          worldPoints: newWorldPoints,
+          realValue: newRealValue
+        });
+      }
+    };
+
+    canvas.on('object:modified', handleObjectModified);
+
+    return () => {
+      canvas.off('object:modified', handleObjectModified);
+    };
+  }, [viewport, unitsPerMetre, onMeasurementUpdate]);
+
   // Update cursor based on active tool
   useEffect(() => {
     if (!fabricCanvasRef.current) return;
@@ -339,14 +421,23 @@ export const InteractiveCanvas = ({
     const fontSize = getZoomAwareSize(14);
     const objects: any[] = [];
 
+    // STAGE 4: Check if measurement is locked (prevent interaction)
+    const enhancedMeasurement = measurement as any;
+    const isLocked = enhancedMeasurement.locked || false;
+
     // Render based on type
     if (measurement.type === 'line' && measurement.worldPoints.length >= 2) {
       const [p1, p2] = measurement.worldPoints;
       const line = new Line([p1.x, p1.y, p2.x, p2.y], {
         stroke: measurement.color,
         strokeWidth: strokeWidth,
-        selectable: false,
-        evented: false,
+        selectable: !isLocked, // STAGE 4: Allow selection if not locked
+        evented: !isLocked,
+        hasControls: true,
+        hasBorders: true,
+        lockRotation: true, // Only allow move, not rotate
+        lockScalingFlip: true,
+        data: { measurementId: measurement.id, measurementType: 'line' }, // Store ID for event handlers
       });
       canvas.add(line);
       objects.push(line);
@@ -376,8 +467,13 @@ export const InteractiveCanvas = ({
         fill: `${measurement.color}33`, // Add transparency
         stroke: measurement.color,
         strokeWidth: strokeWidth,
-        selectable: false,
-        evented: false,
+        selectable: !isLocked, // STAGE 4: Allow selection if not locked
+        evented: !isLocked,
+        hasControls: true,
+        hasBorders: true,
+        lockRotation: true,
+        lockScalingFlip: true,
+        data: { measurementId: measurement.id, measurementType: 'rectangle' },
       });
       canvas.add(rect);
       objects.push(rect);
@@ -403,8 +499,13 @@ export const InteractiveCanvas = ({
         fill: `${measurement.color}33`, // Add transparency
         stroke: measurement.color,
         strokeWidth: strokeWidth,
-        selectable: false,
-        evented: false,
+        selectable: !isLocked, // STAGE 4: Allow selection if not locked
+        evented: !isLocked,
+        hasControls: true,
+        hasBorders: true,
+        lockRotation: true,
+        lockScalingFlip: true,
+        data: { measurementId: measurement.id, measurementType: 'polygon' },
       });
       canvas.add(polygon);
       objects.push(polygon);
@@ -471,8 +572,13 @@ export const InteractiveCanvas = ({
           fill: `${measurement.color}33`, // Add transparency
           stroke: measurement.color,
           strokeWidth: strokeWidth,
-          selectable: false,
-          evented: false,
+          selectable: !isLocked, // STAGE 4: Allow selection if not locked
+          evented: !isLocked,
+          hasControls: true,
+          hasBorders: true,
+          lockRotation: true,
+          lockScalingFlip: true,
+          data: { measurementId: measurement.id, measurementType: 'circle' },
         });
         canvas.add(circle);
         objects.push(circle);
@@ -493,7 +599,6 @@ export const InteractiveCanvas = ({
     }
 
     // STAGE 3: Add lock indicator for locked measurements
-    const enhancedMeasurement = measurement as any; // Cast to access locked property
     if (enhancedMeasurement.locked) {
       // Calculate position for lock icon (top-left of measurement bounds)
       let lockX = 0;
