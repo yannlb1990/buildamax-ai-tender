@@ -322,8 +322,14 @@ export const TakeoffTableEnhanced = ({
     onUpdateMeasurement(measurementId, updates);
   };
 
-  // FIX #6: Generate auto-label from area + structure type
+  // FIX #6 + #8: Generate auto-label from area + structure type (with unit support)
   const generateLabel = (m: EnhancedMeasurement): string => {
+    // FIX #8: For count measurements, use simpler label
+    if (m.unit === 'count') {
+      if (m.area) return `${m.area} Items`;
+      return 'Count Items';
+    }
+    
     const parts: string[] = [];
     
     if (m.area) {
@@ -384,7 +390,7 @@ export const TakeoffTableEnhanced = ({
         {/* FIX #5: Restructured row with HEIGHT, DEPTH, CALCULATED, MATERIAL columns */}
         <div
           className={cn(
-            'grid grid-cols-[40px_minmax(80px,1fr)_70px_50px_70px_70px_80px_90px_80px_80px_80px_minmax(100px,1fr)_60px_70px] gap-1 p-2 border-b items-center text-xs cursor-pointer transition-colors',
+            'grid grid-cols-[40px_minmax(80px,1fr)_70px_50px_70px_70px_80px_90px_80px_80px_80px_minmax(100px,1fr)_50px_100px] gap-1 p-2 border-b items-center text-xs cursor-pointer transition-colors',
             m.validated && 'bg-green-50 dark:bg-green-950/30',
             m.addedToEstimate && 'bg-blue-50 dark:bg-blue-950/30',
             selectedIds.has(m.id) && 'bg-accent/50',
@@ -949,7 +955,8 @@ export const TakeoffTableEnhanced = ({
       </div>
 
       {/* Table Header - FIX #5: Restructured with HEIGHT, DEPTH, CALCULATED, MATERIAL columns */}
-      <div className="grid grid-cols-[40px_minmax(80px,1fr)_70px_50px_70px_70px_80px_90px_80px_80px_80px_minmax(100px,1fr)_60px_70px] gap-1 p-2 bg-muted/50 text-[10px] font-medium text-muted-foreground uppercase tracking-wide border-b">
+      {/* FIX #11: Increased Actions column from 70px to 100px, reduced NCC from 60px to 50px */}
+      <div className="grid grid-cols-[40px_minmax(80px,1fr)_70px_50px_70px_70px_80px_90px_80px_80px_80px_minmax(100px,1fr)_50px_100px] gap-1 p-2 bg-muted/50 text-[10px] font-medium text-muted-foreground uppercase tracking-wide border-b">
         <div className="flex items-center justify-center">
           <Checkbox
             checked={selectedIds.size === filteredMeasurements.length && filteredMeasurements.length > 0}
