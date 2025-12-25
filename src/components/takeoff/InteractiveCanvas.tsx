@@ -423,6 +423,7 @@ export const InteractiveCanvas = ({
   }, [viewport, unitsPerMetre, onMeasurementUpdate, measurements]);
 
   // Update cursor based on active tool
+  // CRITICAL FIX: Make sure canvas allows selection for select tool and eraser
   useEffect(() => {
     if (!fabricCanvasRef.current) return;
     const canvas = fabricCanvasRef.current;
@@ -431,20 +432,38 @@ export const InteractiveCanvas = ({
       canvas.defaultCursor = 'crosshair';
       canvas.hoverCursor = 'crosshair';
       canvas.selection = false;
-    } else if (activeTool === 'select') {
-      canvas.defaultCursor = 'default';
-      canvas.hoverCursor = 'move';
-      canvas.selection = true; // Enable Fabric.js selection
+      // Make all objects non-selectable during calibration
+      canvas.forEachObject(obj => {
+        if (obj.type !== 'image') {
+          obj.selectable = false;
+          obj.evented = false;
+        }
+      });
+    } else if (activeTool === 'select' || activeTool === 'eraser') {
+      canvas.defaultCursor = activeTool === 'eraser' ? 'crosshair' : 'default';
+      canvas.hoverCursor = activeTool === 'eraser' ? 'pointer' : 'move';
+      canvas.selection = true; // Enable Fabric.js selection for BOTH select and eraser
+      // Make all measurement objects selectable
+      canvas.forEachObject(obj => {
+        if (obj.type !== 'image' && obj.data && obj.data.measurementId) {
+          const measurement = measurements.find(m => m.id === obj.data.measurementId) as any;
+          const isLocked = measurement?.locked || false;
+          obj.selectable = !isLocked;
+          obj.evented = !isLocked;
+        }
+      });
     } else if (activeTool === 'pan' || !activeTool) {
       canvas.defaultCursor = 'grab';
       canvas.hoverCursor = 'grab';
       canvas.selection = false;
     } else {
+      // Drawing tools (line, rectangle, polygon, count, circle)
       canvas.defaultCursor = 'crosshair';
       canvas.hoverCursor = 'crosshair';
       canvas.selection = false;
     }
-  }, [activeTool, calibrationMode]);
+    canvas.requestRenderAll();
+  }, [activeTool, calibrationMode, measurements]);
 
   // Clear calibration markers when calibration is complete
   useEffect(() => {

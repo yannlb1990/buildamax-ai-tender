@@ -285,7 +285,7 @@ export const TakeoffTableEnhanced = ({
     <div key={m.id}>
       <div
         className={cn(
-          'grid grid-cols-18 gap-2 p-2 border-b items-center text-sm',
+          'grid grid-cols-20 gap-2 p-2 border-b items-center text-sm',
           m.validated && 'bg-green-50 dark:bg-green-950/30',
           selectedIds.has(m.id) && 'bg-accent/50'
         )}
@@ -457,10 +457,10 @@ export const TakeoffTableEnhanced = ({
           )}
         </div>
 
-        {/* Structure Type */}
-        <div className="col-span-2">
+        {/* Structure Type - FIXED: Wider column to show full text */}
+        <div className="col-span-3">
           {m.structureType ? (
-            <Badge variant="secondary" className="text-[10px] px-1">
+            <Badge variant="secondary" className="text-[10px] px-1.5">
               {STRUCTURE_OPTIONS.find(s => s.value === m.structureType)?.label}
             </Badge>
           ) : (
@@ -468,14 +468,14 @@ export const TakeoffTableEnhanced = ({
           )}
         </div>
 
-        {/* FIX #6: MATERIAL DESCRIPTION - Freetext with dropdown option */}
-        <div className="col-span-2">
+        {/* MATERIAL DESCRIPTION - FIXED: Wider column for better readability */}
+        <div className="col-span-3">
           <Input
             type="text"
             value={m.materialDescription || ''}
             onChange={(e) => onUpdateMeasurement(m.id, { materialDescription: e.target.value })}
-            className="h-8 text-xs"
-            placeholder="e.g., 90mm Timber Stud, Concrete 25MPa..."
+            className="h-8 text-xs w-full"
+            placeholder="e.g., Plasterboard, Timber, Concrete..."
           />
         </div>
 
@@ -1098,8 +1098,8 @@ export const TakeoffTableEnhanced = ({
         </Button>
       </div>
 
-      {/* Table Header - FIX #10: Optimized spacing to prevent button overlap */}
-      <div className="grid grid-cols-18 gap-2 p-2 bg-muted/50 rounded-t-md text-xs font-medium text-muted-foreground">
+      {/* Table Header - FIXED: Wider columns to prevent text truncation */}
+      <div className="grid grid-cols-20 gap-2 p-2 bg-muted/50 rounded-t-md text-xs font-medium text-muted-foreground">
         <div className="col-span-1 flex items-center">
           <Checkbox
             checked={selectedIds.size === filteredMeasurements.length && filteredMeasurements.length > 0}
@@ -1113,8 +1113,8 @@ export const TakeoffTableEnhanced = ({
         <div className="col-span-1">Height</div>
         <div className="col-span-1">Depth</div>
         <div className="col-span-2">Calculated</div>
-        <div className="col-span-2">Structure</div>
-        <div className="col-span-2">Material</div>
+        <div className="col-span-3">Structure</div>
+        <div className="col-span-3">Material</div>
         <div className="col-span-1">NCC</div>
         <div className="col-span-2">Actions</div>
       </div>
