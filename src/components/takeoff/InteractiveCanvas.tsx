@@ -300,10 +300,58 @@ export const InteractiveCanvas = ({
 
       const measurementId = obj.data.measurementId;
       const measurementType = obj.data.measurementType;
+      const isControlPoint = obj.data.isControlPoint;
+      const pointIndex = obj.data.pointIndex;
 
-      console.log('Object modified:', measurementId, measurementType);
+      console.log('Object modified:', measurementId, measurementType, 'isControlPoint:', isControlPoint);
 
-      // Extract new positions and update measurement
+      // HANDLE CONTROL POINT DRAGGING (individual point movement)
+      if (isControlPoint !== undefined && pointIndex !== undefined) {
+        console.log('📍 Control point dragged - Point index:', pointIndex, 'New position:', obj.left, obj.top);
+
+        // Find the measurement
+        const measurement = measurements.find(m => m.id === measurementId);
+        if (!measurement) {
+          console.error('Measurement not found:', measurementId);
+          return;
+        }
+
+        // Update the specific point
+        const newWorldPoints = [...measurement.worldPoints];
+        newWorldPoints[pointIndex] = { x: obj.left, y: obj.top };
+
+        // Recalculate based on measurement type
+        let newRealValue = 0;
+        const effectiveUnits = unitsPerMetre || 1;
+
+        if (measurement.type === 'line' && newWorldPoints.length >= 2) {
+          const result = calculateLinearWorld(newWorldPoints[0], newWorldPoints[1], effectiveUnits);
+          newRealValue = result.realValue;
+        } else if (measurement.type === 'rectangle' && newWorldPoints.length >= 2) {
+          const result = calculateRectangleAreaWorld(newWorldPoints[0], newWorldPoints[1], effectiveUnits);
+          newRealValue = result.realValue;
+        } else if (measurement.type === 'polygon' && newWorldPoints.length >= 3) {
+          const result = calculatePolygonPerimeterWorld(newWorldPoints, effectiveUnits);
+          newRealValue = result.realValue;
+        }
+
+        console.log('📍 Updating measurement with new points:', newWorldPoints, 'New value:', newRealValue);
+
+        // Remove old objects and update state
+        const oldObjects = measurementObjectsRef.current.get(measurementId);
+        if (oldObjects) {
+          oldObjects.forEach(oldObj => canvas.remove(oldObj));
+          measurementObjectsRef.current.delete(measurementId);
+        }
+
+        onMeasurementUpdate(measurementId, {
+          worldPoints: newWorldPoints,
+          realValue: newRealValue
+        });
+        return;
+      }
+
+      // HANDLE WHOLE SHAPE DRAGGING/RESIZING (existing logic)
       let newWorldPoints: WorldPoint[] = [];
       let newRealValue = 0;
       const effectiveUnits = unitsPerMetre || 1;
@@ -379,7 +427,7 @@ export const InteractiveCanvas = ({
     return () => {
       canvas.off('object:modified', handleObjectModified);
     };
-  }, [viewport, unitsPerMetre, onMeasurementUpdate]);
+  }, [viewport, unitsPerMetre, onMeasurementUpdate, measurements]);
 
   // Update cursor based on active tool
   useEffect(() => {
@@ -478,31 +526,49 @@ export const InteractiveCanvas = ({
       canvas.add(line);
       objects.push(line);
 
-      // STAGE 6: Add start point marker (green circle)
+      // STAGE 6: Add start point marker (green circle) - DRAGGABLE
       const startMarker = new Circle({
-        left: p1.x - getZoomAwareSize(4),
-        top: p1.y - getZoomAwareSize(4),
-        radius: getZoomAwareSize(4),
+        left: p1.x,
+        top: p1.y,
+        radius: getZoomAwareSize(6),
         fill: '#22c55e', // Green
         stroke: 'white',
-        strokeWidth: getZoomAwareSize(1.5),
-        selectable: false,
-        evented: false,
+        strokeWidth: getZoomAwareSize(2),
+        selectable: !isLocked,
+        evented: !isLocked,
+        hasControls: false, // No resize controls for points
+        hasBorders: false,
+        originX: 'center',
+        originY: 'center',
+        data: {
+          measurementId: measurement.id,
+          pointIndex: 0,
+          isControlPoint: true
+        },
       });
       canvas.add(startMarker);
       objects.push(startMarker);
 
-      // STAGE 6: Add end point marker (red square)
+      // STAGE 6: Add end point marker (red square) - DRAGGABLE
       const endMarker = new Rect({
-        left: p2.x - getZoomAwareSize(4),
-        top: p2.y - getZoomAwareSize(4),
+        left: p2.x,
+        top: p2.y,
         width: getZoomAwareSize(8),
         height: getZoomAwareSize(8),
         fill: '#ef4444', // Red
         stroke: 'white',
-        strokeWidth: getZoomAwareSize(1.5),
-        selectable: false,
-        evented: false,
+        strokeWidth: getZoomAwareSize(2),
+        selectable: !isLocked,
+        evented: !isLocked,
+        hasControls: false,
+        hasBorders: false,
+        originX: 'center',
+        originY: 'center',
+        data: {
+          measurementId: measurement.id,
+          pointIndex: 1,
+          isControlPoint: true
+        },
       });
       canvas.add(endMarker);
       objects.push(endMarker);
@@ -543,30 +609,48 @@ export const InteractiveCanvas = ({
       canvas.add(rect);
       objects.push(rect);
 
-      // STAGE 6: Add corner markers (green circle for first corner, red square for opposite)
+      // STAGE 6: Add corner markers (green circle for first corner, red square for opposite) - DRAGGABLE
       const corner1Marker = new Circle({
-        left: p1.x - getZoomAwareSize(4),
-        top: p1.y - getZoomAwareSize(4),
-        radius: getZoomAwareSize(4),
+        left: p1.x,
+        top: p1.y,
+        radius: getZoomAwareSize(6),
         fill: '#22c55e', // Green
         stroke: 'white',
-        strokeWidth: getZoomAwareSize(1.5),
-        selectable: false,
-        evented: false,
+        strokeWidth: getZoomAwareSize(2),
+        selectable: !isLocked,
+        evented: !isLocked,
+        hasControls: false,
+        hasBorders: false,
+        originX: 'center',
+        originY: 'center',
+        data: {
+          measurementId: measurement.id,
+          pointIndex: 0,
+          isControlPoint: true
+        },
       });
       canvas.add(corner1Marker);
       objects.push(corner1Marker);
 
       const corner2Marker = new Rect({
-        left: p2.x - getZoomAwareSize(4),
-        top: p2.y - getZoomAwareSize(4),
+        left: p2.x,
+        top: p2.y,
         width: getZoomAwareSize(8),
         height: getZoomAwareSize(8),
         fill: '#ef4444', // Red
         stroke: 'white',
-        strokeWidth: getZoomAwareSize(1.5),
-        selectable: false,
-        evented: false,
+        strokeWidth: getZoomAwareSize(2),
+        selectable: !isLocked,
+        evented: !isLocked,
+        hasControls: false,
+        hasBorders: false,
+        originX: 'center',
+        originY: 'center',
+        data: {
+          measurementId: measurement.id,
+          pointIndex: 1,
+          isControlPoint: true
+        },
       });
       canvas.add(corner2Marker);
       objects.push(corner2Marker);
@@ -603,19 +687,28 @@ export const InteractiveCanvas = ({
       canvas.add(polygon);
       objects.push(polygon);
 
-      // STAGE 6: Add blue diamond markers at each vertex
+      // STAGE 6: Add draggable diamond markers at each vertex
       measurement.worldPoints.forEach((point, index) => {
         const diamond = new Rect({
-          left: point.x - getZoomAwareSize(4),
-          top: point.y - getZoomAwareSize(4),
+          left: point.x,
+          top: point.y,
           width: getZoomAwareSize(8),
           height: getZoomAwareSize(8),
           fill: index === 0 ? '#22c55e' : '#3b82f6', // Green for first, blue for others
           stroke: 'white',
-          strokeWidth: getZoomAwareSize(1.5),
+          strokeWidth: getZoomAwareSize(2),
           angle: 45, // Rotate 45 degrees to make diamond shape
-          selectable: false,
-          evented: false,
+          selectable: !isLocked,
+          evented: !isLocked,
+          hasControls: false,
+          hasBorders: false,
+          originX: 'center',
+          originY: 'center',
+          data: {
+            measurementId: measurement.id,
+            pointIndex: index,
+            isControlPoint: true
+          },
         });
         canvas.add(diamond);
         objects.push(diamond);
