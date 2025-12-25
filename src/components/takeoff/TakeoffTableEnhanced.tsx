@@ -135,6 +135,106 @@ export const TakeoffTableEnhanced = ({
     setExpandedIds(newSet);
   };
 
+  // Export to Estimate - creates cost items with calculated M2/M3 values
+  const handleExportToEstimate = () => {
+    // 1. Check if onAddCostItem is available
+    if (!onAddCostItem) {
+      toast.error('Cost item creation not available');
+      return;
+    }
+
+    // 2. Filter selected measurements
+    const selectedMeasurements = enhancedMeasurements.filter(m => selectedIds.has(m.id));
+    
+    if (selectedMeasurements.length === 0) {
+      toast.error('No measurements selected');
+      return;
+    }
+
+    // 3. Create cost items for each selected measurement
+    selectedMeasurements.forEach(m => {
+      // Calculate area/volume from dimensions
+      const calculatedArea = m.dimensions ? m.dimensions.width * m.dimensions.height : 0;
+      const calculatedVolume = calculatedArea > 0 && m.depth ? calculatedArea * m.depth : 0;
+
+      // Build material description from selections
+      const materialParts: string[] = [];
+      if (m.framing) {
+        const framingOpt = FRAMING_OPTIONS.find(o => o.value === m.framing);
+        materialParts.push(framingOpt?.label || m.framing);
+      }
+      if (m.lining) {
+        const liningOpt = LINING_OPTIONS.find(o => o.value === m.lining);
+        materialParts.push(liningOpt?.label || m.lining);
+      }
+      if (m.insulation) {
+        const insulOpt = INSULATION_OPTIONS.find(o => o.value === m.insulation);
+        materialParts.push(insulOpt?.label || m.insulation);
+      }
+      if (m.flooring) {
+        const floorOpt = FLOORING_OPTIONS.find(o => o.value === m.flooring);
+        materialParts.push(floorOpt?.label || m.flooring);
+      }
+      const materialDescription = materialParts.join(', ');
+
+      // Get structure type label
+      const structureLabel = m.structureType 
+        ? STRUCTURE_TYPES.find(s => s.value === m.structureType)?.label 
+        : undefined;
+
+      // Determine quantity, unit, and notes based on calculated values
+      let quantity: number;
+      let unit: MeasurementUnit;
+      const notes: string[] = [];
+
+      if (calculatedArea > 0 && m.dimensions) {
+        quantity = calculatedArea;
+        unit = 'M2';
+        notes.push(`Calculated: ${m.dimensions.width.toFixed(2)}m × ${m.dimensions.height.toFixed(2)}m`);
+      } else if (calculatedVolume > 0) {
+        quantity = calculatedVolume;
+        unit = 'M3';
+        notes.push(`Calculated: Area ${calculatedArea.toFixed(2)}m² × Depth ${m.depth?.toFixed(2)}m`);
+      } else {
+        quantity = m.realValue;
+        unit = m.unit;
+      }
+
+      if (structureLabel) {
+        notes.push(`Structure: ${structureLabel}`);
+      }
+      if (m.notes) {
+        notes.push(m.notes);
+      }
+
+      // 4. Create cost item
+      const costItem: CostItem = {
+        id: `cost-${crypto.randomUUID().slice(0, 8)}`,
+        category: m.area || 'General',
+        name: m.label || `${m.type} measurement`,
+        description: materialDescription || `${m.type} - ${formatValue(m.realValue, m.unit)} ${getUnitLabel(m.unit)}`,
+        unit,
+        unitCost: 0,
+        quantity,
+        linkedMeasurements: [m.id],
+        wasteFactor: 0,
+        notes: notes.join('. '),
+        subtotal: 0,
+      };
+
+      onAddCostItem(costItem);
+      
+      // 5. Mark measurement as added to estimate
+      onUpdateMeasurement(m.id, { addedToEstimate: true } as Partial<EnhancedMeasurement>);
+    });
+
+    // 6. Show success toast
+    toast.success(`Exported ${selectedMeasurements.length} measurement(s) to estimate`);
+
+    // 7. Clear selectedIds
+    setSelectedIds(new Set());
+  };
+
   const handleRowClick = (id: string) => {
     if (onSelectMeasurement) {
       onSelectMeasurement(selectedMeasurementId === id ? null : id);
@@ -741,17 +841,15 @@ export const TakeoffTableEnhanced = ({
           </span>
         </div>
 
-        {/* Action Buttons */}
+        {/* Export to Estimate Button - FIX #7 */}
         {selectedIds.size > 0 && (
           <Button
             className="w-full"
             size="sm"
-            onClick={() => {
-              onAddToEstimate(Array.from(selectedIds));
-              setSelectedIds(new Set());
-            }}
+            onClick={handleExportToEstimate}
+            disabled={!onAddCostItem}
           >
-            Add {selectedIds.size} Selected to Estimate
+            Export {selectedIds.size} to Estimate
           </Button>
         )}
       </div>
