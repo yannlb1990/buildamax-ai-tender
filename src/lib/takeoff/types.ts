@@ -81,6 +81,11 @@ export interface EnhancedMeasurement extends Measurement {
   notes?: string;
   isSelected?: boolean;
   locked?: boolean;  // Prevent accidental edits
+  // FIX #5 & #6: Height/Depth calculation fields
+  height?: number;              // Wall height for LM → M2 calculation
+  calculatedArea?: number;      // LM × height = M2
+  calculatedVolume?: number;    // M2 × depth = M3
+  materialDescription?: string; // Freetext: "90mm F7 Timber Stud", "Concrete 25MPa"
 }
 export type CalibrationMode = 'preset' | 'manual' | null;
 export type DistanceUnit = 'm' | 'mm' | 'cm' | 'ft' | 'in';
