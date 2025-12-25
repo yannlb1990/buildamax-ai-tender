@@ -602,13 +602,56 @@ export const TakeoffTableEnhanced = ({
           {m.unit === 'count' ? (
             <div className="space-y-3">
               <h4 className="text-sm font-semibold">Item Details</h4>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-3 gap-3">
+                {/* Common Item Type Dropdown */}
+                <div>
+                  <label className="text-xs text-muted-foreground">Item Type</label>
+                  <Select
+                    value={m.structureType || ''}
+                    onValueChange={(v: string) => {
+                      // Auto-populate label based on selection
+                      const itemLabels: Record<string, string> = {
+                        'toilet': 'Toilet',
+                        'door': 'Door',
+                        'window': 'Window',
+                        'light_fixture': 'Light Fixture',
+                        'power_point': 'Power Point',
+                        'switch': 'Switch',
+                        'tap': 'Tap/Fixture',
+                        'downlight': 'Downlight',
+                        'exhaust_fan': 'Exhaust Fan',
+                        'other': ''
+                      };
+                      onUpdateMeasurement(m.id, {
+                        structureType: v as StructureType,
+                        label: itemLabels[v] || m.label
+                      });
+                    }}
+                  >
+                    <SelectTrigger className="h-8 text-xs mt-1">
+                      <SelectValue placeholder="Select type..." />
+                    </SelectTrigger>
+                    <SelectContent className="bg-popover">
+                      <SelectItem value="toilet" className="text-xs">🚽 Toilet</SelectItem>
+                      <SelectItem value="door" className="text-xs">🚪 Door</SelectItem>
+                      <SelectItem value="window" className="text-xs">🪟 Window</SelectItem>
+                      <SelectItem value="light_fixture" className="text-xs">💡 Light Fixture</SelectItem>
+                      <SelectItem value="power_point" className="text-xs">🔌 Power Point</SelectItem>
+                      <SelectItem value="switch" className="text-xs">💡 Switch</SelectItem>
+                      <SelectItem value="tap" className="text-xs">🚰 Tap/Fixture</SelectItem>
+                      <SelectItem value="downlight" className="text-xs">🔆 Downlight</SelectItem>
+                      <SelectItem value="exhaust_fan" className="text-xs">🌀 Exhaust Fan</SelectItem>
+                      <SelectItem value="other" className="text-xs">📦 Other</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
                 <div>
                   <label className="text-xs text-muted-foreground">Item Name</label>
                   <Input
                     value={m.label}
                     onChange={(e) => onUpdateMeasurement(m.id, { label: e.target.value })}
-                    placeholder="e.g., Toilet, Window, Door Handle"
+                    placeholder="e.g., Vitreous China WC"
                     className="mt-1 h-8 text-xs"
                   />
                 </div>
@@ -617,17 +660,49 @@ export const TakeoffTableEnhanced = ({
                   <Input
                     value={`${m.realValue} EA`}
                     readOnly
-                    className="mt-1 h-8 text-xs bg-muted"
+                    className="mt-1 h-8 text-xs bg-muted font-mono font-semibold"
                   />
                 </div>
               </div>
+
+              {/* Additional Details */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs text-muted-foreground">Brand/Model</label>
+                  <Input
+                    value={m.materialDescription || ''}
+                    onChange={(e) => onUpdateMeasurement(m.id, { materialDescription: e.target.value })}
+                    className="h-8 text-xs mt-1"
+                    placeholder="e.g., Caroma Profile 5"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground">Area Location</label>
+                  <Select
+                    value={m.area || ''}
+                    onValueChange={(v: MeasurementArea) => onUpdateMeasurement(m.id, { area: v })}
+                  >
+                    <SelectTrigger className="h-8 text-xs mt-1">
+                      <SelectValue placeholder="Select area..." />
+                    </SelectTrigger>
+                    <SelectContent className="bg-popover">
+                      {AREA_OPTIONS.map((area) => (
+                        <SelectItem key={area} value={area} className="text-xs">
+                          {area}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
               <div>
-                <label className="text-xs text-muted-foreground">Notes</label>
+                <label className="text-xs text-muted-foreground">Notes / Specifications</label>
                 <Input
                   value={m.notes || ''}
                   onChange={(e) => onUpdateMeasurement(m.id, { notes: e.target.value })}
                   className="h-8 text-xs mt-1"
-                  placeholder="Optional: brand, model, specifications..."
+                  placeholder="Optional: color, finish, special requirements..."
                 />
               </div>
             </div>
@@ -751,6 +826,24 @@ export const TakeoffTableEnhanced = ({
                   </SelectContent>
                 </Select>
               </div>
+
+              {/* AUTO-CALCULATED: Lining Area */}
+              {m.lining?.type && m.calculatedArea && (
+                <div>
+                  <label className="text-xs text-muted-foreground">Lining M² (Auto-calculated)</label>
+                  <div className="mt-1 h-8 px-3 py-2 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-md flex items-center justify-between">
+                    <span className="text-xs font-mono font-semibold text-blue-700 dark:text-blue-400">
+                      {(m.calculatedArea * (m.lining.sides === 'both' ? 2 : 1)).toFixed(2)} M²
+                    </span>
+                    <Badge variant="secondary" className="text-[9px] px-1">
+                      {m.calculatedArea.toFixed(2)} × {m.lining.sides === 'both' ? '2' : '1'} sides
+                    </Badge>
+                  </div>
+                  <p className="text-[10px] text-muted-foreground mt-0.5">
+                    Wall area: {m.calculatedArea.toFixed(2)} M² × {m.lining.sides === 'both' ? 'Both Sides' : 'One Side'}
+                  </p>
+                </div>
+              )}
 
               {/* Flooring */}
               <div>
