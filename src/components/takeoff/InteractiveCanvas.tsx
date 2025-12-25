@@ -19,11 +19,13 @@ interface InteractiveCanvasProps {
   unitsPerMetre: number | null;
   calibrationMode: 'preset' | 'manual' | null;
   selectedColor?: string;
+  measurements: Measurement[]; // NEW - array of all measurements for rendering
   onMeasurementComplete: (measurement: Measurement) => void;
   onCalibrationPointsSet: (points: [WorldPoint, WorldPoint]) => void;
   onTransformChange: (transform: Partial<Transform>) => void;
   onViewportReady: (viewport: PDFViewportData) => void;
   onDeleteLastMeasurement?: () => void;
+  onMeasurementUpdate?: (id: string, updates: Partial<Measurement>) => void; // NEW - for editing
 }
 
 export const InteractiveCanvas = ({
@@ -34,15 +36,21 @@ export const InteractiveCanvas = ({
   isCalibrated,
   unitsPerMetre,
   calibrationMode,
+  measurements,
   onMeasurementComplete,
   onCalibrationPointsSet,
   onTransformChange,
   onViewportReady,
   onDeleteLastMeasurement,
+  onMeasurementUpdate,
 }: InteractiveCanvasProps) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fabricCanvasRef = useRef<FabricCanvas | null>(null);
+
+  // STAGE 1: Track rendered measurement objects for edit/delete/move/resize
+  const measurementObjectsRef = useRef<Map<string, any[]>>(new Map());
+
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [viewport, setViewport] = useState<PDFViewportData | null>(null);
@@ -205,18 +213,62 @@ export const InteractiveCanvas = ({
   useEffect(() => {
     if (!fabricCanvasRef.current) return;
     const canvas = fabricCanvasRef.current;
-    
+
     // Apply viewportTransform for zoom and pan
     // [scaleX, skewY, skewX, scaleY, translateX, translateY]
     canvas.setViewportTransform([
-      transform.zoom, 0, 0, 
-      transform.zoom, 
-      transform.panX, 
+      transform.zoom, 0, 0,
+      transform.zoom,
+      transform.panX,
       transform.panY
     ]);
-    
+
     canvas.requestRenderAll();
   }, [transform.zoom, transform.panX, transform.panY]);
+
+  // STAGE 1: Render all measurements when they change
+  useEffect(() => {
+    const canvas = fabricCanvasRef.current;
+    if (!canvas || !viewport) return;
+
+    console.log('Re-rendering all measurements. Total:', measurements.length, 'Page:', pageIndex);
+
+    // Clear all previously rendered measurement objects
+    measurementObjectsRef.current.forEach((objects, measurementId) => {
+      console.log('Removing old objects for measurement:', measurementId);
+      objects.forEach(obj => canvas.remove(obj));
+    });
+    measurementObjectsRef.current.clear();
+
+    // Render all measurements for current page
+    const pageMeasurements = measurements.filter(m => m.pageIndex === pageIndex);
+    console.log('Measurements on this page:', pageMeasurements.length);
+
+    pageMeasurements.forEach(measurement => {
+      renderMeasurement(measurement);
+    });
+
+    canvas.requestRenderAll();
+  }, [measurements, pageIndex, viewport, renderMeasurement]);
+
+  // STAGE 1: Re-render measurements when zoom changes (for zoom-aware sizing)
+  useEffect(() => {
+    const canvas = fabricCanvasRef.current;
+    if (!canvas || !viewport) return;
+
+    // Clear and re-render with new zoom-aware sizes
+    measurementObjectsRef.current.forEach((objects) => {
+      objects.forEach(obj => canvas.remove(obj));
+    });
+    measurementObjectsRef.current.clear();
+
+    const pageMeasurements = measurements.filter(m => m.pageIndex === pageIndex);
+    pageMeasurements.forEach(measurement => {
+      renderMeasurement(measurement);
+    });
+
+    canvas.requestRenderAll();
+  }, [transform.zoom, measurements, pageIndex, viewport, renderMeasurement]);
 
   // Update cursor based on active tool
   useEffect(() => {
@@ -275,6 +327,174 @@ export const InteractiveCanvas = ({
   const getZoomAwareSize = useCallback((baseSize: number) => {
     return baseSize / transform.zoom;
   }, [transform.zoom]);
+
+  // STAGE 1: Render a measurement on the canvas
+  const renderMeasurement = useCallback((measurement: Measurement) => {
+    const canvas = fabricCanvasRef.current;
+    if (!canvas || !viewport) return;
+
+    console.log('Rendering measurement:', measurement.id, measurement.type);
+
+    const strokeWidth = getZoomAwareSize(2);
+    const fontSize = getZoomAwareSize(14);
+    const objects: any[] = [];
+
+    // Render based on type
+    if (measurement.type === 'line' && measurement.worldPoints.length >= 2) {
+      const [p1, p2] = measurement.worldPoints;
+      const line = new Line([p1.x, p1.y, p2.x, p2.y], {
+        stroke: measurement.color,
+        strokeWidth: strokeWidth,
+        selectable: false,
+        evented: false,
+      });
+      canvas.add(line);
+      objects.push(line);
+
+      // Add label
+      const midX = (p1.x + p2.x) / 2;
+      const midY = (p1.y + p2.y) / 2;
+      const label = new Text(measurement.label, {
+        left: midX,
+        top: midY - getZoomAwareSize(10),
+        fontSize: fontSize,
+        fill: measurement.color,
+        backgroundColor: 'white',
+        selectable: false,
+        evented: false,
+      });
+      canvas.add(label);
+      objects.push(label);
+
+    } else if (measurement.type === 'rectangle' && measurement.worldPoints.length >= 2) {
+      const [p1, p2] = measurement.worldPoints;
+      const rect = new Rect({
+        left: Math.min(p1.x, p2.x),
+        top: Math.min(p1.y, p2.y),
+        width: Math.abs(p2.x - p1.x),
+        height: Math.abs(p2.y - p1.y),
+        fill: `${measurement.color}33`, // Add transparency
+        stroke: measurement.color,
+        strokeWidth: strokeWidth,
+        selectable: false,
+        evented: false,
+      });
+      canvas.add(rect);
+      objects.push(rect);
+
+      // Add label
+      const centerX = (p1.x + p2.x) / 2;
+      const centerY = (p1.y + p2.y) / 2;
+      const label = new Text(measurement.label, {
+        left: centerX - getZoomAwareSize(30),
+        top: centerY - getZoomAwareSize(10),
+        fontSize: fontSize,
+        fill: measurement.color,
+        backgroundColor: 'white',
+        selectable: false,
+        evented: false,
+      });
+      canvas.add(label);
+      objects.push(label);
+
+    } else if (measurement.type === 'polygon' && measurement.worldPoints.length >= 3) {
+      const worldPointsFabric = measurement.worldPoints.map(wp => new FabricPoint(wp.x, wp.y));
+      const polygon = new Polygon(worldPointsFabric, {
+        fill: `${measurement.color}33`, // Add transparency
+        stroke: measurement.color,
+        strokeWidth: strokeWidth,
+        selectable: false,
+        evented: false,
+      });
+      canvas.add(polygon);
+      objects.push(polygon);
+
+      // Add label at centroid
+      const worldCentroid = calculateCentroidWorld(measurement.worldPoints);
+      const label = new Text(measurement.label, {
+        left: worldCentroid.x - getZoomAwareSize(50),
+        top: worldCentroid.y - getZoomAwareSize(10),
+        fontSize: fontSize,
+        fill: measurement.color,
+        backgroundColor: 'rgba(255,255,255,0.9)',
+        selectable: false,
+        evented: false,
+      });
+      canvas.add(label);
+      objects.push(label);
+
+    } else if (measurement.type === 'circle') {
+      if (measurement.unit === 'count') {
+        // Count markers - render each point
+        measurement.worldPoints.forEach((point, index) => {
+          const markerRadius = getZoomAwareSize(6);
+          const markerStrokeWidth = getZoomAwareSize(2);
+          const markerFontSize = getZoomAwareSize(12);
+
+          const marker = new Circle({
+            left: point.x - markerRadius,
+            top: point.y - markerRadius,
+            radius: markerRadius,
+            fill: 'orange',
+            stroke: 'white',
+            strokeWidth: markerStrokeWidth,
+            selectable: false,
+            evented: false,
+          });
+          canvas.add(marker);
+          objects.push(marker);
+
+          // Add number label
+          const numberLabel = new Text(String(index + 1), {
+            left: point.x - getZoomAwareSize(4),
+            top: point.y - getZoomAwareSize(6),
+            fontSize: markerFontSize,
+            fill: 'white',
+            fontWeight: 'bold',
+            selectable: false,
+            evented: false,
+          });
+          canvas.add(numberLabel);
+          objects.push(numberLabel);
+        });
+      } else if (measurement.worldPoints.length >= 2) {
+        // Circle/area measurement
+        const [center, radiusPoint] = measurement.worldPoints;
+        const dx = radiusPoint.x - center.x;
+        const dy = radiusPoint.y - center.y;
+        const radiusWorld = Math.sqrt(dx * dx + dy * dy);
+
+        const circle = new Circle({
+          left: center.x - radiusWorld,
+          top: center.y - radiusWorld,
+          radius: radiusWorld,
+          fill: `${measurement.color}33`, // Add transparency
+          stroke: measurement.color,
+          strokeWidth: strokeWidth,
+          selectable: false,
+          evented: false,
+        });
+        canvas.add(circle);
+        objects.push(circle);
+
+        // Add label
+        const label = new Text(measurement.label, {
+          left: center.x - getZoomAwareSize(30),
+          top: center.y - getZoomAwareSize(10),
+          fontSize: fontSize,
+          fill: measurement.color,
+          backgroundColor: 'white',
+          selectable: false,
+          evented: false,
+        });
+        canvas.add(label);
+        objects.push(label);
+      }
+    }
+
+    // Store objects for this measurement
+    measurementObjectsRef.current.set(measurement.id, objects);
+  }, [viewport, transform, getZoomAwareSize]);
 
   // Handle calibration DRAG (new drag-to-calibrate)
   const handleCalibrationMouseDown = useCallback((worldPoint: WorldPoint) => {
