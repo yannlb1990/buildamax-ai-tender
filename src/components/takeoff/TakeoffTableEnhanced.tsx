@@ -406,7 +406,7 @@ export const TakeoffTableEnhanced = ({
             />
           </div>
 
-          {/* Name/Label */}
+          {/* Name/Label + Debug Badge */}
           <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
             <Input
               value={m.label || ''}
@@ -414,6 +414,10 @@ export const TakeoffTableEnhanced = ({
               className="h-7 text-xs"
               placeholder="Label..."
             />
+            {/* DEBUG BADGE: Shows measurement type/unit */}
+            <Badge className="bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300 text-[8px] px-1 shrink-0 font-mono">
+              {m.type}/{m.unit}
+            </Badge>
             <Button
               variant="ghost"
               size="icon"
@@ -514,61 +518,73 @@ export const TakeoffTableEnhanced = ({
             )}
           </div>
 
-          {/* Structure Type */}
+          {/* Structure Type - Hidden for count measurements */}
           <div onClick={(e) => e.stopPropagation()}>
-            <Select
-              value={m.structureType || ''}
-              onValueChange={(v) => handleStructureChange(m.id, 'structureType', v)}
-            >
-              <SelectTrigger className="h-7 text-xs">
-                <SelectValue placeholder="Type" />
-              </SelectTrigger>
-              <SelectContent className="bg-popover">
-                {STRUCTURE_TYPES.map((opt) => (
-                  <SelectItem key={opt.value} value={opt.value} className="text-xs">
-                    {opt.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {m.unit === 'count' ? (
+              <span className="text-muted-foreground text-[10px] block text-center">—</span>
+            ) : (
+              <Select
+                value={m.structureType || ''}
+                onValueChange={(v) => handleStructureChange(m.id, 'structureType', v)}
+              >
+                <SelectTrigger className="h-7 text-xs">
+                  <SelectValue placeholder="Type" />
+                </SelectTrigger>
+                <SelectContent className="bg-popover">
+                  {STRUCTURE_TYPES.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value} className="text-xs">
+                      {opt.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
           </div>
 
-          {/* Framing */}
+          {/* Framing - Hidden for count measurements */}
           <div onClick={(e) => e.stopPropagation()}>
-            <Select
-              value={m.framing || ''}
-              onValueChange={(v) => handleStructureChange(m.id, 'framing', v)}
-            >
-              <SelectTrigger className="h-7 text-xs">
-                <SelectValue placeholder="Frame" />
-              </SelectTrigger>
-              <SelectContent className="bg-popover">
-                {FRAMING_OPTIONS.map((opt) => (
-                  <SelectItem key={opt.value} value={opt.value} className="text-xs">
-                    {opt.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {m.unit === 'count' ? (
+              <span className="text-muted-foreground text-[10px] block text-center">—</span>
+            ) : (
+              <Select
+                value={m.framing || ''}
+                onValueChange={(v) => handleStructureChange(m.id, 'framing', v)}
+              >
+                <SelectTrigger className="h-7 text-xs">
+                  <SelectValue placeholder="Frame" />
+                </SelectTrigger>
+                <SelectContent className="bg-popover">
+                  {FRAMING_OPTIONS.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value} className="text-xs">
+                      {opt.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
           </div>
 
-          {/* Lining */}
+          {/* Lining - Hidden for count measurements */}
           <div onClick={(e) => e.stopPropagation()}>
-            <Select
-              value={m.lining || ''}
-              onValueChange={(v) => handleStructureChange(m.id, 'lining', v)}
-            >
-              <SelectTrigger className="h-7 text-xs">
-                <SelectValue placeholder="Lining" />
-              </SelectTrigger>
-              <SelectContent className="bg-popover">
-                {LINING_OPTIONS.map((opt) => (
-                  <SelectItem key={opt.value} value={opt.value} className="text-xs">
-                    {opt.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {m.unit === 'count' ? (
+              <span className="text-muted-foreground text-[10px] block text-center">—</span>
+            ) : (
+              <Select
+                value={m.lining || ''}
+                onValueChange={(v) => handleStructureChange(m.id, 'lining', v)}
+              >
+                <SelectTrigger className="h-7 text-xs">
+                  <SelectValue placeholder="Lining" />
+                </SelectTrigger>
+                <SelectContent className="bg-popover">
+                  {LINING_OPTIONS.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value} className="text-xs">
+                      {opt.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
           </div>
 
           {/* MATERIAL - FIX #6: Freetext input */}
@@ -635,11 +651,20 @@ export const TakeoffTableEnhanced = ({
               size="icon"
               className="h-5 w-5 text-destructive hover:text-destructive"
               onClick={() => {
+                console.log('🗑️ TABLE DELETE clicked:', { 
+                  id: m.id, 
+                  label: m.label, 
+                  type: m.type, 
+                  unit: m.unit,
+                  locked: m.locked 
+                });
                 if (m.locked) {
                   toast.error('Unlock measurement before deleting');
                   return;
                 }
+                console.log('📤 Dispatching DELETE for:', m.id);
                 onDeleteMeasurement(m.id);
+                console.log('✅ Delete dispatched');
               }}
             >
               <Trash2 className="h-3 w-3" />
