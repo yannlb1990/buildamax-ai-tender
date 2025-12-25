@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Check, Trash2, ChevronDown, ChevronRight, Plus, Search, X, Calculator, AlertTriangle, Lightbulb, Package } from 'lucide-react';
+import { Check, Trash2, ChevronDown, ChevronRight, Plus, Search, X, Calculator, AlertTriangle, Lightbulb, Package, Lock, Unlock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -337,11 +337,39 @@ export const TakeoffTableEnhanced = ({
             </Tooltip>
           </TooltipProvider>
 
+          {/* STAGE 3: Lock Toggle */}
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className={cn(
+                    "h-7 w-7",
+                    m.locked ? "text-amber-600 hover:text-amber-700" : "text-muted-foreground hover:text-foreground"
+                  )}
+                  onClick={() => onUpdateMeasurement(m.id, { locked: !m.locked })}
+                >
+                  {m.locked ? <Lock className="h-3 w-3" /> : <Unlock className="h-3 w-3" />}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                {m.locked ? 'Locked - Click to unlock' : 'Unlocked - Click to lock'}
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+
           <Button
             variant="ghost"
             size="icon"
             className="h-7 w-7 text-destructive hover:text-destructive"
-            onClick={() => onDeleteMeasurement(m.id)}
+            onClick={() => {
+              if (m.locked) {
+                toast.error('Cannot delete locked measurement. Unlock it first.');
+                return;
+              }
+              onDeleteMeasurement(m.id);
+            }}
           >
             <Trash2 className="h-3 w-3" />
           </Button>

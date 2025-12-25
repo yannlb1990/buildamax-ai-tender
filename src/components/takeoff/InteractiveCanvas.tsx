@@ -492,6 +492,33 @@ export const InteractiveCanvas = ({
       }
     }
 
+    // STAGE 3: Add lock indicator for locked measurements
+    const enhancedMeasurement = measurement as any; // Cast to access locked property
+    if (enhancedMeasurement.locked) {
+      // Calculate position for lock icon (top-left of measurement bounds)
+      let lockX = 0;
+      let lockY = 0;
+
+      if (measurement.worldPoints.length > 0) {
+        // Use first point as reference, offset slightly
+        lockX = measurement.worldPoints[0].x + getZoomAwareSize(5);
+        lockY = measurement.worldPoints[0].y - getZoomAwareSize(15);
+      }
+
+      // Create lock icon using a small text symbol
+      const lockIcon = new Text('🔒', {
+        left: lockX,
+        top: lockY,
+        fontSize: getZoomAwareSize(12),
+        fill: '#f59e0b', // Amber color to match table UI
+        backgroundColor: 'rgba(255, 255, 255, 0.9)',
+        selectable: false,
+        evented: false,
+      });
+      canvas.add(lockIcon);
+      objects.push(lockIcon);
+    }
+
     // Store objects for this measurement
     measurementObjectsRef.current.set(measurement.id, objects);
   }, [viewport, transform, getZoomAwareSize]);
