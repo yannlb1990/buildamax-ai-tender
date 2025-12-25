@@ -173,12 +173,12 @@ export const TakeoffTableEnhanced = ({
   };
 
   // FIX #8: Auto-generate meaningful label from area and structure type
-  const generateLabel = (area?: string, structureType?: string, type?: string): string => {
+  const generateLabel = (area?: string, structureType?: string, type?: string, unit?: string): string => {
     if (area && structureType) {
       const structureLabel = STRUCTURE_OPTIONS.find(s => s.value === structureType)?.label;
       return `${area} ${structureLabel}`;
     } else if (area && type) {
-      const typeLabel = type === 'line' ? 'Wall' : type === 'rectangle' ? 'Floor' : type === 'count' ? 'Items' : type;
+      const typeLabel = type === 'line' ? 'Wall' : type === 'rectangle' ? 'Floor' : unit === 'count' ? 'Items' : type;
       return `${area} ${typeLabel}`;
     } else if (area) {
       return area;
@@ -313,7 +313,7 @@ export const TakeoffTableEnhanced = ({
           <Select
             value={m.area || ''}
             onValueChange={(v: MeasurementArea) => {
-              const newLabel = generateLabel(v, m.structureType, m.type);
+              const newLabel = generateLabel(v, m.structureType, m.type, m.unit);
               onUpdateMeasurement(m.id, {
                 area: v,
                 label: newLabel || m.label
@@ -583,7 +583,7 @@ export const TakeoffTableEnhanced = ({
       {expandedIds.has(m.id) && (
         <div className="p-4 bg-muted/30 border-b space-y-4">
           {/* FIX #9: Simplified form for COUNT measurements */}
-          {m.type === 'count' ? (
+          {m.unit === 'count' ? (
             <div className="space-y-3">
               <h4 className="text-sm font-semibold">Item Details</h4>
               <div className="grid grid-cols-2 gap-3">
@@ -627,7 +627,7 @@ export const TakeoffTableEnhanced = ({
                 <Select
                   value={m.structureType || ''}
                   onValueChange={(v: StructureType) => {
-                    const newLabel = generateLabel(m.area, v, m.type);
+                    const newLabel = generateLabel(m.area, v, m.type, m.unit);
                     onUpdateMeasurement(m.id, {
                       structureType: v,
                       label: newLabel || m.label
