@@ -124,11 +124,17 @@ function takeoffReducer(state: TakeoffState, action: TakeoffAction): TakeoffStat
       };
       
     case 'DELETE_MEASUREMENT':
+      console.log('🔴 REDUCER: DELETE_MEASUREMENT');
+      console.log('  🆔 Deleting ID:', action.payload);
+      console.log('  📊 Before deletion:', state.measurements.length, 'measurements');
+      const newMeasurementsAfterDelete = state.measurements.filter(m => m.id !== action.payload);
+      console.log('  📊 After deletion:', newMeasurementsAfterDelete.length, 'measurements');
+      console.log('  ✅ Measurement removed from state');
       return {
         ...state,
-        measurements: state.measurements.filter(m => m.id !== action.payload),
-        selectedMeasurementId: state.selectedMeasurementId === action.payload 
-          ? null 
+        measurements: newMeasurementsAfterDelete,
+        selectedMeasurementId: state.selectedMeasurementId === action.payload
+          ? null
           : state.selectedMeasurementId
       };
       

@@ -299,13 +299,17 @@ export const TakeoffTableEnhanced = ({
         </div>
 
         {/* Name */}
-        <div className="col-span-2">
+        <div className="col-span-2 flex items-center gap-1">
           <Input
             value={m.label}
             onChange={(e) => onUpdateMeasurement(m.id, { label: e.target.value })}
-            className="h-8 text-xs"
+            className="h-8 text-xs flex-1"
             placeholder="Label..."
           />
+          {/* DEBUG: Show measurement type/unit */}
+          <Badge variant="outline" className="text-[9px] px-1 py-0 bg-blue-50 dark:bg-blue-950">
+            {m.type}/{m.unit}
+          </Badge>
         </div>
 
         {/* Area - FIX #8: Auto-generate label when area changes */}
@@ -567,11 +571,15 @@ export const TakeoffTableEnhanced = ({
             size="icon"
             className="h-7 w-7 text-destructive hover:text-destructive"
             onClick={() => {
+              console.log('🗑️ TABLE DELETE BUTTON clicked for:', m.id, m.label);
               if (m.locked) {
+                console.log('  🔒 Measurement is locked, cannot delete');
                 toast.error('Cannot delete locked measurement. Unlock it first.');
                 return;
               }
+              console.log('  📤 Dispatching DELETE_MEASUREMENT for:', m.id);
               onDeleteMeasurement(m.id);
+              console.log('  ✅ Delete action dispatched');
             }}
           >
             <Trash2 className="h-3 w-3" />
@@ -582,6 +590,14 @@ export const TakeoffTableEnhanced = ({
       {/* Expanded Details Panel */}
       {expandedIds.has(m.id) && (
         <div className="p-4 bg-muted/30 border-b space-y-4">
+          {/* DEBUG: Log measurement properties */}
+          {console.log('EXPANDED PANEL DEBUG:', {
+            id: m.id,
+            type: m.type,
+            unit: m.unit,
+            isCount: m.unit === 'count',
+            label: m.label
+          })}
           {/* FIX #9: Simplified form for COUNT measurements */}
           {m.unit === 'count' ? (
             <div className="space-y-3">
