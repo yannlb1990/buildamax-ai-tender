@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { WorldPoint, ViewPoint, Transform, PDFViewportData, Measurement, ToolType } from '@/lib/takeoff/types';
 import { calculateLinearWorld, calculateRectangleAreaWorld, calculatePolygonPerimeterWorld, calculateCentroidWorld, calculateCircleAreaWorld, formatPerimeter } from '@/lib/takeoff/calculations';
 import { viewToWorld } from '@/lib/takeoff/coordinates';
+import { toast } from 'sonner';
 
 // Set up PDF.js worker
 pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
@@ -26,6 +27,7 @@ interface InteractiveCanvasProps {
   onViewportReady: (viewport: PDFViewportData) => void;
   onDeleteLastMeasurement?: () => void;
   onMeasurementUpdate?: (id: string, updates: Partial<Measurement>) => void; // NEW - for editing
+  onDeleteMeasurement?: (id: string) => void; // FIX #2 - for eraser to delete specific measurement
 }
 
 export const InteractiveCanvas = ({
@@ -43,6 +45,7 @@ export const InteractiveCanvas = ({
   onViewportReady,
   onDeleteLastMeasurement,
   onMeasurementUpdate,
+  onDeleteMeasurement,
 }: InteractiveCanvasProps) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -225,6 +228,33 @@ export const InteractiveCanvas = ({
 
     canvas.requestRenderAll();
   }, [transform.zoom, transform.panX, transform.panY]);
+
+  // FIX #1: Detect and remove deleted measurements from canvas
+  useEffect(() => {
+    const canvas = fabricCanvasRef.current;
+    if (!canvas) return;
+
+    // Get current measurement IDs
+    const currentMeasurementIds = new Set(measurements.map(m => m.id));
+    const renderedMeasurementIds = Array.from(measurementObjectsRef.current.keys());
+
+    // Find and remove deleted measurements
+    renderedMeasurementIds.forEach(renderedId => {
+      if (!currentMeasurementIds.has(renderedId)) {
+        console.log('FIX #1: Removing deleted measurement from canvas:', renderedId);
+        const objects = measurementObjectsRef.current.get(renderedId);
+        if (objects) {
+          objects.forEach(obj => {
+            canvas.remove(obj);
+            console.log('  - Removed canvas object');
+          });
+          measurementObjectsRef.current.delete(renderedId);
+        }
+      }
+    });
+
+    canvas.requestRenderAll();
+  }, [measurements]); // Trigger whenever measurements array changes
 
   // STAGE 1: Render all measurements when they change
   useEffect(() => {
@@ -922,10 +952,25 @@ export const InteractiveCanvas = ({
       return;
     }
 
-    // Handle eraser tool - delete last measurement
+    // FIX #2: Handle eraser tool - delete clicked measurement
     if (activeTool === 'eraser') {
-      if (onDeleteLastMeasurement) {
-        onDeleteLastMeasurement();
+      const target = e.target;
+
+      if (target && target.data && target.data.measurementId) {
+        // Clicked on a measurement - delete it
+        const measurementId = target.data.measurementId;
+        console.log('FIX #2: Eraser clicked on measurement:', measurementId);
+
+        if (onDeleteMeasurement) {
+          onDeleteMeasurement(measurementId);
+          toast.success('Measurement deleted');
+        }
+      } else {
+        // Clicked on empty space - fallback to delete last
+        if (onDeleteLastMeasurement) {
+          onDeleteLastMeasurement();
+          toast.info('Last measurement deleted');
+        }
       }
       return;
     }

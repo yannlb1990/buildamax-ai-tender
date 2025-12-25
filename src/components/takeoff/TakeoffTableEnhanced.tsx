@@ -172,6 +172,23 @@ export const TakeoffTableEnhanced = ({
     setExpandedIds(newSet);
   };
 
+  // FIX #8: Auto-generate meaningful label from area and structure type
+  const generateLabel = (area?: string, structureType?: string, type?: string): string => {
+    if (area && structureType) {
+      const structureLabel = STRUCTURE_OPTIONS.find(s => s.value === structureType)?.label;
+      return `${area} ${structureLabel}`;
+    } else if (area && type) {
+      const typeLabel = type === 'line' ? 'Wall' : type === 'rectangle' ? 'Floor' : type === 'count' ? 'Items' : type;
+      return `${area} ${typeLabel}`;
+    } else if (area) {
+      return area;
+    } else if (structureType) {
+      const structureLabel = STRUCTURE_OPTIONS.find(s => s.value === structureType)?.label;
+      return structureLabel || '';
+    }
+    return '';
+  };
+
   // FIX #7: Export to Estimate - Create cost items from selected measurements
   const handleExportToEstimate = () => {
     if (!onAddCostItem) {
@@ -291,11 +308,17 @@ export const TakeoffTableEnhanced = ({
           />
         </div>
 
-        {/* Area */}
+        {/* Area - FIX #8: Auto-generate label when area changes */}
         <div className="col-span-2">
           <Select
             value={m.area || ''}
-            onValueChange={(v: MeasurementArea) => onUpdateMeasurement(m.id, { area: v })}
+            onValueChange={(v: MeasurementArea) => {
+              const newLabel = generateLabel(v, m.structureType, m.type);
+              onUpdateMeasurement(m.id, {
+                area: v,
+                label: newLabel || m.label
+              });
+            }}
           >
             <SelectTrigger className="h-8 text-xs">
               <SelectValue placeholder="Select..." />
@@ -333,49 +356,87 @@ export const TakeoffTableEnhanced = ({
           </Select>
         </div>
 
-        {/* FIX #3: HEIGHT - Shows for walls (LM measurements) */}
+        {/* FIX #3-4: HEIGHT - Shows for walls (LM measurements) */}
         <div className="col-span-1">
           {(m.unit === 'LM' && (m.structureType === 'external_wall' || m.structureType === 'internal_wall' || m.structureType === 'load_bearing' || m.structureType === 'non_load_bearing')) ? (
-            <Input
-              type="number"
-              step="0.1"
-              min="0"
-              value={m.height || ''}
-              onChange={(e) => {
-                const height = parseFloat(e.target.value) || 0;
-                const calculatedArea = m.realValue * height;
-                onUpdateMeasurement(m.id, {
-                  height,
-                  calculatedArea
-                });
-              }}
-              className="h-8 text-xs"
-              placeholder="2.4"
-            />
+            <div className="relative">
+              <Input
+                type="number"
+                step="0.1"
+                min="0"
+                max="10"
+                value={m.height || ''}
+                onChange={(e) => {
+                  const height = parseFloat(e.target.value) || 0;
+
+                  // FIX #4: Validation with warnings
+                  if (height > 10) {
+                    toast.error('Height cannot exceed 10m');
+                    return;
+                  }
+                  if (height > 4.0 && height <= 10) {
+                    toast.warning(`Height ${height.toFixed(1)}m is unusually high (typical: 2.4-3.0m)`);
+                  }
+
+                  // FIX #6: Precise calculation
+                  const calculatedArea = parseFloat((m.realValue * height).toFixed(2));
+                  onUpdateMeasurement(m.id, {
+                    height,
+                    calculatedArea
+                  });
+                }}
+                className="h-8 text-xs pr-6"
+                placeholder="2.4"
+              />
+              {/* FIX #7: Unit indicator */}
+              <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground font-medium pointer-events-none">
+                m
+              </span>
+            </div>
           ) : (
             <span className="text-xs text-muted-foreground">-</span>
           )}
         </div>
 
-        {/* FIX #4: DEPTH - Shows for floors/slabs (M2 measurements) */}
+        {/* FIX #4-5: DEPTH - Shows for floors/slabs (M2 measurements) */}
         <div className="col-span-1">
           {(m.unit === 'M2' && (m.structureType === 'floor' || m.flooring)) ? (
-            <Input
-              type="number"
-              step="0.01"
-              min="0"
-              value={m.depth || ''}
-              onChange={(e) => {
-                const depth = parseFloat(e.target.value) || 0;
-                const calculatedVolume = depth > 0 ? m.realValue * depth : 0;
-                onUpdateMeasurement(m.id, {
-                  depth,
-                  calculatedVolume
-                });
-              }}
-              className="h-8 text-xs"
-              placeholder="0.15"
-            />
+            <div className="relative">
+              <Input
+                type="number"
+                step="0.01"
+                min="0"
+                max="0.5"
+                value={m.depth || ''}
+                onChange={(e) => {
+                  const depth = parseFloat(e.target.value) || 0;
+
+                  // FIX #5: Validation with warnings
+                  if (depth > 0.5) {
+                    toast.error('Depth cannot exceed 0.5m (500mm)');
+                    return;
+                  }
+                  if (depth > 0.3 && depth <= 0.5) {
+                    toast.warning(`Depth ${depth.toFixed(2)}m is unusually deep (typical: 0.10-0.15m)`);
+                  }
+
+                  // FIX #6: Precise calculation
+                  const calculatedVolume = depth > 0
+                    ? parseFloat((m.realValue * depth).toFixed(3))
+                    : 0;
+                  onUpdateMeasurement(m.id, {
+                    depth,
+                    calculatedVolume
+                  });
+                }}
+                className="h-8 text-xs pr-6"
+                placeholder="0.15"
+              />
+              {/* FIX #7: Unit indicator */}
+              <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground font-medium pointer-events-none">
+                m
+              </span>
+            </div>
           ) : (
             <span className="text-xs text-muted-foreground">-</span>
           )}
@@ -521,16 +582,57 @@ export const TakeoffTableEnhanced = ({
       {/* Expanded Details Panel */}
       {expandedIds.has(m.id) && (
         <div className="p-4 bg-muted/30 border-b space-y-4">
-          {/* Structure Assembly Section */}
-          <div className="space-y-3">
-            <h4 className="text-sm font-semibold">Structure Assembly</h4>
+          {/* FIX #9: Simplified form for COUNT measurements */}
+          {m.type === 'count' ? (
+            <div className="space-y-3">
+              <h4 className="text-sm font-semibold">Item Details</h4>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs text-muted-foreground">Item Name</label>
+                  <Input
+                    value={m.label}
+                    onChange={(e) => onUpdateMeasurement(m.id, { label: e.target.value })}
+                    placeholder="e.g., Toilet, Window, Door Handle"
+                    className="mt-1 h-8 text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground">Count</label>
+                  <Input
+                    value={`${m.realValue} EA`}
+                    readOnly
+                    className="mt-1 h-8 text-xs bg-muted"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground">Notes</label>
+                <Input
+                  value={m.notes || ''}
+                  onChange={(e) => onUpdateMeasurement(m.id, { notes: e.target.value })}
+                  className="h-8 text-xs mt-1"
+                  placeholder="Optional: brand, model, specifications..."
+                />
+              </div>
+            </div>
+          ) : (
+            <>
+              {/* Structure Assembly Section */}
+              <div className="space-y-3">
+                <h4 className="text-sm font-semibold">Structure Assembly</h4>
             <div className="grid grid-cols-3 gap-3">
-              {/* Structure Type */}
+              {/* Structure Type - FIX #8: Auto-generate label */}
               <div>
                 <label className="text-xs text-muted-foreground">Structure Type</label>
                 <Select
                   value={m.structureType || ''}
-                  onValueChange={(v: StructureType) => onUpdateMeasurement(m.id, { structureType: v })}
+                  onValueChange={(v: StructureType) => {
+                    const newLabel = generateLabel(m.area, v, m.type);
+                    onUpdateMeasurement(m.id, {
+                      structureType: v,
+                      label: newLabel || m.label
+                    });
+                  }}
                 >
                   <SelectTrigger className="h-8 text-xs mt-1">
                     <SelectValue placeholder="Select..." />
@@ -851,6 +953,8 @@ export const TakeoffTableEnhanced = ({
               </div>
             );
           })()}
+            </>
+          )}
         </div>
       )}
     </div>
