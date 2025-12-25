@@ -172,6 +172,74 @@ export const TakeoffTableEnhanced = ({
     setExpandedIds(newSet);
   };
 
+  // FIX #7: Export to Estimate - Create cost items from selected measurements
+  const handleExportToEstimate = () => {
+    if (!onAddCostItem) {
+      toast.error('Cost item creation not available');
+      return;
+    }
+
+    const selectedMeasurements = enhancedMeasurements.filter(m => selectedIds.has(m.id));
+
+    if (selectedMeasurements.length === 0) {
+      toast.error('No measurements selected');
+      return;
+    }
+
+    const costItems: CostItem[] = selectedMeasurements.map(m => {
+      // Determine which quantity and unit to use
+      let quantity = m.realValue;
+      let unit = m.unit;
+      let notes = `Measurement: ${m.realValue.toFixed(2)} ${m.unit}`;
+
+      // If calculated area exists (wall with height), use that
+      if (m.calculatedArea && m.calculatedArea > 0) {
+        quantity = m.calculatedArea;
+        unit = 'M2';
+        notes += ` × ${m.height}m height = ${m.calculatedArea.toFixed(2)} M²`;
+      }
+      // If calculated volume exists (slab with depth), use that
+      else if (m.calculatedVolume && m.calculatedVolume > 0) {
+        quantity = m.calculatedVolume;
+        unit = 'M3';
+        notes += ` × ${m.depth}m depth = ${m.calculatedVolume.toFixed(2)} M³`;
+      }
+
+      // Add structure info to notes
+      if (m.structureType) {
+        const structureLabel = STRUCTURE_OPTIONS.find(s => s.value === m.structureType)?.label;
+        notes += ` | Structure: ${structureLabel}`;
+      }
+
+      // Create the cost item
+      const item: CostItem = {
+        id: `cost-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        name: m.label || `${m.type} measurement`,
+        category: m.area || 'General',
+        description: m.materialDescription || '',
+        quantity: quantity,
+        unit: unit as MeasurementUnit,
+        unitCost: 0, // User will fill in pricing
+        totalCost: 0,
+        linkedMeasurements: [m.id],
+        notes: notes
+      };
+
+      return item;
+    });
+
+    // Add all cost items to estimate
+    costItems.forEach(item => onAddCostItem(item));
+
+    // Mark measurements as added to estimate
+    selectedMeasurements.forEach(m => {
+      onUpdateMeasurement(m.id, { addedToEstimate: true });
+    });
+
+    toast.success(`Exported ${costItems.length} item${costItems.length > 1 ? 's' : ''} to estimate`);
+    setSelectedIds(new Set()); // Clear selection
+  };
+
   const handleMaterialToggle = (measurementId: string, material: string) => {
     const measurement = enhancedMeasurements.find((m) => m.id === measurementId);
     const currentMaterials = measurement?.materials || [];
@@ -876,17 +944,15 @@ export const TakeoffTableEnhanced = ({
           </span>
         </div>
 
-        {/* Add to Estimate Button */}
+        {/* Export to Estimate Button - FIX #7 */}
         {selectedIds.size > 0 && (
           <Button
             className="w-full"
-            onClick={() => {
-              onAddToEstimate(Array.from(selectedIds));
-              setSelectedIds(new Set());
-            }}
+            onClick={handleExportToEstimate}
+            disabled={!onAddCostItem}
           >
             <Plus className="h-4 w-4 mr-2" />
-            Add {selectedIds.size} to Estimate
+            Export {selectedIds.size} to Estimate
           </Button>
         )}
       </div>
