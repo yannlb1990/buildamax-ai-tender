@@ -123,14 +123,23 @@ function takeoffReducer(state: TakeoffState, action: TakeoffAction): TakeoffStat
         )
       };
       
-    case 'DELETE_MEASUREMENT':
+    case 'DELETE_MEASUREMENT': {
+      const beforeCount = state.measurements.length;
+      const afterMeasurements = state.measurements.filter(m => m.id !== action.payload);
+      console.log('🔴 REDUCER: DELETE_MEASUREMENT', {
+        deletingId: action.payload,
+        beforeCount,
+        afterCount: afterMeasurements.length,
+        wasDeleted: beforeCount !== afterMeasurements.length
+      });
       return {
         ...state,
-        measurements: state.measurements.filter(m => m.id !== action.payload),
+        measurements: afterMeasurements,
         selectedMeasurementId: state.selectedMeasurementId === action.payload 
           ? null 
           : state.selectedMeasurementId
       };
+    }
       
     case 'SELECT_MEASUREMENT':
       return { ...state, selectedMeasurementId: action.payload };
