@@ -442,6 +442,35 @@ export const InteractiveCanvas = ({
       canvas.add(line);
       objects.push(line);
 
+      // STAGE 6: Add start point marker (green circle)
+      const startMarker = new Circle({
+        left: p1.x - getZoomAwareSize(4),
+        top: p1.y - getZoomAwareSize(4),
+        radius: getZoomAwareSize(4),
+        fill: '#22c55e', // Green
+        stroke: 'white',
+        strokeWidth: getZoomAwareSize(1.5),
+        selectable: false,
+        evented: false,
+      });
+      canvas.add(startMarker);
+      objects.push(startMarker);
+
+      // STAGE 6: Add end point marker (red square)
+      const endMarker = new Rect({
+        left: p2.x - getZoomAwareSize(4),
+        top: p2.y - getZoomAwareSize(4),
+        width: getZoomAwareSize(8),
+        height: getZoomAwareSize(8),
+        fill: '#ef4444', // Red
+        stroke: 'white',
+        strokeWidth: getZoomAwareSize(1.5),
+        selectable: false,
+        evented: false,
+      });
+      canvas.add(endMarker);
+      objects.push(endMarker);
+
       // Add label
       const midX = (p1.x + p2.x) / 2;
       const midY = (p1.y + p2.y) / 2;
@@ -478,6 +507,34 @@ export const InteractiveCanvas = ({
       canvas.add(rect);
       objects.push(rect);
 
+      // STAGE 6: Add corner markers (green circle for first corner, red square for opposite)
+      const corner1Marker = new Circle({
+        left: p1.x - getZoomAwareSize(4),
+        top: p1.y - getZoomAwareSize(4),
+        radius: getZoomAwareSize(4),
+        fill: '#22c55e', // Green
+        stroke: 'white',
+        strokeWidth: getZoomAwareSize(1.5),
+        selectable: false,
+        evented: false,
+      });
+      canvas.add(corner1Marker);
+      objects.push(corner1Marker);
+
+      const corner2Marker = new Rect({
+        left: p2.x - getZoomAwareSize(4),
+        top: p2.y - getZoomAwareSize(4),
+        width: getZoomAwareSize(8),
+        height: getZoomAwareSize(8),
+        fill: '#ef4444', // Red
+        stroke: 'white',
+        strokeWidth: getZoomAwareSize(1.5),
+        selectable: false,
+        evented: false,
+      });
+      canvas.add(corner2Marker);
+      objects.push(corner2Marker);
+
       // Add label
       const centerX = (p1.x + p2.x) / 2;
       const centerY = (p1.y + p2.y) / 2;
@@ -510,6 +567,24 @@ export const InteractiveCanvas = ({
       canvas.add(polygon);
       objects.push(polygon);
 
+      // STAGE 6: Add blue diamond markers at each vertex
+      measurement.worldPoints.forEach((point, index) => {
+        const diamond = new Rect({
+          left: point.x - getZoomAwareSize(4),
+          top: point.y - getZoomAwareSize(4),
+          width: getZoomAwareSize(8),
+          height: getZoomAwareSize(8),
+          fill: index === 0 ? '#22c55e' : '#3b82f6', // Green for first, blue for others
+          stroke: 'white',
+          strokeWidth: getZoomAwareSize(1.5),
+          angle: 45, // Rotate 45 degrees to make diamond shape
+          selectable: false,
+          evented: false,
+        });
+        canvas.add(diamond);
+        objects.push(diamond);
+      });
+
       // Add label at centroid
       const worldCentroid = calculateCentroidWorld(measurement.worldPoints);
       const label = new Text(measurement.label, {
@@ -527,10 +602,11 @@ export const InteractiveCanvas = ({
     } else if (measurement.type === 'circle') {
       if (measurement.unit === 'count') {
         // Count markers - render each point
+        // STAGE 6: 2x larger count markers for better visibility
         measurement.worldPoints.forEach((point, index) => {
-          const markerRadius = getZoomAwareSize(6);
-          const markerStrokeWidth = getZoomAwareSize(2);
-          const markerFontSize = getZoomAwareSize(12);
+          const markerRadius = getZoomAwareSize(12); // 2x larger (was 6)
+          const markerStrokeWidth = getZoomAwareSize(3); // Proportionally larger (was 2)
+          const markerFontSize = getZoomAwareSize(16); // Larger font (was 12)
 
           const marker = new Circle({
             left: point.x - markerRadius,
@@ -547,8 +623,8 @@ export const InteractiveCanvas = ({
 
           // Add number label
           const numberLabel = new Text(String(index + 1), {
-            left: point.x - getZoomAwareSize(4),
-            top: point.y - getZoomAwareSize(6),
+            left: point.x - getZoomAwareSize(6), // Adjusted for larger marker
+            top: point.y - getZoomAwareSize(9), // Adjusted for larger marker
             fontSize: markerFontSize,
             fill: 'white',
             fontWeight: 'bold',
@@ -582,6 +658,34 @@ export const InteractiveCanvas = ({
         });
         canvas.add(circle);
         objects.push(circle);
+
+        // STAGE 6: Add center marker (green circle) and radius marker (red square)
+        const centerMarker = new Circle({
+          left: center.x - getZoomAwareSize(4),
+          top: center.y - getZoomAwareSize(4),
+          radius: getZoomAwareSize(4),
+          fill: '#22c55e', // Green
+          stroke: 'white',
+          strokeWidth: getZoomAwareSize(1.5),
+          selectable: false,
+          evented: false,
+        });
+        canvas.add(centerMarker);
+        objects.push(centerMarker);
+
+        const radiusMarker = new Rect({
+          left: radiusPoint.x - getZoomAwareSize(4),
+          top: radiusPoint.y - getZoomAwareSize(4),
+          width: getZoomAwareSize(8),
+          height: getZoomAwareSize(8),
+          fill: '#ef4444', // Red
+          stroke: 'white',
+          strokeWidth: getZoomAwareSize(1.5),
+          selectable: false,
+          evented: false,
+        });
+        canvas.add(radiusMarker);
+        objects.push(radiusMarker);
 
         // Add label
         const label = new Text(measurement.label, {
@@ -812,10 +916,11 @@ export const InteractiveCanvas = ({
     setStartPoint(worldPoint);
 
     // Handle count tool - add numbered markers for grouped counting
+    // STAGE 6: 2x larger count markers for better visibility
     if (activeTool === 'count') {
-      const markerRadius = getZoomAwareSize(6);
-      const strokeWidth = getZoomAwareSize(2);
-      const fontSize = getZoomAwareSize(12);
+      const markerRadius = getZoomAwareSize(12); // 2x larger (was 6)
+      const strokeWidth = getZoomAwareSize(3); // Proportionally larger (was 2)
+      const fontSize = getZoomAwareSize(16); // Larger font (was 12)
       const markerIndex = countPoints.length + 1;
 
       // Draw numbered marker at WORLD coordinates
@@ -833,8 +938,8 @@ export const InteractiveCanvas = ({
 
       // Add number label
       const numberLabel = new Text(String(markerIndex), {
-        left: worldPoint.x - getZoomAwareSize(4),
-        top: worldPoint.y - getZoomAwareSize(6),
+        left: worldPoint.x - getZoomAwareSize(6), // Adjusted for larger marker
+        top: worldPoint.y - getZoomAwareSize(9), // Adjusted for larger marker
         fontSize: fontSize,
         fill: 'white',
         fontWeight: 'bold',
