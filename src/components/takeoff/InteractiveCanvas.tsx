@@ -335,9 +335,19 @@ export const InteractiveCanvas = ({
         }
       }
 
-      // Update measurement with new positions and value
+      // FIX DUPLICATION BUG: Remove modified object from canvas before updating state
+      // This prevents the re-render from creating a duplicate
       if (newWorldPoints.length > 0 && onMeasurementUpdate) {
         console.log('Updating measurement with new points:', newWorldPoints);
+
+        // Remove the old Fabric objects for this measurement
+        const oldObjects = measurementObjectsRef.current.get(measurementId);
+        if (oldObjects) {
+          oldObjects.forEach(oldObj => canvas.remove(oldObj));
+          measurementObjectsRef.current.delete(measurementId);
+        }
+
+        // Update state - the useEffect will create new objects with correct positions
         onMeasurementUpdate(measurementId, {
           worldPoints: newWorldPoints,
           realValue: newRealValue
@@ -360,12 +370,19 @@ export const InteractiveCanvas = ({
     if (calibrationMode === 'manual') {
       canvas.defaultCursor = 'crosshair';
       canvas.hoverCursor = 'crosshair';
+      canvas.selection = false;
+    } else if (activeTool === 'select') {
+      canvas.defaultCursor = 'default';
+      canvas.hoverCursor = 'move';
+      canvas.selection = true; // Enable Fabric.js selection
     } else if (activeTool === 'pan' || !activeTool) {
       canvas.defaultCursor = 'grab';
       canvas.hoverCursor = 'grab';
+      canvas.selection = false;
     } else {
       canvas.defaultCursor = 'crosshair';
       canvas.hoverCursor = 'crosshair';
+      canvas.selection = false;
     }
   }, [activeTool, calibrationMode]);
 
@@ -888,6 +905,12 @@ export const InteractiveCanvas = ({
     // Handle calibration (drag-to-calibrate)
     if (calibrationMode === 'manual' && !isCalibrated) {
       handleCalibrationMouseDown(worldPoint);
+      return;
+    }
+
+    // Handle SELECT mode - allow Fabric.js selection, don't intercept
+    if (activeTool === 'select') {
+      // Let Fabric.js handle object selection and movement
       return;
     }
 
