@@ -298,18 +298,14 @@ export const TakeoffTableEnhanced = ({
           />
         </div>
 
-        {/* Name */}
-        <div className="col-span-2 flex items-center gap-1">
+        {/* Name - FIXED: Removed debug badge that was blocking input */}
+        <div className="col-span-2">
           <Input
             value={m.label}
             onChange={(e) => onUpdateMeasurement(m.id, { label: e.target.value })}
-            className="h-8 text-xs flex-1"
-            placeholder="Label..."
+            className="h-8 text-xs w-full"
+            placeholder="Enter name..."
           />
-          {/* DEBUG: Show measurement type/unit */}
-          <Badge variant="outline" className="text-[9px] px-1 py-0 bg-blue-50 dark:bg-blue-950">
-            {m.type}/{m.unit}
-          </Badge>
         </div>
 
         {/* Area - FIX #8: Auto-generate label when area changes */}

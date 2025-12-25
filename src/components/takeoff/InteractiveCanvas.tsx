@@ -230,6 +230,7 @@ export const InteractiveCanvas = ({
   }, [transform.zoom, transform.panX, transform.panY]);
 
   // STAGE 1: Render all measurements when they change
+  // SIMPLIFIED & ROBUST: Clear entire canvas and re-render everything
   useEffect(() => {
     const canvas = fabricCanvasRef.current;
     if (!canvas || !viewport) {
@@ -240,34 +241,39 @@ export const InteractiveCanvas = ({
     console.log('🔄 RENDER: Re-rendering all measurements');
     console.log('  📊 Total measurements:', measurements.length);
     console.log('  📄 Current page:', pageIndex);
-    console.log('  🎨 Previously rendered:', measurementObjectsRef.current.size);
 
-    // Clear all previously rendered measurement objects
-    const previousIds = Array.from(measurementObjectsRef.current.keys());
-    const currentIds = measurements.map(m => m.id);
-    const deletedIds = previousIds.filter(id => !currentIds.includes(id));
+    // CRITICAL FIX: Clear canvas completely (removes ALL objects including measurements)
+    // This is more reliable than tracking individual objects
+    const allObjects = canvas.getObjects();
+    console.log('  🧹 Clearing', allObjects.length, 'objects from canvas');
 
-    if (deletedIds.length > 0) {
-      console.log('  🗑️ DELETIONS DETECTED:', deletedIds);
-    }
-
-    measurementObjectsRef.current.forEach((objects, measurementId) => {
-      console.log('  🧹 Clearing objects for:', measurementId);
-      objects.forEach(obj => canvas.remove(obj));
+    // Remove all objects except the PDF background
+    allObjects.forEach(obj => {
+      // Don't remove the PDF image itself
+      if (obj.type !== 'image') {
+        canvas.remove(obj);
+      }
     });
-    measurementObjectsRef.current.clear();
 
-    // Render all measurements for current page
+    // Clear the tracking ref
+    measurementObjectsRef.current.clear();
+    console.log('  ✓ Canvas cleared');
+
+    // Render measurements for current page only
     const pageMeasurements = measurements.filter(m => m.pageIndex === pageIndex);
     console.log('  ✏️ Rendering', pageMeasurements.length, 'measurements on page', pageIndex);
 
-    pageMeasurements.forEach(measurement => {
-      console.log('    → Rendering:', measurement.id, measurement.type, measurement.unit, measurement.label);
-      renderMeasurement(measurement);
-    });
+    if (pageMeasurements.length === 0) {
+      console.log('  ℹ️ No measurements to render');
+    } else {
+      pageMeasurements.forEach(measurement => {
+        console.log('    → Rendering:', measurement.id, measurement.type, measurement.label);
+        renderMeasurement(measurement);
+      });
+    }
 
     canvas.requestRenderAll();
-    console.log('  ✅ Render complete');
+    console.log('  ✅ Render complete -', pageMeasurements.length, 'measurements on canvas');
   }, [measurements, pageIndex, viewport, renderMeasurement]);
 
   // ZOOM HANDLING:
