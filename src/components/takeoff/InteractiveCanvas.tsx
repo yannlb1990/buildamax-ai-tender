@@ -543,15 +543,28 @@ export const InteractiveCanvas = ({
     canvas.requestRenderAll();
   }, [measurements, pageIndex, renderMeasurement]);
 
-  // FIX #1: PDF-Table Sync - Detect deleted measurements and remove their canvas objects
+  // FIX #1 + #12: PDF-Table Sync - Detect deleted measurements and remove their canvas objects
   useEffect(() => {
     const canvas = fabricCanvasRef.current;
-    if (!canvas) return;
+    if (!canvas) {
+      console.log('FIX #1: Deletion check - Canvas not ready');
+      return;
+    }
 
     const currentIds = new Set(measurements.map(m => m.id));
+    console.log('FIX #1: Deletion check -', {
+      measurementsCount: measurements.length,
+      trackedObjects: measurementObjectsRef.current.size,
+      currentIds: Array.from(currentIds)
+    });
+
     measurementObjectsRef.current.forEach((objects, id) => {
       if (!currentIds.has(id)) {
-        objects.forEach(obj => canvas.remove(obj));
+        console.log('FIX #1: ⚠️ DELETING measurement from canvas:', id, 'objects:', objects.length);
+        objects.forEach(obj => {
+          const removed = canvas.remove(obj);
+          console.log('FIX #1: Object removed:', removed ? 'SUCCESS' : 'FAILED');
+        });
         measurementObjectsRef.current.delete(id);
       }
     });
@@ -807,16 +820,24 @@ export const InteractiveCanvas = ({
       return;
     }
 
-    // FIX #2: Handle eraser tool - delete the specific clicked measurement
+    // FIX #2 + #12: Handle eraser tool - delete the specific clicked measurement
     if (activeTool === 'eraser') {
       const target = canvas.findTarget(e.e);
+      console.log('FIX #2: Eraser clicked', {
+        hasTarget: !!target,
+        targetData: target ? (target as any).measurementId : null,
+        measurementId: target ? (target as any).measurementId : null
+      });
+      
       if (target && (target as any).measurementId) {
         const measurementId = (target as any).measurementId;
+        console.log('FIX #2: Eraser deleting measurement:', measurementId);
         if (onDeleteMeasurement) {
           onDeleteMeasurement(measurementId);
           toast.success('Measurement deleted');
         }
       } else {
+        console.log('FIX #2: Eraser - no measurement clicked');
         toast.info('Click on a measurement to delete it');
       }
       return;
