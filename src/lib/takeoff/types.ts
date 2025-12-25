@@ -81,6 +81,12 @@ export interface EnhancedMeasurement extends Measurement {
   flooring?: string;
   notes?: string;
   isSelected?: boolean;
+  // FIX #3 & #4: Height/Depth for estimation calculations
+  height?: number;  // For walls: LM × height = M2 (default 2.4m)
+  depth?: number;   // For slabs: M2 × depth = M3 (optional)
+  calculatedArea?: number;   // Auto-calculated: LM × height
+  calculatedVolume?: number; // Auto-calculated: M2 × depth
+  materialDescription?: string; // Custom material description
 }
 export type CalibrationMode = 'preset' | 'manual' | null;
 export type DistanceUnit = 'm' | 'mm' | 'cm' | 'ft' | 'in';

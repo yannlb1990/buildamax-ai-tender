@@ -200,7 +200,7 @@ export const TakeoffTableEnhanced = ({
     <div key={m.id}>
       <div
         className={cn(
-          'grid grid-cols-12 gap-2 p-2 border-b items-center text-sm',
+          'grid grid-cols-18 gap-2 p-2 border-b items-center text-sm',
           m.validated && 'bg-green-50 dark:bg-green-950/30',
           selectedIds.has(m.id) && 'bg-accent/50'
         )}
@@ -265,6 +265,69 @@ export const TakeoffTableEnhanced = ({
           </Select>
         </div>
 
+        {/* FIX #3: HEIGHT - Shows for walls (LM measurements) */}
+        <div className="col-span-1">
+          {(m.unit === 'LM' && (m.structureType === 'external_wall' || m.structureType === 'internal_wall' || m.structureType === 'load_bearing' || m.structureType === 'non_load_bearing')) ? (
+            <Input
+              type="number"
+              step="0.1"
+              min="0"
+              value={m.height || ''}
+              onChange={(e) => {
+                const height = parseFloat(e.target.value) || 0;
+                const calculatedArea = m.realValue * height;
+                onUpdateMeasurement(m.id, {
+                  height,
+                  calculatedArea
+                });
+              }}
+              className="h-8 text-xs"
+              placeholder="2.4"
+            />
+          ) : (
+            <span className="text-xs text-muted-foreground">-</span>
+          )}
+        </div>
+
+        {/* FIX #4: DEPTH - Shows for floors/slabs (M2 measurements) */}
+        <div className="col-span-1">
+          {(m.unit === 'M2' && (m.structureType === 'floor' || m.flooring)) ? (
+            <Input
+              type="number"
+              step="0.01"
+              min="0"
+              value={m.depth || ''}
+              onChange={(e) => {
+                const depth = parseFloat(e.target.value) || 0;
+                const calculatedVolume = depth > 0 ? m.realValue * depth : 0;
+                onUpdateMeasurement(m.id, {
+                  depth,
+                  calculatedVolume
+                });
+              }}
+              className="h-8 text-xs"
+              placeholder="0.15"
+            />
+          ) : (
+            <span className="text-xs text-muted-foreground">-</span>
+          )}
+        </div>
+
+        {/* CALCULATED VALUES - Shows calculated M2 or M3 */}
+        <div className="col-span-2 font-mono text-xs">
+          {m.calculatedArea ? (
+            <span className="text-green-600 font-medium">
+              {m.calculatedArea.toFixed(2)} M²
+            </span>
+          ) : m.calculatedVolume ? (
+            <span className="text-blue-600 font-medium">
+              {m.calculatedVolume.toFixed(2)} M³
+            </span>
+          ) : (
+            <span className="text-muted-foreground">-</span>
+          )}
+        </div>
+
         {/* Structure Type */}
         <div className="col-span-2">
           {m.structureType ? (
@@ -274,6 +337,17 @@ export const TakeoffTableEnhanced = ({
           ) : (
             <span className="text-xs text-muted-foreground">-</span>
           )}
+        </div>
+
+        {/* FIX #6: MATERIAL DESCRIPTION - Freetext with dropdown option */}
+        <div className="col-span-2">
+          <Input
+            type="text"
+            value={m.materialDescription || ''}
+            onChange={(e) => onUpdateMeasurement(m.id, { materialDescription: e.target.value })}
+            className="h-8 text-xs"
+            placeholder="e.g., 90mm Timber Stud, Concrete 25MPa..."
+          />
         </div>
 
         {/* NCC */}
@@ -747,8 +821,8 @@ export const TakeoffTableEnhanced = ({
         </Button>
       </div>
 
-      {/* Table Header */}
-      <div className="grid grid-cols-12 gap-2 p-2 bg-muted/50 rounded-t-md text-xs font-medium text-muted-foreground">
+      {/* Table Header - FIX #3-6: Expanded grid for Height/Depth/Material */}
+      <div className="grid grid-cols-18 gap-2 p-2 bg-muted/50 rounded-t-md text-xs font-medium text-muted-foreground">
         <div className="col-span-1 flex items-center">
           <Checkbox
             checked={selectedIds.size === filteredMeasurements.length && filteredMeasurements.length > 0}
@@ -759,7 +833,11 @@ export const TakeoffTableEnhanced = ({
         <div className="col-span-2">Area</div>
         <div className="col-span-1">Qty</div>
         <div className="col-span-1">Unit</div>
+        <div className="col-span-1">Height</div>
+        <div className="col-span-1">Depth</div>
+        <div className="col-span-2">Calculated</div>
         <div className="col-span-2">Structure</div>
+        <div className="col-span-2">Material</div>
         <div className="col-span-2">NCC</div>
         <div className="col-span-1">Actions</div>
       </div>
