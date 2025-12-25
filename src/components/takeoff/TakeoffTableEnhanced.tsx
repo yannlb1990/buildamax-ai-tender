@@ -411,13 +411,9 @@ export const TakeoffTableEnhanced = ({
             <Input
               value={m.label || ''}
               onChange={(e) => onUpdateMeasurement(m.id, { label: e.target.value })}
-              className="h-7 text-xs"
+              className="h-7 text-xs flex-1"
               placeholder="Label..."
             />
-            {/* DEBUG BADGE: Shows measurement type/unit */}
-            <Badge className="bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300 text-[8px] px-1 shrink-0 font-mono">
-              {m.type}/{m.unit}
-            </Badge>
             <Button
               variant="ghost"
               size="icon"
