@@ -232,28 +232,48 @@ export const InteractiveCanvas = ({
   // FIX #1: Detect and remove deleted measurements from canvas
   useEffect(() => {
     const canvas = fabricCanvasRef.current;
-    if (!canvas) return;
+    if (!canvas) {
+      console.log('FIX #1: Canvas not ready, skipping deletion check');
+      return;
+    }
 
     // Get current measurement IDs
     const currentMeasurementIds = new Set(measurements.map(m => m.id));
     const renderedMeasurementIds = Array.from(measurementObjectsRef.current.keys());
 
+    console.log('FIX #1: Deletion check - Current measurements:', currentMeasurementIds.size, 'Rendered:', renderedMeasurementIds.length);
+
     // Find and remove deleted measurements
+    let deletedCount = 0;
     renderedMeasurementIds.forEach(renderedId => {
       if (!currentMeasurementIds.has(renderedId)) {
-        console.log('FIX #1: Removing deleted measurement from canvas:', renderedId);
+        console.log('FIX #1: ⚠️ DELETING measurement from canvas:', renderedId);
         const objects = measurementObjectsRef.current.get(renderedId);
-        if (objects) {
-          objects.forEach(obj => {
-            canvas.remove(obj);
-            console.log('  - Removed canvas object');
+        if (objects && objects.length > 0) {
+          console.log(`  - Found ${objects.length} canvas objects to remove`);
+          objects.forEach((obj, index) => {
+            try {
+              canvas.remove(obj);
+              console.log(`  - ✓ Removed object ${index + 1}/${objects.length}`);
+              deletedCount++;
+            } catch (error) {
+              console.error(`  - ✗ Error removing object ${index + 1}:`, error);
+            }
           });
           measurementObjectsRef.current.delete(renderedId);
+          console.log('  - ✓ Cleared from ref map');
+        } else {
+          console.warn('  - ⚠️ No objects found in ref for this measurement!');
         }
       }
     });
 
-    canvas.requestRenderAll();
+    if (deletedCount > 0) {
+      console.log(`FIX #1: ✅ Deleted ${deletedCount} canvas objects, requesting re-render`);
+      canvas.requestRenderAll();
+    } else {
+      console.log('FIX #1: No deletions needed');
+    }
   }, [measurements]); // Trigger whenever measurements array changes
 
   // STAGE 1: Render all measurements when they change
@@ -955,18 +975,23 @@ export const InteractiveCanvas = ({
     // FIX #2: Handle eraser tool - delete clicked measurement
     if (activeTool === 'eraser') {
       const target = e.target;
+      console.log('FIX #2: Eraser clicked - target:', target?.type, 'has measurementId:', !!target?.data?.measurementId);
 
       if (target && target.data && target.data.measurementId) {
         // Clicked on a measurement - delete it
         const measurementId = target.data.measurementId;
-        console.log('FIX #2: Eraser clicked on measurement:', measurementId);
+        console.log('FIX #2: ✓ Eraser deleting measurement:', measurementId);
 
         if (onDeleteMeasurement) {
           onDeleteMeasurement(measurementId);
           toast.success('Measurement deleted');
+          console.log('FIX #2: ✓ Delete dispatched');
+        } else {
+          console.error('FIX #2: ✗ onDeleteMeasurement not available!');
         }
       } else {
         // Clicked on empty space - fallback to delete last
+        console.log('FIX #2: Clicked empty space, deleting last measurement');
         if (onDeleteLastMeasurement) {
           onDeleteLastMeasurement();
           toast.info('Last measurement deleted');

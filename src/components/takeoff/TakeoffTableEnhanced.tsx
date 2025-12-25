@@ -480,7 +480,7 @@ export const TakeoffTableEnhanced = ({
         </div>
 
         {/* NCC */}
-        <div className="col-span-2">
+        <div className="col-span-1">
           {m.nccCode ? (
             <Badge variant="outline" className="text-xs">
               {m.nccCode}
@@ -498,8 +498,8 @@ export const TakeoffTableEnhanced = ({
           )}
         </div>
 
-        {/* Actions */}
-        <div className="col-span-1 flex items-center gap-1">
+        {/* Actions - FIX #10: Increased span to prevent button overlap */}
+        <div className="col-span-2 flex items-center gap-1">
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
@@ -993,7 +993,7 @@ export const TakeoffTableEnhanced = ({
         </Button>
       </div>
 
-      {/* Table Header - FIX #3-6: Expanded grid for Height/Depth/Material */}
+      {/* Table Header - FIX #10: Optimized spacing to prevent button overlap */}
       <div className="grid grid-cols-18 gap-2 p-2 bg-muted/50 rounded-t-md text-xs font-medium text-muted-foreground">
         <div className="col-span-1 flex items-center">
           <Checkbox
@@ -1010,8 +1010,8 @@ export const TakeoffTableEnhanced = ({
         <div className="col-span-2">Calculated</div>
         <div className="col-span-2">Structure</div>
         <div className="col-span-2">Material</div>
-        <div className="col-span-2">NCC</div>
-        <div className="col-span-1">Actions</div>
+        <div className="col-span-1">NCC</div>
+        <div className="col-span-2">Actions</div>
       </div>
 
       {/* Table Body */}
